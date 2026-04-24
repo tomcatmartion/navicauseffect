@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum MembershipPlan {
+  FREE
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum AnalysisCategory {
+  PERSONALITY
+  FORTUNE
+  MARRIAGE
+  CAREER
+  HEALTH
+  PARENT_CHILD
+  EMOTION
+}
+
+enum PaymentType {
+  MEMBERSHIP
+  PER_QUERY
+}
+
+enum PaymentChannel {
+  WECHAT
+  ALIPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PointSource {
+  SHARE
+  ADMIN_GRANT
+  REDEEM
+}
+
+enum SharePlatform {
+  WECHAT
+  MOMENTS
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String?   @unique
+  phone         String?   @unique
+  email         String?   @unique
+  wechatOpenId  String?   @unique @map("wechat_openid")
+  nickname      String?
+  avatar        String?
+  password      String?
+  role          UserRole  @default(USER)
+  bonusQueries  Int       @default(0) @map("bonus_queries")
+  totalPoints   Int       @default(0) @map("total_points")
+  inviteCode    String    @unique @map("invite_code")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  membership          Membership?
+  consultationRecords ConsultationRecord[]
+  paymentOrders       PaymentOrder[]
+  pointRecords        PointRecord[]
+  shareRecords        ShareRecord[]
+  dailyUsages         DailyUsage[]
+
+  @@map("users")
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  userId    String           @unique @map("user_id")
+  plan      MembershipPlan   @default(FREE)
+  status    MembershipStatus @default(ACTIVE)
+  startDate DateTime?        @map("start_date")
+  endDate   DateTime?        @map("end_date")
+  pricePaid Decimal?         @map("price_paid") @db.Decimal(10, 2)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("memberships")
+}
+
+model ConsultationRecord {
+  id                String   @id @default(cuid())
+  userId            String?  @map("user_id")
+  chartFingerprint  String?  @map("chart_fingerprint")
+  birthSolarDate    String   @map("birth_solar_date")
+  birthLunarDate    String?  @map("birth_lunar_date")
+  birthCity         String?  @map("birth_city")
+  timeIndex         Int      @map("time_index")
+  gender            Gender
+  astrolabeData     Json     @map("astrolabe_data")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  analyses   AIAnalysis[]
+
+  @@index([userId, chartFingerprint])
+  @@map("consultation_records")
+}
+
+model AIAnalysis {
+  id             String           @id @default(cuid())
+  recordId       String           @map("record_id")
+  category       AnalysisCategory
+  aiModelUsed    String           @map("ai_model_used")
+  fullContent    String           @map("full_content") @db.LongText
+  previewContent String           @map("preview_content") @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  record ConsultationRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId, category])
+  @@map("ai_analyses")
+}
+
+model PaymentOrder {
+  id            String         @id @default(cuid())
+  userId        String         @map("user_id")
+  type          PaymentType
+  amount        Decimal        @db.Decimal(10, 2)
+  channel       PaymentChannel
+  status        PaymentStatus  @default(PENDING)
+  transactionId String?        @map("transaction_id")
+  metadata      Json?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payment_orders")
+}
+
+model AIModelConfig {
+  id              String  @id @default(cuid())
+  name            String
+  provider        String
+  apiKeyEncrypted String  @map("api_key_encrypted") @db.Text
+  baseUrl         String  @map("base_url")
+  modelId         String  @map("model_id")
+  isActive        Boolean @default(true) @map("is_active")
+  isDefault       Boolean @default(false) @map("is_default")
+  promptTemplates Json?   @map("prompt_templates")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_model_configs")
+}
+
+model PointRecord {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  points    Int
+  source    PointSource
+  detail    String?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("point_records")
+}
+
+model ShareRecord {
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  platform  SharePlatform
+  shareUrl  String        @map("share_url")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("share_records")
+}
+
+model MembershipPricing {
+  id            String         @id @default(cuid())
+  plan          MembershipPlan
+  originalPrice Decimal        @map("original_price") @db.Decimal(10, 2)
+  activityPrice Decimal?       @map("activity_price") @db.Decimal(10, 2)
+  isActive      Boolean        @default(true) @map("is_active")
+  startDate     DateTime?      @map("start_date")
+  endDate       DateTime?      @map("end_date")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@map("membership_pricing")
+}
+
+model DailyUsage {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  date      DateTime @db.Date
+  count     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("daily_usages")
+}
+
+model AdminConfig {
+  id          String   @id @default(cuid())
+  configKey   String   @unique @map("config_key")
+  configValue Json     @map("config_value")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_configs")
+}

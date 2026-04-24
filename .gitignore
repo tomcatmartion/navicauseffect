@@ -1,0 +1,73 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/packages/*/node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+**/.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# vercel
+.vercel
+
+# data & vector store
+/data/
+# 旧知识库目录（已弃用，迁移至 sysfiles/sysknowledge/）
+/logicdoc/
+
+# iztro 文档站点（14MB，不需要提交）
+/packages/iztro/docs/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+/src/generated/prisma
+
+# ── AI 工具配置与记忆 ──
+.claude/
+.cursor/
+.cursorignore
+.gstack/
+
+# ── 系统文件目录（知识库、标签库、规则库、技法库、映射表） ──
+/sysfiles/
+
+# ── 内部文档（含安全漏洞信息、管理员凭据、商业规划，不公开） ──
+claude.me
+imemory.md
+CONTEXT.md
+CLAUDE.md
+alpha.md
+workresultdoc.md
+/planfiles/

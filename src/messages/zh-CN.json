@@ -1,0 +1,19 @@
+{
+  "common": {
+    "appName": "紫微心理",
+    "tagline": "观己观人观世界，知微知著知真如",
+    "loading": "加载中…"
+  },
+  "nav": {
+    "home": "首页",
+    "chart": "排盘",
+    "admin": "管理后台",
+    "login": "登录",
+    "logout": "退出"
+  },
+  "chart": {
+    "title": "紫微命理排盘",
+    "description": "输入出生信息，生成专属紫微命盘，解码你的生命轨迹",
+    "reenter": "重新排盘"
+  }
+}

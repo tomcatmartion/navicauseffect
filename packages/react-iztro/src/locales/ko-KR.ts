@@ -1,0 +1,23 @@
+export default {
+    "titleBasicInfo": "기본 정보",
+    "labelElementType": "오행국",
+    "labelNominalAge": "나이(세는 나이)",
+    "age": "{{age}}세",
+    "labelFourPillars": "사주",
+    "labelLunarCalendar": "음력",
+    "labelSolarCalendar": "양력",
+    "labelChineseHour": "시진(지지)",
+    "labelChineseZodiacSign": "십이지",
+    "labelZodiacSign": "별자리",
+    "labelSoulRuler": "명주",
+    "labelBodyRuler": "신주",
+    "labelSoulPalace": "명궁",
+    "labelBodyPalace": "신궁",
+    "titleHoroscopeInfo": "운한 정보",
+    "buttonNow": "현재",
+    "buttonDecade": "금",
+    "buttonYear": "년",
+    "buttonMonth": "월",
+    "buttonDay": "일",
+    "buttonHour": "시"
+}

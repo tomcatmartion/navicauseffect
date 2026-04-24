@@ -1,0 +1,23 @@
+export default {
+    "titleBasicInfo": "Thông tin cơ bản",
+    "labelElementType": "Ngũ hành cục",
+    "labelNominalAge": "Tuổi mụ",
+    "age": "{{age}} tuổi",
+    "labelFourPillars": "Tứ trụ",
+    "labelLunarCalendar": "Âm lịch",
+    "labelSolarCalendar": "Dương lịch",
+    "labelChineseHour": "Giờ can chi",
+    "labelChineseZodiacSign": "Thập nhị địa chi",
+    "labelZodiacSign": "Cung hoàng đạo",
+    "labelSoulRuler": "Mệnh chủ",
+    "labelBodyRuler": "Thân chủ",
+    "labelSoulPalace": "Cung mệnh",
+    "labelBodyPalace": "Cung thân",
+    "titleHoroscopeInfo": "Thông tin vận hạn",
+    "buttonNow": "Hiện",
+    "buttonDecade": "Hạn",
+    "buttonYear": "Năm",
+    "buttonMonth": "Thg",
+    "buttonDay": "Ng",
+    "buttonHour": "Giờ"
+}

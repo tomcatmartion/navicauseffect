@@ -1,0 +1,28 @@
+{
+  "lastRun": "2026-04-21T07:56:50.013Z",
+  "family": "1536",
+  "failures": [
+    {
+      "id": "ee828a85e3f18c27639c4cd1f2c43b3e8cba3cfd2dad4dffe414b4234a41b4f0",
+      "chunkIndex": 10,
+      "sourceFile": "紫微斗数知识库.docx",
+      "preview": "，当忧不忧，逢吉不吉，逢凶不凶；唯犯刑律可暂免追究；宜守不宜攻；适合医疗卫生人员及买空卖空的生意人。\n\n☆29、孤辰、寡宿\n\n孤寡均为恶曜，十二宫皆不能为福，尤",
+      "failedAt": "2026-04-21T07:56:50.011Z",
+      "reason": "AI 打标无结果"
+    },
+    {
+      "id": "11f64254ccef86d514c38f26e2af0fbe53ae921fde1f907a4ba9bec202c4fe90",
+      "chunkIndex": 11,
+      "sourceFile": "紫微斗数知识库.docx",
+      "preview": "增加投入所致，故宜见好就收。加吉化吉财运旺，能暴发，亦且能守财。加煞星则风险很大，横发横破；见空劫，破败后较得财前更贫困。\n\n紫相，善积储致富，财运亦好，有暴发",
+      "failedAt": "2026-04-21T07:56:50.013Z",
+      "reason": "AI 打标无结果"
+    }
+  ],
+  "stats": {
+    "total": 2,
+    "success": 0,
+    "failed": 2,
+    "skipped": 0
+  }
+}
