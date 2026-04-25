@@ -122,14 +122,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // 登录时：从数据库获取最新用户信息写入 token
       if (user?.id) {
         token.userId = user.id;
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { membership: true },
+        });
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.name = dbUser.nickname;
+          token.membershipPlan = dbUser.membership?.plan ?? "FREE";
+          token.membershipStatus = dbUser.membership?.status ?? "ACTIVE";
+        }
       }
-      // Middleware 运行在 Edge，不能使用 Prisma；在此处查库会导致解码 session 失败并清空 cookie（表现为「登录后进不去」）。
-      // 在 Node（登录回调、RSC 等）再同步 DB，保证支付后会员等信息可更新。
-      const onEdge = process.env.NEXT_RUNTIME === "edge";
-      if (token.userId && !onEdge) {
+      // 手动刷新 session 时（支付后等场景）：重新查库更新 token
+      if (trigger === "update" && token.userId) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.userId as string },
           include: { membership: true },
@@ -141,6 +150,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.membershipStatus = dbUser.membership?.status ?? "ACTIVE";
         }
       }
+      // 其余请求：直接返回 token，不查库
       return token;
     },
     async session({ session, token }) {
