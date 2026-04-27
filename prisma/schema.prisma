@@ -239,3 +239,66 @@ model AdminConfig {
 
   @@map("admin_configs")
 }
+
+// ── RAG 精准召回：知识库元数据表 ──────────────────────────
+// 与 Zvec 向量双索引：Zvec 做语义检索，MySQL 做精确元数据匹配
+model ZiweiKnowledge {
+  id          Int      @id @default(autoincrement())
+  filePath    String   // 原始文件路径，如 sysfiles/sysknowledge/stars/武曲星.md
+  title       String   // 知识标题
+  content     String   @db.LongText  // 切片内容
+  chunkIndex  Int      @default(0)   // 同文件第几个切片
+
+  // 精确匹配元数据（核心！）
+  stars       Json     // string[] 涉及星曜，如 ["武曲"]
+  palaces     Json     // string[] 涉及宫位，如 ["命宫","财帛宫"]
+  sihua       Json     // string[] 涉及四化类型，如 ["化禄","化忌"]
+  domains     Json     // string[] 涉及领域，如 ["财运","事业"]
+  patterns    Json     // string[] 涉及格局
+  topicType   String   // "星曜本义"|"宫位含义"|"格局"|"四化"|"组合"
+  timeScope   String   @default("本命") // "本命"|"大限"|"流年"
+
+  // 向量关联
+  vectorId    String?  // Zvec 中对应的向量 ID
+
+  priority    Int      @default(5)  // 1-10，越高越重要
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([filePath, chunkIndex])
+  @@index([topicType])
+  @@index([timeScope])
+  @@map("ziwei_knowledge")
+}
+
+// ── RAG 精准召回：标签表（systag 入库）────────────────────
+model ZiweiTag {
+  id        Int      @id @default(autoincrement())
+  tagType   String   // "predict_item" | "star_nature" | "palace_item" | "asterism_item" | "rules_item"
+  name      String   // 标签名，如"财运专项"、"十四主星"
+  desc      String   @db.Text
+  keywords  Json     // string[] 关键词数组
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([name, tagType])
+  @@index([tagType])
+  @@map("ziwei_tags")
+}
+
+// ── RAG 精准召回：多轮会话表 ────────────────────────────
+// Redis 快路径（读写）+ MySQL 慢路径（持久化）
+model ZiweiSession {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  chartData     Json     @map("chart_data")     // 完整命盘 JSON（iztro 格式）
+  chartSummary  String   @map("chart_summary") @db.Text  // 命盘摘要文本（用于 Prompt）
+  turns         Json     @default("[]")          // ConversationTurn[]，assistantReply 截断存摘要
+  turnCount     Int      @default(0) @map("turn_count")  // 轮次计数，方便查询统计
+  currentDomain String   @default("") @map("current_domain") // 当前对话领域
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  expiresAt     DateTime @map("expires_at")
+
+  @@index([userId])
+  @@map("ziwei_sessions")
+}

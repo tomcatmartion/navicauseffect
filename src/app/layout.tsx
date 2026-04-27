@@ -1,8 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+};
 
 const notoSerif = localFont({
   src: "../../public/fonts/noto-serif-sc.woff2",

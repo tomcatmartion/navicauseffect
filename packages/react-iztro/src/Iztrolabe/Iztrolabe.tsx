@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Izpalace } from "../Izpalace/Izpalace";
 import { IztrolabeProps } from "./Iztrolabe.type";
 import { IzpalaceCenter } from "../IzpalaceCenter";
@@ -103,13 +103,27 @@ export const Iztrolabe: React.FC<IztrolabeProps> = (props) => {
     }
   }, [showDecadal, showYearly, showMonthly, showDaily, showHourly, horoscope]);
 
+  // 标记当前是否由外部 props 驱动的变更（避免回调通知导致死循环）
+  const isPropsDriven = useRef(false);
+
   useEffect(() => {
+    isPropsDriven.current = true;
     setHoroscopeDate(props.horoscopeDate ?? new Date());
     setHoroscopeHour(props.horoscopeHour ?? 0);
   }, [props.horoscopeDate, props.horoscopeHour]);
 
   useEffect(() => {
     setHoroscope(horoscopeDate ?? new Date(), horoscopeHour);
+    // 只在用户操作触发时通知外部（非 props 驱动时）
+    if (!isPropsDriven.current) {
+      if (horoscopeDate) {
+        props.onHoroscopeDateChange?.(horoscopeDate);
+      }
+      if (horoscopeHour !== undefined) {
+        props.onHoroscopeHourChange?.(horoscopeHour);
+      }
+    }
+    isPropsDriven.current = false;
   }, [horoscopeDate, horoscopeHour]);
 
   useEffect(() => {

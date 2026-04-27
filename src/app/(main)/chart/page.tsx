@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 // 重型依赖：排盘后才需要，用 dynamic import 按需加载
 const Iztrolabe = dynamic(
@@ -22,11 +22,6 @@ const Iztrolabe = dynamic(
   { ssr: false }
 );
 
-const AnalysisPanel = dynamic(
-  () => import("@/components/analysis/analysis-panel").then((m) => m.AnalysisPanel),
-  { ssr: false }
-);
-
 const ZiweiAnalysisPanel = dynamic(
   () => import("@/components/analysis/ziwei-analysis-panel").then((m) => m.ZiweiAnalysisPanel),
   { ssr: false }
@@ -38,6 +33,11 @@ const ChatPanel = dynamic(
 );
 
 const CHART_STATE_KEY = "chart_birth_state";
+
+// 命盘固定渲染宽度（px），缩放基于此值计算
+const CHART_RENDER_WIDTH = 600;
+// 命盘容器内边距（px），命盘四周留白
+const CHART_PADDING = 16;
 
 // 按需加载 iztro 排盘引擎（不在文件顶部 import，减少首屏 JS 体积）
 async function getAstro() {
@@ -79,6 +79,31 @@ export default function ChartPage() {
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // 命盘缩放：必须在组件顶层调用（Rules of Hooks）
+  const chartWrapperRef = useRef<HTMLDivElement>(null);
+  const chartInnerRef = useRef<HTMLDivElement>(null);
+  const [chartScale, setChartScale] = useState(1);
+  const [chartNaturalHeight, setChartNaturalHeight] = useState(0);
+
+  // 监测命盘容器宽度变化，动态计算缩放比例和实际高度
+  useEffect(() => {
+    const wrapper = chartWrapperRef.current;
+    if (!wrapper) return;
+    const update = () => {
+      // 容器可用宽度 = 容器总宽度 - 两侧 padding
+      const availableWidth = wrapper.clientWidth - CHART_PADDING * 2;
+      setChartScale(Math.min(availableWidth / CHART_RENDER_WIDTH, 1));
+      // 测量命盘实际渲染高度（未缩放的自然高度）
+      if (chartInnerRef.current) {
+        setChartNaturalHeight(chartInnerRef.current.scrollHeight);
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [astrolabe]);
+
   // 页面挂载后立即预加载重型依赖（用户填表时已在后台下载完）
   useEffect(() => {
     preloadHeavyDeps();
@@ -115,11 +140,9 @@ export default function ChartPage() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!astrolabe) return;
-    const h = astrolabe.horoscope(horoscopeDate, horoscopeTimeIndex);
-    setHoroscope(h);
-  }, [astrolabe, horoscopeDate, horoscopeTimeIndex]);
+  // horoscope 运限由 Iztrolabe 组件内部管理（useIztro hook）
+  // chart page 只维护 horoscopeDate/horoscopeTimeIndex 用于传给右侧分析面板
+  // 不再自己计算 horoscope，避免与 Iztrolabe 内部 horoscope 计算冲突
 
   const handleGenerateChart = async (data: {
     solarDate: string;
@@ -236,76 +259,78 @@ export default function ChartPage() {
     <div className="mx-auto max-w-[1600px] px-4 py-4 md:py-6">
       {/* 标题栏 */}
       <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="font-[var(--font-serif-sc)] text-xl font-bold text-primary md:text-2xl">
+        <div className="min-w-0">
+          <h1 className="font-[var(--font-serif-sc)] text-lg font-bold text-primary md:text-2xl">
             紫微命理排盘
           </h1>
           <p className="text-xs text-muted-foreground">{trueSolarTimeInfo}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleReenter}>
+        <Button variant="outline" size="sm" onClick={handleReenter} className="shrink-0">
           重新排盘
         </Button>
       </div>
 
       {/* 主体：左右分栏 */}
       <div className="flex flex-col gap-4 md:flex-row md:gap-4">
-        {/* 左侧：命盘 */}
-        <div className="w-full md:w-[45%] md:flex-none">
-          <div className="overflow-x-auto rounded-lg border bg-card">
-            <Iztrolabe
-              lang="zh-CN"
-              birthday={astrolabe.solarDate}
-              birthTime={birthTimeIndex}
-              gender={astrolabe.gender as "男" | "女"}
-              birthdayType="solar"
-              astrolabe={astrolabe}
-              horoscope={horoscope ?? undefined}
-              horoscopeDate={horoscopeDate}
-              horoscopeHour={horoscopeTimeIndex <= 11 ? horoscopeTimeIndex : 0}
-              onHoroscopeDateChange={handleHoroscopeDateChange}
-              onHoroscopeHourChange={handleHoroscopeHourChange}
-              defaultShowDecadal={true}
-              defaultShowYearly={true}
-              defaultShowMonthly={true}
-              defaultShowDaily={true}
-              defaultShowHourly={true}
-            />
+        {/* 左侧：命盘（transform scale 缩放） */}
+        <div className="w-full md:w-[460px] md:flex-none">
+          <div
+            ref={chartWrapperRef}
+            className="rounded-lg border bg-card overflow-hidden"
+            style={{
+              padding: `${CHART_PADDING}px`,
+              height: chartNaturalHeight > 0 ? chartNaturalHeight * chartScale + CHART_PADDING * 2 : undefined,
+            }}
+          >
+            <div
+              ref={chartInnerRef}
+              style={{
+                width: `${CHART_RENDER_WIDTH}px`,
+                transform: `scale(${chartScale})`,
+                transformOrigin: "top left",
+              }}
+            >
+              <Iztrolabe
+                lang="zh-CN"
+                birthday={astrolabe.solarDate}
+                birthTime={birthTimeIndex}
+                gender={astrolabe.gender as "男" | "女"}
+                birthdayType="solar"
+                astrolabe={astrolabe}
+                horoscope={horoscope ?? undefined}
+                horoscopeDate={horoscopeDate}
+                horoscopeHour={horoscopeTimeIndex <= 11 ? horoscopeTimeIndex : 0}
+                onHoroscopeDateChange={handleHoroscopeDateChange}
+                onHoroscopeHourChange={handleHoroscopeHourChange}
+                defaultShowDecadal={true}
+                defaultShowYearly={true}
+                defaultShowMonthly={true}
+                defaultShowDaily={true}
+                defaultShowHourly={true}
+              />
+            </div>
           </div>
         </div>
 
         {/* 右侧：AI 分析 + 对话 */}
-        <div className="w-full md:w-[55%] md:flex-none">
+        <div className="w-full md:flex-1 md:min-w-0">
           <div className="flex h-full flex-col gap-4">
-            <Tabs defaultValue="ai" className="w-full">
-              <TabsList className="grid w-full max-w-xs grid-cols-2">
-                <TabsTrigger value="ai">AI 智能解析</TabsTrigger>
-                <TabsTrigger value="rule">规则解析</TabsTrigger>
-              </TabsList>
-              <TabsContent value="ai" className="mt-3">
-                <AnalysisPanel
-                  astrolabeData={astrolabe}
-                  horoscopeData={horoscope}
-                />
-              </TabsContent>
-              <TabsContent value="rule" className="mt-3">
-                <p className="mb-2 rounded-md border border-muted bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
-                  <strong className="text-foreground">规则解析</strong>
-                  由站内紫微引擎本地计算，<strong className="text-foreground">不调用大模型</strong>
-                </p>
-                {birthData ? (
-                  <ZiweiAnalysisPanel birthData={birthData} />
-                ) : (
-                  <div className="p-8 text-center text-muted-foreground">
-                    暂无出生数据，请重新排盘
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
+            {/* 移动端分隔线 */}
+            <div className="border-t md:hidden" />
+            {/* 规则解析 */}
+            <div className="w-full">
+              {birthData ? (
+                <ZiweiAnalysisPanel birthData={birthData} />
+              ) : (
+                <div className="p-8 text-center text-muted-foreground">
+                  暂无出生数据，请重新排盘
+                </div>
+              )}
+            </div>
 
             {/* AI 对话区 */}
             <ChatPanel
               astrolabeData={astrolabe}
-              horoscopeData={horoscope}
             />
           </div>
         </div>

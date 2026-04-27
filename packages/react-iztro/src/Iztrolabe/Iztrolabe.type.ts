@@ -6,5 +6,9 @@ export type IztrolabeProps = {
   horoscopeDate?: string | Date;
   horoscopeHour?: number;
   centerPalaceAlign?: boolean;
+  /** 运限日期变更回调 */
+  onHoroscopeDateChange?: (date: string | Date) => void;
+  /** 运限时辰变更回调 */
+  onHoroscopeHourChange?: (hour: number) => void;
 } & IztroInput &
   NestedProps;

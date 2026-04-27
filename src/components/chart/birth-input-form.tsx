@@ -36,7 +36,7 @@ function NativeSelect({
       disabled={disabled}
       className={
         className ??
-        "flex h-9 w-full rounded-md border border-primary/20 bg-background px-3 py-1 text-sm shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+        "flex h-9 w-full rounded-md border border-primary/20 bg-background px-3 py-1 text-base shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
       }
     >
       {children}
@@ -319,8 +319,11 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
 
           {!isLunar && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>出生城市（用于真太阳时校正）</Label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label>
+                  <span className="sm:hidden">出生城市</span>
+                  <span className="hidden sm:inline">出生城市（用于真太阳时校正）</span>
+                </Label>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground">启用真太阳时</Label>
                   <Switch

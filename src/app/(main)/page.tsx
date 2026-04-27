@@ -43,7 +43,7 @@ export default function HomePage() {
         <div className="absolute inset-0 opacity-5">
           <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-3xl" />
         </div>
-        <div className="relative mx-auto max-w-4xl px-4 py-20 text-center md:py-32">
+        <div className="relative mx-auto max-w-4xl px-4 py-14 text-center md:py-32">
           <p className="mb-4 text-sm tracking-[0.3em] text-accent-foreground/60">
             传统智慧 × 现代科学
           </p>

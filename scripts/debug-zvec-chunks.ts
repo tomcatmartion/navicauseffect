@@ -12,7 +12,7 @@ async function main() {
 
   try {
     const col = ZVecOpen(path1536, { readOnly: true });
-    const total = col.totalSync();
+    const total = col.stats.docCount;
     console.log(`总 chunk 数: ${total}\n`);
 
     // 搜索包含"子女宫"的 chunk

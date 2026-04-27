@@ -123,4 +123,17 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* 移动端基础防御性样式 */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 防止 iOS Safari 对小于 16px 的表单元素自动缩放 */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

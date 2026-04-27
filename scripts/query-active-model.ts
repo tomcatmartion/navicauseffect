@@ -5,7 +5,7 @@ import "dotenv/config";
 import { prisma } from "../src/lib/db";
 
 async function main() {
-  const configs = await prisma.aiModelConfig.findMany({
+  const configs = await prisma.aIModelConfig.findMany({
     where: { isActive: true },
     select: { provider: true, modelId: true, isDefault: true }
   });

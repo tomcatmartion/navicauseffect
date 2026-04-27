@@ -1,16 +1,5 @@
 import { AnalysisCategory } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import {
-  ZVecIndexType,
-  ZVecOpen,
-  type ZVecCollection,
-} from "@zvec/zvec";
-import { ensureZvecInitialized } from "@/lib/zvec/init-zvec";
-import { embeddingCollectionDimension } from "@/lib/zvec/constants";
-import { getEmbeddingConfigForFamily } from "@/lib/zvec/embedding-config";
-import { fetchEmbeddingVector } from "@/lib/zvec/fetch-embedding";
-import { getLogicdocCollectionPath } from "@/lib/zvec/paths";
-import type { EmbeddingDimensionFamily } from "@/lib/zvec/constants";
 import { buildHoroscopeQuerySnippet } from "@/lib/rag/horoscope-query-snippet";
 import { stableChunkId } from "@/lib/logicdoc/chunk-metadata";
 import { extractSystagKeywordsForCategory } from "@/lib/logicdoc/registry";
@@ -22,6 +11,52 @@ import {
 } from "@/lib/rag/logicdoc-hybrid";
 import { rerankRowsByLexical, type RerankableRow } from "@/lib/rag/logicdoc-rerank";
 import { createHash } from "crypto";
+
+// ── zvec 懒加载：兼容 GLIBC 2.28 等低版本系统 ──────────────
+// @zvec/zvec 含原生 .node 二进制，需要 GLIBC 2.29+
+// 静态 import 会在模块加载阶段崩溃，改为动态 require + 降级
+
+let _zvecAvailable: boolean | null = null
+let _ZVecOpen: typeof import("@zvec/zvec").ZVecOpen | null = null
+let _ZVecIndexType: typeof import("@zvec/zvec").ZVecIndexType | null = null
+
+/** 类型别名，避免在文件中到处写 any */
+type ZVecCollectionLike = ReturnType<typeof import("@zvec/zvec").ZVecOpen>
+
+function loadZvec(): boolean {
+  if (_zvecAvailable !== null) return _zvecAvailable
+  try {
+    const zvec = require("@zvec/zvec") as typeof import("@zvec/zvec")
+    _ZVecOpen = zvec.ZVecOpen
+    _ZVecIndexType = zvec.ZVecIndexType
+    // 初始化
+    const { ZVecInitialize, ZVecLogLevel, ZVecLogType } = require("@zvec/zvec") as typeof import("@zvec/zvec")
+    try {
+      ZVecInitialize({
+        logLevel: ZVecLogLevel[(process.env.ZVEC_LOG_LEVEL as keyof typeof ZVecLogLevel) ?? "WARNING"],
+        logType: ZVecLogType.CONSOLE,
+      })
+    } catch { /* 已初始化则忽略 */ }
+    _zvecAvailable = true
+    console.log("[zvec] 原生库加载成功")
+  } catch (err) {
+    _zvecAvailable = false
+    console.warn("[zvec] 原生库加载失败（GLIBC 不兼容或未安装），RAG 向量检索不可用:", (err as Error).message)
+  }
+  return _zvecAvailable
+}
+
+// zvec 依赖的辅助函数也改为懒加载
+function getEmbeddingHelpers() {
+  const { embeddingCollectionDimension } = require("@/lib/zvec/constants") as typeof import("@/lib/zvec/constants")
+  const { getEmbeddingConfigForFamily } = require("@/lib/zvec/embedding-config") as typeof import("@/lib/zvec/embedding-config")
+  const { fetchEmbeddingVector } = require("@/lib/zvec/fetch-embedding") as typeof import("@/lib/zvec/fetch-embedding")
+  const { getLogicdocCollectionPath } = require("@/lib/zvec/paths") as typeof import("@/lib/zvec/paths")
+  return { embeddingCollectionDimension, getEmbeddingConfigForFamily, fetchEmbeddingVector, getLogicdocCollectionPath }
+}
+
+/** 类型别名，避免到处 require */
+type EmbeddingDimensionFamily = import("@/lib/zvec/constants").EmbeddingDimensionFamily
 
 // ─── Embedding 向量缓存（避免相同查询文本重复调 API） ───
 const EMBEDDING_CACHE_MAX = 128;
@@ -535,12 +570,14 @@ export function buildRagQueryVariants(
 }
 
 function openReadCollection(
-  family: EmbeddingDimensionFamily,
+  family: string,
   pathStr: string
-): ZVecCollection {
-  ensureZvecInitialized();
+): ZVecCollectionLike {
+  if (!loadZvec() || !_ZVecOpen) {
+    throw new LogicdocIndexMissingError();
+  }
   try {
-    return ZVecOpen(pathStr, { readOnly: true });
+    return _ZVecOpen(pathStr, { readOnly: true });
   } catch {
     throw new LogicdocIndexMissingError();
   }
@@ -655,7 +692,7 @@ function decodeChunkIndexFromId(sourceFile: string, id: string): number {
 }
 
 function appendNeighborChunks(
-  col: ZVecCollection,
+  col: ZVecCollectionLike,
   rows: ZvecHit[],
   maxPerHit: number,
   maxCharsPerNeighbor: number
@@ -698,10 +735,11 @@ function appendNeighborChunks(
 }
 
 async function getOrEmbedQueryVector(
-  cfg: Awaited<ReturnType<typeof getEmbeddingConfigForFamily>>,
+  cfg: Awaited<ReturnType<typeof import("@/lib/zvec/embedding-config").getEmbeddingConfigForFamily>>,
   queryText: string,
   dimension: number
 ): Promise<number[]> {
+  const { fetchEmbeddingVector } = getEmbeddingHelpers();
   const cacheKey = getEmbeddingCacheKey(queryText, dimension);
   let vector = getCachedVector(cacheKey);
   if (vector) {
@@ -719,17 +757,17 @@ async function getOrEmbedQueryVector(
 }
 
 function runVectorQuery(
-  col: ZVecCollection,
+  col: ZVecCollectionLike,
   vector: number[],
   topk: number,
   filterExpr?: string
 ): ZvecHit[] {
-  const q: Parameters<ZVecCollection["querySync"]>[0] = {
+  const q: Parameters<ZVecCollectionLike["querySync"]>[0] = {
     fieldName: "embedding",
     vector,
     topk,
     outputFields: ["text", "source_file", "biz_modules"],
-    params: { indexType: ZVecIndexType.HNSW, ef: 200 },
+    params: { indexType: _ZVecIndexType?.HNSW ?? "HNSW" as never, ef: 200 },
   };
   if (filterExpr) {
     (q as { filter: string }).filter = filterExpr;
@@ -750,6 +788,7 @@ async function retrieveFusion(
   prisma: PrismaClient,
   opts: RetrievalOpts
 ): Promise<LogicdocRetrievalDetail> {
+  const { getLogicdocCollectionPath, getEmbeddingConfigForFamily, embeddingCollectionDimension } = getEmbeddingHelpers();
   const pathStr = getLogicdocCollectionPath(opts.family);
   const col = openReadCollection(opts.family, pathStr);
   const filterSteps: FilterStepRecord[] = [];
@@ -920,6 +959,7 @@ export async function retrieveLogicdocForAnalysisDetailed(
     return retrieveFusion(prisma, opts);
   }
   // 以下是原有 legacy 流程
+  const { getLogicdocCollectionPath, getEmbeddingConfigForFamily, embeddingCollectionDimension } = getEmbeddingHelpers();
   const pathStr = getLogicdocCollectionPath(opts.family);
   const col = openReadCollection(opts.family, pathStr);
   const filterSteps: FilterStepRecord[] = [];
