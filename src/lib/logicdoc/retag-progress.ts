@@ -5,6 +5,7 @@
  */
 
 import { readFile, writeFile, mkdir, rename } from "fs/promises";
+import { randomUUID } from "crypto";
 import path from "path";
 import { join } from "path";
 
@@ -93,7 +94,8 @@ export async function writeRetagProgress(update: Partial<RetagProgress>): Promis
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });
   // 原子写入：先写临时文件，再 rename，防止写入一半时断电导致 JSON 损坏
-  const tmpPath = join(dir, ".retag-progress.tmp");
+  // 每次写入使用唯一临时文件名，避免并发写入 rename 竞争（ENOENT）
+  const tmpPath = join(dir, `.retag-progress.${randomUUID()}.tmp`);
   await writeFile(tmpPath, JSON.stringify(merged, null, 2), "utf-8");
   await rename(tmpPath, filePath);
 }

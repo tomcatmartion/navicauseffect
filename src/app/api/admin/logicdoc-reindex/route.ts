@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { withLogicdocIndexFileLock } from "@/lib/zvec/index-lock";
 import { runLogicdocZvecIndex } from "@/lib/zvec/logicdoc-indexer";
+import { clearStaleIndexArtifacts } from "@/lib/zvec/index-housekeeping";
 
 async function requireAdmin() {
   const session = await auth();
@@ -18,6 +19,9 @@ export async function POST() {
   if (!session) {
     return NextResponse.json({ error: "无权限" }, { status: 403 });
   }
+
+  // 启动前清理上次中断残留的锁文件和过期进度
+  await clearStaleIndexArtifacts();
 
   try {
     const stats = await withLogicdocIndexFileLock(() =>

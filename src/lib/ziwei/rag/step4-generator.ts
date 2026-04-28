@@ -25,13 +25,15 @@ export interface AssembleContextParams {
   elements: ReadingElements
   sessionHistory: string
   question: string
+  /** 运限摘要（大限/流年/小限），当问题涉及具体年份时生成 */
+  horoscopeSummary?: string
 }
 
 /**
  * 组装完整的解盘上下文
  */
 export function assembleContext(params: AssembleContextParams): string {
-  const { chartSummary, rules, techs, knowledge, elements, sessionHistory, question } = params
+  const { chartSummary, rules, techs, knowledge, elements, sessionHistory, question, horoscopeSummary } = params
 
   const knowledgeText = knowledge.length > 0
     ? knowledge
@@ -47,9 +49,14 @@ export function assembleContext(params: AssembleContextParams): string {
     ? `\n## 实战技法参考\n${techs}`
     : ''
 
+  const horoscopeSection = horoscopeSummary
+    ? `\n## 运限信息\n以下为用户当前大限及目标年份的流年/小限数据，分析时必须参考：\n${horoscopeSummary}`
+    : ''
+
   return `## 用户命盘
 ${chartSummary}
 ${analysisHints}
+${horoscopeSection}
 
 ## 解盘规则（请严格遵循）
 ${rules}
@@ -129,7 +136,7 @@ export async function generateReading(context: string): Promise<string> {
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: context },
     ],
-    { temperature: 0.7, maxTokens: 1500 }
+    { temperature: 0.7, maxTokens: 3000 }
   )
 }
 
@@ -151,7 +158,7 @@ export async function generateReadingStream(
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: context },
     ],
-    { temperature: 0.7, maxTokens: 1500, stream: true }
+    { temperature: 0.7, maxTokens: 3000, stream: true }
   )
 }
 

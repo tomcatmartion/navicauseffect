@@ -27,10 +27,68 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 }
 
 const TIME_KEYWORDS: Record<string, string[]> = {
-  '流年': ['今年', '流年', '这一年', '当年'],
+  '流年': ['今年', '流年', '这一年', '当年', '明年', '后年', '大后年', '去年', '前年'],
   '大限': ['这十年', '大限', '这段时期'],
   '流月': ['这个月', '流月', '本月'],
   '本命': ['先天', '一生', '整体', '命格'],
+}
+
+// ── 年份解析（将相对年份转换为绝对年份）────────────────────
+
+/** 相对年份 → 偏移量（必须按长度降序排列，避免"大后年"被"后年"误匹配） */
+const YEAR_OFFSET_PATTERNS: [RegExp, number][] = [
+  [/大后年/, 3],
+  [/后年/, 2],
+  [/明年/, 1],
+  [/今年/, 0],
+  [/去年/, -1],
+  [/前年/, -2],
+]
+
+/** 绝对年份匹配（如 "2028年"、"2028"） */
+const ABSOLUTE_YEAR_RE = /(\d{4})年?/
+
+export interface YearResolution {
+  /** 解析出的目标年份，null 表示未检测到年份引用 */
+  targetYear: number | null
+  /** 澄清后的问题（将相对年份替换为"XXXX年（相对词）"） */
+  clarifiedQuestion: string
+}
+
+/**
+ * 从用户问题中解析目标年份
+ *
+ * 优先级：相对年份（后年/明年等）> 绝对年份（2028年）> null
+ */
+export function resolveTargetYear(question: string): YearResolution {
+  const currentYear = new Date().getFullYear()
+
+  // 1. 尝试匹配相对年份
+  for (const [re, offset] of YEAR_OFFSET_PATTERNS) {
+    const match = question.match(re)
+    if (match) {
+      const targetYear = currentYear + offset
+      const clarified = question.replace(re, `${targetYear}年（${match[0]}）`)
+      return { targetYear, clarifiedQuestion: clarified }
+    }
+  }
+
+  // 2. 尝试匹配绝对年份（排除当前年份，因为"今年"已由上面处理）
+  const absMatch = question.match(ABSOLUTE_YEAR_RE)
+  if (absMatch) {
+    const year = parseInt(absMatch[1], 10)
+    if (year >= 1900 && year <= 2100 && year !== currentYear) {
+      return { targetYear: year, clarifiedQuestion: question }
+    }
+  }
+
+  // 3. 检测是否包含流年关键词（不指定具体年份时用当前年份）
+  const hasLiunianKw = TIME_KEYWORDS['流年'].some(kw => question.includes(kw))
+  if (hasLiunianKw) {
+    return { targetYear: currentYear, clarifiedQuestion: question }
+  }
+
+  return { targetYear: null, clarifiedQuestion: question }
 }
 
 // domain → 规则文件名
@@ -50,6 +108,39 @@ const DOMAIN_RULE_FILES: Record<string, string> = {
 
 const RULES_DIR = path.join(process.cwd(), 'sysfiles', 'sysrules')
 const TECH_DIR = path.join(process.cwd(), 'sysfiles', 'systech')
+
+// ── 文件缓存（生产环境减少磁盘 I/O）──────────────────────
+
+interface CachedContent {
+  content: string
+  cachedAt: number
+}
+
+// 缓存 key 仅限预定义 domain 名称（DOMAIN_RULE_FILES 中的 key），不接受外部输入
+const rulesCache = new Map<string, CachedContent>()
+const techsCache = new Map<string, CachedContent>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 分钟
+const isDev = process.env.NODE_ENV === 'development'
+
+/** 从缓存读取文件内容，开发环境跳过缓存 */
+function readWithCache(
+  filePath: string,
+  cache: Map<string, CachedContent>,
+  cacheKey: string,
+): string {
+  if (!isDev) {
+    const cached = cache.get(cacheKey)
+    if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
+      return cached.content
+    }
+  }
+
+  const content = fs.readFileSync(filePath, 'utf-8')
+  if (!isDev) {
+    cache.set(cacheKey, { content, cachedAt: Date.now() })
+  }
+  return content
+}
 
 // ── 核心函数 ────────────────────────────────────────────
 
@@ -86,7 +177,7 @@ export function detectDomain(question: string, lastDomain?: string): ReadingDoma
 }
 
 /**
- * 硬加载规则文件（直接 fs.readFileSync，绝不走向量库）
+ * 硬加载规则文件（生产环境缓存 5 分钟，绝不走向量库）
  */
 export function loadRules(domains: string[]): string {
   const contents: string[] = []
@@ -101,7 +192,7 @@ export function loadRules(domains: string[]): string {
       continue
     }
 
-    const content = fs.readFileSync(filePath, 'utf-8')
+    const content = readWithCache(filePath, rulesCache, `rule:${domain}`)
     contents.push(`### ${domain}解盘规则\n\n${content}`)
   }
 
@@ -109,7 +200,7 @@ export function loadRules(domains: string[]): string {
 }
 
 /**
- * 硬加载技法文件（直接 fs.readFileSync，绝不走向量库）
+ * 硬加载技法文件（生产环境缓存 5 分钟，绝不走向量库）
  */
 export function loadTechs(domains: string[]): string {
   const contents: string[] = []
@@ -118,7 +209,7 @@ export function loadTechs(domains: string[]): string {
     const filePath = path.join(TECH_DIR, `${domain}技法.md`)
     if (!fs.existsSync(filePath)) continue
 
-    const content = fs.readFileSync(filePath, 'utf-8')
+    const content = readWithCache(filePath, techsCache, `tech:${domain}`)
     contents.push(`### ${domain}实战技法\n\n${content}`)
   }
 

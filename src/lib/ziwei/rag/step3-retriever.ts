@@ -213,28 +213,36 @@ async function vectorFallback(
     // 获取查询向量
     const queryVector = await fetchEmbeddingVector(cfg, query)
 
-    // 自动查找已存在的 Zvec 集合（支持任意维度：1024/1536/2048）
+    // 按维度精确匹配 Zvec 集合（避免多维度目录时选错）
     ensureZvecInitialized()
     const fs = await import('fs')
     const nodePath = await import('path')
     const zvecRoot = nodePath.join(process.cwd(), 'data', 'zvec')
+    const expectedDir = `sysknowledge_dim${family}`
     let colPath: string | null = null
     if (fs.existsSync(zvecRoot)) {
-      const dirs = fs.readdirSync(zvecRoot).filter(d => d.startsWith('sysknowledge_dim'))
+      const dirs = fs.readdirSync(zvecRoot).filter(d => d === expectedDir)
       if (dirs.length > 0) {
         colPath = nodePath.join(zvecRoot, dirs[0])
       }
     }
     if (!colPath) {
-      console.warn('[Step3] 无可用的 Zvec 知识集合')
+      const allDirs = fs.existsSync(zvecRoot) ? fs.readdirSync(zvecRoot).join(', ') : '(目录不存在)'
+      console.warn(`[Step3] 期望目录 ${expectedDir} 不存在，zvecRoot 下有: ${allDirs}`)
       return []
     }
 
     let col: ReturnType<typeof ZVecOpen> | null = null
     try {
+      // 清理残留 LOCK 文件（进程异常退出后遗留，会导致 readOnly 模式无法打开）
+      const lockPath = nodePath.join(colPath, 'LOCK')
+      if (fs.existsSync(lockPath)) {
+        const stat = fs.statSync(lockPath)
+        if (stat.size === 0) fs.unlinkSync(lockPath)
+      }
       col = ZVecOpen(colPath, { readOnly: true })
-    } catch {
-      console.warn('[Step3] Zvec 集合不存在或无法打开:', colPath)
+    } catch (e) {
+      console.warn('[Step3] Zvec 集合不存在或无法打开:', colPath, (e as Error).message)
       return []
     }
 
@@ -263,8 +271,11 @@ async function vectorFallback(
       const palacesFromFields = parseFieldToArray(fields.palaces)
 
       return {
-        // 基于原始 ID 的确定性负数哈希，确保同一 Zvec 记录多次调用产生相同 ID
-        id: deterministicNegativeId(String(r.id ?? '')),
+        // 基于原始 ID 的确定性负数哈希，空 id 时用 source_file + 内容前缀兜底
+        id: deterministicNegativeId(
+          String(r.id ?? ''),
+          String(fields.source_file ?? '') + text.slice(0, 50),
+        ),
         title: sourceFile.replace(/\.md$/, ''),
         content: text,
         stars: starsFromFields.length > 0 ? starsFromFields : extractNamesFromText(text, CORE_STARS),
@@ -401,11 +412,14 @@ function safeJsonParse(value: string | unknown): string[] {
   return []
 }
 
-/** 基于字符串的确定性负数 ID 生成（同一输入始终产出同一负数） */
-function deterministicNegativeId(rawId: string): number {
+/** 基于字符串的确定性负数 ID 生成（同一输入始终产出同一负数）
+ *  fallbackKey：当 rawId 为空时用 source_file + 内容前缀作为备选，保持确定性 */
+function deterministicNegativeId(rawId: string, fallbackKey: string = ''): number {
+  const source = rawId || fallbackKey
+  if (!source) return -999999
   let hash = 0
-  for (let i = 0; i < rawId.length; i++) {
-    hash = ((hash << 5) - hash + rawId.charCodeAt(i)) | 0
+  for (let i = 0; i < source.length; i++) {
+    hash = ((hash << 5) - hash + source.charCodeAt(i)) | 0
   }
   return hash === 0 ? -1 : -Math.abs(hash)
 }

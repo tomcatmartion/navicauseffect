@@ -233,10 +233,19 @@ async function callAIForBatch(
     const batchResult = parseTagResponse(response);
 
     if (batchResult.size === 0) {
-      console.warn(
-        `[ai-tagger] batch ${batchIdx}/${totalBatches} 解析失败，` +
-        `原始响应前300字：${stripThinking(response).slice(0, 300)}`
-      );
+      const cleaned = stripThinking(response);
+      // 区分：真正的 JSON 解析失败 vs AI 合法返回空标签
+      const looksLikeValidJson = /^\s*\[\s*\{[\s\S]*\}\s*\]\s*$/.test(cleaned);
+      if (looksLikeValidJson) {
+        console.info(
+          `[ai-tagger] batch ${batchIdx}/${totalBatches} AI 返回空标签（文本不涉及已知分类）`
+        );
+      } else {
+        console.warn(
+          `[ai-tagger] batch ${batchIdx}/${totalBatches} 响应解析失败，` +
+          `原始响应前300字：${cleaned.slice(0, 300)}`
+        );
+      }
     }
 
     return batchResult;

@@ -115,3 +115,37 @@ export const ReadingRequestSchema = z.object({
   question: z.string().min(1).max(500),
   chartData: z.record(z.string(), z.unknown()).optional(),
 })
+
+// ── 调试信息（Phase 3）──────────────────────────────────
+
+export interface PipelineDebugInfo {
+  /** Step 1：意图路由结果 */
+  step1: {
+    domain: ReadingDomain
+    rulesLength: number
+    techsLength: number
+  }
+  /** Step 2：要素提取结果 */
+  step2: {
+    elements: ReadingElements
+    isFollowUp: boolean
+  }
+  /** Step 3：知识召回结果 */
+  step3: {
+    knowledgeCount: number
+    knowledge: KnowledgeChunk[]
+  }
+  /** Step 4：完整上下文 */
+  step4: {
+    context: string
+    horoscopeSummary?: string
+  }
+  /** 年份解析结果 */
+  yearResolution: {
+    originalQuestion: string
+    targetYear: number | null
+    clarifiedQuestion: string
+  }
+  /** 各步骤耗时（ms） */
+  timing: Record<string, number>
+}

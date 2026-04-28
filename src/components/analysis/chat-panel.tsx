@@ -4,21 +4,35 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Send, Loader2, MessageCircle } from "lucide-react";
+import { Send, Loader2, MessageCircle, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PipelineDebugInfo } from "@/lib/ziwei/rag/types";
+import { ReadingDebugPanel } from "./reading-debug-panel";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  /** 调试信息（仅 assistant 消息有） */
+  debugInfo?: PipelineDebugInfo;
 }
 
 interface ChatPanelProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   astrolabeData: any;
+  /** 出生数据，用于服务端计算运限（大限/流年/小限） */
+  birthData?: {
+    gender: string;
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    solar?: boolean;
+  } | null;
 }
 
 export function ChatPanel({
   astrolabeData,
+  birthData,
 }: ChatPanelProps) {
   const { data: session } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -26,6 +40,7 @@ export function ChatPanel({
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [readingSessionId, setReadingSessionId] = useState<string | null>(null);
+  const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -66,8 +81,8 @@ export function ChatPanel({
       if (readingSessionId) {
         requestBody.sessionId = readingSessionId;
       } else if (astrolabeData) {
-        // 首次发送，序列化命盘数据
-        requestBody.chartData = serializeAstrolabe(astrolabeData);
+        // 首次发送，序列化命盘数据（含出生信息供服务端计算运限）
+        requestBody.chartData = serializeAstrolabe(astrolabeData, birthData);
       }
 
       const response = await fetch("/api/ziwei/reading", {
@@ -113,6 +128,7 @@ export function ChatPanel({
       const decoder = new TextDecoder();
       let accumulated = "";
       let sseCarry = "";
+      let currentDebugInfo: PipelineDebugInfo | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -132,11 +148,19 @@ export function ChatPanel({
               text?: string;
               sessionId?: string;
               error?: string;
+              type?: string;
+              debugInfo?: PipelineDebugInfo;
             };
 
             // 从首个事件中提取 sessionId
             if (parsed.sessionId && !readingSessionId) {
               setReadingSessionId(parsed.sessionId);
+            }
+
+            // 捕获调试信息
+            if (parsed.type === "debug" && parsed.debugInfo) {
+              currentDebugInfo = parsed.debugInfo;
+              continue;
             }
 
             if (parsed.error) {
@@ -154,11 +178,11 @@ export function ChatPanel({
         if (done) break;
       }
 
-      // 流结束，追加 assistant 消息
+      // 流结束，追加 assistant 消息（含调试信息）
       if (accumulated) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: accumulated },
+          { role: "assistant", content: accumulated, debugInfo: currentDebugInfo },
         ]);
       } else {
         setMessages((prev) => [
@@ -199,6 +223,7 @@ export function ChatPanel({
   ];
 
   return (
+    <>
     <Card className="flex flex-col border-primary/15">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base text-primary">
@@ -248,6 +273,27 @@ export function ChatPanel({
               <div className="whitespace-pre-wrap leading-relaxed">
                 {renderContent(msg.content)}
               </div>
+              {/* 调试按钮：仅 assistant 消息且含调试数据时显示 */}
+              {msg.role === "assistant" && msg.debugInfo && (
+                <div className="mt-2 flex justify-end border-t border-border/30 pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveDebug(msg.debugInfo ?? null)}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Bug className="h-3 w-3" />
+                    查看 RAG 调试信息
+                  </button>
+                </div>
+              )}
+              {/* 无调试数据时的提示 */}
+              {msg.role === "assistant" && !msg.debugInfo && i > 0 && (
+                <div className="mt-2 flex justify-end border-t border-border/30 pt-1.5">
+                  <span className="text-[10px] text-muted-foreground/50">
+                    调试数据不可用（重新发送问题可获取）
+                  </span>
+                </div>
+              )}
             </div>
           ))}
           {/* 流式输出 */}
@@ -296,19 +342,29 @@ export function ChatPanel({
         </div>
       </CardContent>
     </Card>
+
+      {/* 调试面板 */}
+      {activeDebug && (
+        <ReadingDebugPanel
+          open={!!activeDebug}
+          onClose={() => setActiveDebug(null)}
+          debugInfo={activeDebug}
+        />
+      )}
+    </>
   );
 }
 
 /**
  * 将 iztro FunctionalAstrolabe 对象序列化为可传输的 JSON
- * 提取命盘核心字段：基本信息 + 各宫星曜
+ * 提取命盘核心字段：基本信息 + 各宫星曜 + 出生数据（供服务端计算运限）
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializeAstrolabe(astrolabe: any): Record<string, unknown> {
+function serializeAstrolabe(astrolabe: any, birthDataParam?: ChatPanelProps['birthData']): Record<string, unknown> {
   if (!astrolabe) return {};
 
   // iztro FunctionalAstrolabe 的核心字段
-  return {
+  const result: Record<string, unknown> = {
     name: astrolabe.name ?? "命主",
     gender: astrolabe.gender ?? "male",
     soul: astrolabe.soul ?? "",
@@ -338,6 +394,20 @@ function serializeAstrolabe(astrolabe: any): Record<string, unknown> {
       })
     ),
   };
+
+  // 出生数据（供服务端 iztro 重建命盘计算运限）
+  if (birthDataParam) {
+    result.birthInfo = {
+      year: birthDataParam.year,
+      month: birthDataParam.month,
+      day: birthDataParam.day,
+      hour: birthDataParam.hour,
+      gender: birthDataParam.gender === "MALE" ? "男" : birthDataParam.gender,
+      solar: birthDataParam.solar ?? true,
+    };
+  }
+
+  return result;
 }
 
 /** 简易 Markdown 渲染：加粗 + 换行 */

@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
           let buffer = ''
           let fullReply = ''
           let sessionIdSent = false
+          let debugSent = false
 
           try {
             while (true) {
@@ -115,6 +116,12 @@ export async function POST(request: NextRequest) {
                       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText, sessionId: result.sessionId })}\n\n`))
                     } else {
                       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText })}\n\n`))
+                    }
+
+                    // 首个文本事件之后立即发送调试数据
+                    if (!debugSent && result.debugInfo) {
+                      debugSent = true
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo: result.debugInfo })}\n\n`))
                     }
                   }
                 }
@@ -157,6 +164,7 @@ export async function POST(request: NextRequest) {
       reply: result.reply,
       sessionId: result.sessionId,
       elements: result.elements,
+      debugInfo: result.debugInfo,
     })
 
   } catch (err) {

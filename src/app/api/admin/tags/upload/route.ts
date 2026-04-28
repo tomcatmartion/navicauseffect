@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
 const SYSTAG_DIR = "sysfiles/systag";
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const systagPath = path.join(process.cwd(), SYSTAG_DIR);
+    await mkdir(systagPath, { recursive: true });
     const destPath = path.join(systagPath, safeName);
     await writeFile(destPath, Buffer.from(bytes));
 

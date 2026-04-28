@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "build": "next build --webpack && bash scripts/postbuild-copy-zvec-bindings.sh",
     "start": "next start",
     "prod": "npm run build && npm run start",
     "lint": "eslint",
@@ -24,13 +24,15 @@
     "test:embedding-config": "npx tsx scripts/test-embedding-config-persist.ts",
     "test:embedding-pipeline": "npx tsx scripts/test-embedding-pipeline.ts",
     "test:rag-categories": "npx tsx scripts/test-rag-all-categories.ts",
-    "logicdoc:index-zvec": "npx tsx scripts/logicdoc-index-zvec.ts",
-    "sysknowledge:index-zvec": "npx tsx scripts/logicdoc-index-zvec.ts",
-    "ziwei:index": "npx tsx scripts/index-ziwei-knowledge.ts"
+    "logicdoc:index-zvec": "node scripts/logicdoc-index-zvec.cjs 2>/dev/null || npx tsx scripts/logicdoc-index-zvec.ts",
+    "sysknowledge:index-zvec": "node scripts/logicdoc-index-zvec.cjs 2>/dev/null || npx tsx scripts/logicdoc-index-zvec.ts",
+    "ziwei:index": "node scripts/index-ziwei-knowledge.cjs 2>/dev/null || npx tsx scripts/index-ziwei-knowledge.ts",
+    "release": "bash scripts/build-release.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.2",
+    "@zvec/bindings-linux-x64": "^0.3.2",
     "@zvec/zvec": "^0.3.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

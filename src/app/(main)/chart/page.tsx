@@ -331,6 +331,7 @@ export default function ChartPage() {
             {/* AI 对话区 */}
             <ChatPanel
               astrolabeData={astrolabe}
+              birthData={birthData}
             />
           </div>
         </div>
