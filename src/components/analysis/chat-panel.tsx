@@ -55,13 +55,9 @@ export function ChatPanel({
     setUserScrolled(distanceFromBottom > 50 && messages.length > 0);
   }, [streaming, messages.length]);
 
-  // 自动定位：仅在有新消息时触发，初次加载不自动滚动到输入框
+  // 自动定位：仅在新消息追加且用户未手动滚动时定位，流式输出时不干预页面滚动
   useEffect(() => {
-    if (streaming) {
-      // 流式输出过程中始终跟随到底部
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } else if (!userScrolled && messages.length > 0) {
-      // 非流式时：仅在新消息追加且用户未手动滚动时定位
+    if (!streaming && !userScrolled && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, streaming, userScrolled]);
