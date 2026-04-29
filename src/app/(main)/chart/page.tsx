@@ -180,16 +180,18 @@ export default function ChartPage() {
       }
 
       const dateMatch = data.solarDate.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-      if (dateMatch) {
-        setBirthData({
-          gender: data.gender === "男" ? "MALE" : "FEMALE",
-          year: parseInt(dateMatch[1], 10),
-          month: parseInt(dateMatch[2], 10),
-          day: parseInt(dateMatch[3], 10),
-          hour: data.timeIndex,
-          solar: !data.isLunar,
-        });
-      }
+      // 构建 birthInfo（用于 state 和 sessionStorage），不依赖 dateMatch 是否存在
+      const birthInfo = {
+        gender: (data.gender === "男" ? "MALE" : "FEMALE") as "MALE" | "FEMALE",
+        year: dateMatch ? parseInt(dateMatch[1], 10) : new Date().getFullYear(),
+        month: dateMatch ? parseInt(dateMatch[2], 10) : 1,
+        day: dateMatch ? parseInt(dateMatch[3], 10) : 1,
+        hour: data.timeIndex,
+        solar: !data.isLunar,
+      };
+
+      // 必须先 setBirthData，再渲染 AI 分析面板（否则显示"暂无出生数据"）
+      setBirthData(birthInfo);
 
       setAstrolabe(result);
       setTrueSolarTimeInfo(data.trueSolarTimeInfo);
@@ -199,18 +201,11 @@ export default function ChartPage() {
       const horo = result.horoscope(new Date(), data.timeIndex);
       setHoroscope(horo);
 
-      // 保存出生数据到 sessionStorage，用于从调试页返回时恢复命盘
-      if (dateMatch) {
-        sessionStorage.setItem(CHART_STATE_KEY, JSON.stringify({
-          gender: data.gender === "男" ? "MALE" : "FEMALE",
-          year: parseInt(dateMatch[1], 10),
-          month: parseInt(dateMatch[2], 10),
-          day: parseInt(dateMatch[3], 10),
-          hour: data.timeIndex,
-          solar: !data.isLunar,
-          trueSolarTimeInfo: data.trueSolarTimeInfo,
-        }));
-      }
+      // 保存到 sessionStorage（用于页面刷新后恢复命盘状态）
+      sessionStorage.setItem(CHART_STATE_KEY, JSON.stringify({
+        ...birthInfo,
+        trueSolarTimeInfo: data.trueSolarTimeInfo,
+      }));
     } catch (err) {
       console.error("排盘错误:", err);
     } finally {
@@ -271,12 +266,12 @@ export default function ChartPage() {
       </div>
 
       {/* 主体：左右分栏 */}
-      <div className="flex flex-col gap-4 md:flex-row md:gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:gap-4 md:items-stretch">
         {/* 左侧：命盘（transform scale 缩放） */}
-        <div className="w-full md:w-[460px] md:flex-none">
+        <div className="w-full md:w-[460px] md:flex-none md:self-stretch">
           <div
             ref={chartWrapperRef}
-            className="rounded-lg border bg-card overflow-hidden"
+            className="rounded-lg border bg-card overflow-hidden md:h-full"
             style={{
               padding: `${CHART_PADDING}px`,
               height: chartNaturalHeight > 0 ? chartNaturalHeight * chartScale + CHART_PADDING * 2 : undefined,
@@ -313,22 +308,22 @@ export default function ChartPage() {
         </div>
 
         {/* 右侧：AI 分析 + 对话 */}
-        <div className="w-full md:flex-1 md:min-w-0">
-          <div className="flex h-full flex-col gap-4">
-            {/* 移动端分隔线 */}
-            <div className="border-t md:hidden" />
-            {/* 规则解析 */}
-            <div className="w-full">
-              {birthData ? (
-                <ZiweiAnalysisPanel birthData={birthData} />
-              ) : (
-                <div className="p-8 text-center text-muted-foreground">
-                  暂无出生数据，请重新排盘
-                </div>
-              )}
-            </div>
+        <div className="flex w-full flex-col gap-4 md:flex-1 md:min-w-0 md:self-stretch">
+          {/* 移动端分隔线 */}
+          <div className="border-t md:hidden" />
+          {/* 规则解析 */}
+          <div className="w-full flex-none">
+            {birthData ? (
+              <ZiweiAnalysisPanel birthData={birthData} />
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                暂无出生数据，请重新排盘
+              </div>
+            )}
+          </div>
 
-            {/* AI 对话区 */}
+          {/* AI 对话区 */}
+          <div className="flex-1 min-h-0">
             <ChatPanel
               astrolabeData={astrolabe}
               birthData={birthData}

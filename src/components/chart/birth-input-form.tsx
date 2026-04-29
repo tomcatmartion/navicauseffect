@@ -90,16 +90,16 @@ function getDaysInMonth(year: number, month: number): number {
 const thisYear = new Date().getFullYear();
 
 export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
-  const [solarYear, setSolarYear] = useState("1982");
-  const [solarMonth, setSolarMonth] = useState("9");
-  const [solarDay, setSolarDay] = useState("24");
+  const [solarYear, setSolarYear] = useState("2000");
+  const [solarMonth, setSolarMonth] = useState("1");
+  const [solarDay, setSolarDay] = useState("1");
 
-  const [lunarYear, setLunarYear] = useState("1982");
+  const [lunarYear, setLunarYear] = useState("2000");
   const [lunarMonth, setLunarMonth] = useState("1");
   const [lunarDay, setLunarDay] = useState("1");
   const [isLeapMonth, setIsLeapMonth] = useState(false);
 
-  const [birthHour, setBirthHour] = useState("4");
+  const [birthHour, setBirthHour] = useState("10");
   const [birthMinute, setBirthMinute] = useState("0");
   const [gender, setGender] = useState("男");
   const [city, setCity] = useState("北京");

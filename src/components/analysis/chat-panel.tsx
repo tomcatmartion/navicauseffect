@@ -41,13 +41,30 @@ export function ChatPanel({
   const [streamContent, setStreamContent] = useState("");
   const [readingSessionId, setReadingSessionId] = useState<string | null>(null);
   const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | null>(null);
+  const [userScrolled, setUserScrolled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自动滚动到底部
+  // 检测用户是否手动滚动过消息容器
+  const handleContainerScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el || streaming) return;
+    // 只有当消息数量 > 0 时才记录用户滚动状态
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setUserScrolled(distanceFromBottom > 50 && messages.length > 0);
+  }, [streaming, messages.length]);
+
+  // 自动定位：仅在有新消息时触发，初次加载不自动滚动到输入框
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamContent]);
+    if (streaming) {
+      // 流式输出过程中始终跟随到底部
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } else if (!userScrolled && messages.length > 0) {
+      // 非流式时：仅在新消息追加且用户未手动滚动时定位
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, streaming, userScrolled]);
 
   // 自动调整 textarea 高度
   useEffect(() => {
@@ -70,6 +87,8 @@ export function ChatPanel({
     setInput("");
     setStreaming(true);
     setStreamContent("");
+    setUserScrolled(false); // 重置用户滚动状态，新消息允许自动定位
+    setUserScrolled(false); // 重置用户滚动状态，新消息允许自动定位
 
     try {
       // 构造请求体：首次带 chartData，后续只带 sessionId
@@ -200,6 +219,7 @@ export function ChatPanel({
       setStreamContent("");
     } finally {
       setStreaming(false);
+      setUserScrolled(false); // 流结束后重置状态
     }
   }, [streaming, readingSessionId, astrolabeData]);
 
@@ -224,19 +244,24 @@ export function ChatPanel({
 
   return (
     <>
-    <Card className="flex flex-col border-primary/15">
-      <CardHeader className="pb-3">
+    <Card className="flex h-full flex-col border-primary/15">
+      <CardHeader className="pb-0 shrink-0">
         <CardTitle className="flex items-center gap-2 text-base text-primary">
           <MessageCircle className="h-4 w-4" />
           AI 精准解盘
         </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          基于规则库+技法库+知识库的四步精准召回，深入解读命盘
-        </p>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-3 p-4 pt-0">
+      <CardContent className="flex flex-1 flex-col gap-2 p-4 pt-3 overflow-hidden">
+        {/* 流式输出状态提示 */}
+        {streaming && (
+          <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary/80">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>正在调动各类知识，结合科学与玄学全面分析，请稍候...</span>
+          </div>
+        )}
+
         {/* 消息列表 */}
-        <div className="flex-1 overflow-y-auto rounded-lg border border-primary/10 bg-muted/20 p-3"
+        <div ref={messagesContainerRef} onScroll={handleContainerScroll} className="flex-1 overflow-y-auto rounded-lg border border-primary/10 bg-muted/20 p-3"
           style={{ minHeight: "200px", maxHeight: "min(400px, 50vh)" }}
         >
           {messages.length === 0 && !streamContent && (
@@ -334,7 +359,10 @@ export function ChatPanel({
             className="h-auto bg-primary px-4 hover:bg-primary/90"
           >
             {streaming ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="hidden sm:inline">正在分析中...</span>
+              </span>
             ) : (
               <Send className="h-4 w-4" />
             )}

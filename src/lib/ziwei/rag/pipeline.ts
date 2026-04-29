@@ -13,12 +13,13 @@ import 'server-only'
 
 import { detectDomain, loadRules, loadTechs, isFollowUp, resolveTargetYear } from './step1-router'
 export type { YearResolution } from './step1-router'
+import { detectIntent, IntentType } from './step0-intent-detector'
 import { extractElements } from './step2-extractor'
 import { retrieveKnowledge } from './step3-retriever'
 import { assembleContext, generateReading, generateReadingStream } from './step4-generator'
 import { SessionManager } from './session-manager'
 import { computeHoroscopeSummary } from './horoscope-computer'
-import type { PipelineParams, PipelineResult, ReadingElements, ReadingDomain, ZiweiSessionData, PipelineDebugInfo } from './types'
+import type { PipelineParams, PipelineResult, ReadingElements, ReadingDomain, ZiweiSessionData, PipelineDebugInfo, IntentDetectionResult } from './types'
 
 const sessionManager = new SessionManager()
 
@@ -48,6 +49,8 @@ export interface RunPipelineResult extends PipelineResult {
   horoscopeSummary?: string
   /** 调试信息 */
   debugInfo?: PipelineDebugInfo
+  /** 意图检测结果（Step 0） */
+  intent?: IntentDetectionResult
 }
 
 /**
@@ -70,7 +73,22 @@ export async function runReadingPipeline(params: RunPipelineOptions): Promise<Ru
   const lastElements = session.turns.at(-1)?.elements
   const sessionHistory = sessionManager.getRecentSummary(session)
 
-  // ── 年份解析（Step 0）────────────────────────────────────
+  // ── Step 0：意图识别（毫秒级，零 LLM）───────────────────
+  tick('Step0 意图识别')
+  const intent = await detectIntent(question)
+
+  // 闲聊/无关 → 直接返回快捷回复，跳过 RAG 管道
+  if (intent.intent === IntentType.OFFTOPIC) {
+    tick('Step0 闲聊分流')
+    return {
+      reply: intent.suggestedReply ?? '您好！我是紫微心理的命理顾问，请问有什么可以帮您？',
+      elements: { palaces: [], stars: [], sihua: [], patterns: [], timeScope: '', analysisPoints: [] },
+      sessionId: session.sessionId,
+      intent,
+    }
+  }
+
+  // ── 年份解析（Step 0.5）──────────────────────────────────
   tick('年份解析')
   const yearResult = resolveTargetYear(question)
   // 使用澄清后的问题传入后续步骤，消除年份歧义
@@ -156,6 +174,7 @@ export async function runReadingPipeline(params: RunPipelineOptions): Promise<Ru
     context: process.env.NODE_ENV === 'development' ? context : undefined,
     yearResolution: { targetYear: yearResult.targetYear, clarifiedQuestion: yearResult.clarifiedQuestion },
     horoscopeSummary,
+    intent,
     debugInfo: {
       step1: { domain, rulesLength: rules.length, techsLength: techs.length },
       step2: { elements, isFollowUp: followUp },

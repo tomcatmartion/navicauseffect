@@ -75,6 +75,23 @@ export interface ZiweiSessionData {
   expiresAt: number
 }
 
+// ── 意图类型（Step 0）────────────────────────────────────────
+
+export enum IntentType {
+  /** 需要解盘：涉及命盘相关内容 */
+  ZIWEI = 'ziwei',
+  /** 闲聊/无关：问候、天气、无关话题 */
+  OFFTOPIC = 'offtopic',
+}
+
+export interface IntentDetectionResult {
+  intent: IntentType
+  confidence: number // 0.0 - 1.0
+  reason: string // 判断理由
+  needsLLM: boolean // 是否需要 LLM 二次确认
+  suggestedReply?: string // 闲聊时的快捷回复
+}
+
 // ── 流水线参数与结果 ─────────────────────────────────────
 
 export interface PipelineParams {
@@ -88,6 +105,8 @@ export interface PipelineResult {
   reply: string
   elements: ReadingElements
   sessionId: string
+  /** 意图检测结果（Step 0） */
+  intent?: IntentDetectionResult
 }
 
 // ── Zod Schema（用于 Step 2 LLM 输出校验）──────────────────

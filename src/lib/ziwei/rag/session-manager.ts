@@ -185,7 +185,7 @@ function generateChartSummary(chartData: Record<string, unknown>): string {
   // 基本信息
   lines.push('## 命盘基本信息')
   lines.push(`- 命主：${String(chartData.name ?? '命主')}`)
-  lines.push(`- 性别：${chartData.gender === 'male' ? '男' : '女'}`)
+  lines.push(`- 性别：${chartData.gender === 'male' || chartData.gender === '男' ? '男' : '女'}`)
   lines.push(`- 命宫：${String(chartData.soul ?? '')} | 身宫：${String(chartData.body ?? '')}`)
   lines.push(`- 五行局：${String(chartData.fiveElementsClass ?? '')}`)
 
