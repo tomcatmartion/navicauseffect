@@ -233,47 +233,38 @@ main().catch(e => { console.error(e); process.exit(1); }).finally(() => prisma.\
 
 # ─── PM2 启动 ───
 do_start() {
-  info "启动服务（PM2）..."
+  info "启动服务..."
 
-  # 检查 PM2 是否已安装
-  if ! command -v pm2 &>/dev/null; then
-    info "安装 PM2..."
-    pnpm add -g pm2
-  fi
+  # 停止现有进程
+  pkill -f "node.*standalone/server.js" 2>/dev/null || true
+  fuser -k ${PORT}/tcp 2>/dev/null || true
+  sleep 2
 
-  # 如果已有进程，先停止
-  if pm2 list 2>/dev/null | grep -q "navicauseffect"; then
-    info "已有 navicauseffect 进程，重启..."
-    pm2 stop navicauseffect 2>/dev/null || true
-    pm2 delete navicauseffect 2>/dev/null || true
-  fi
-
-  # 读取 .env 文件中的变量（作为默认值补充）
+  # 读取 .env 文件中的变量
   if [ -f ".env" ]; then
     set -a
     source .env
     set +a
   fi
 
-  # 启动 standalone server（HOSTNAME=0.0.0.0 确保外网可访问）
-  HOSTNAME=0.0.0.0 \
-    PORT="$PORT" \
+  # 后台启动 standalone server（HOSTNAME=0.0.0.0 确保外网可访问）
+  nohup env \
+    HOSTNAME=0.0.0.0 \
+    PORT="${PORT:-3000}" \
     NODE_ENV=production \
-    DATABASE_URL="${DATABASE_URL:-mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:3306/${DB_NAME}}" \
-    REDIS_URL="${REDIS_URL:-redis://${REDIS_HOST}:${REDIS_PORT}}" \
-    NEXTAUTH_URL="${NEXTAUTH_URL:-http://119.45.168.110:${PORT}}" \
-    NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-navicause-deploy-secret-change-me}" \
-    pm2 start node --name "navicauseffect" -- .next/standalone/server.js
+    DATABASE_URL="${DATABASE_URL:-mysql://${DB_USER:-navicause}:${DB_PASS:-navicause_pass_2024}@${DB_HOST:-localhost}:3306/${DB_NAME:-navicauseffect}}" \
+    REDIS_URL="${REDIS_URL:-redis://${REDIS_HOST:-localhost}:${REDIS_PORT:-6379}}" \
+    NEXTAUTH_URL="${NEXTAUTH_URL:-http://$(hostname -I | awk '{print $1}'):${PORT:-3000}}" \
+    NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-navicause-prod-secret-$(date +%s)}" \
+    node .next/standalone/server.js \
+    > /tmp/navicause-server.log 2>&1 &
 
-  info "保存 PM2 进程列表..."
-  pm2 save 2>/dev/null || true
-
-  # 等待服务启动
-  sleep 3
+  info "等待服务启动..."
+  sleep 5
 
   # 健康检查
-  if curl -sf "http://localhost:${PORT}/" > /dev/null 2>&1; then
-    log "服务启动成功！"
+  if curl -sf "http://localhost:${PORT:-3000}/" > /dev/null 2>&1; then
+    log "服务启动成功！PID: $!"
   else
     warn "服务可能尚未就绪，查看日志："
     echo "  ./scripts/install-deploy.sh logs"
@@ -282,17 +273,19 @@ do_start() {
 
 do_stop() {
   info "停止 navicauseffect..."
-  pm2 stop navicauseffect 2>/dev/null || true
+  pkill -f "node.*standalone/server.js" 2>/dev/null || true
+  fuser -k ${PORT:-3000}/tcp 2>/dev/null || true
   log "已停止"
 }
 
 do_restart() {
   do_stop
+  sleep 2
   do_start
 }
 
 do_logs() {
-  pm2 logs navicauseffect --follow --lines 50
+  tail -50 /tmp/navicause-server.log
 }
 
 # ─── 完整安装流程 ───

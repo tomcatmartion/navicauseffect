@@ -30,3 +30,12 @@ cp "$SRC/package.json" "$DST/"
 cp "$SRC/zvec_node_binding.node" "$DST/"
 
 echo "✓ 已拷贝 @zvec/bindings-linux-x64 → standalone 输出"
+
+# ─── 拷贝静态文件到 standalone ───
+# Next.js standalone 模式下，static 文件需要放在 standalone/.next/static/
+# 而 build 输出在 .next/static/，所以需要复制进去
+if [ -d ".next/static" ]; then
+  mkdir -p "$STANDALONE/.next"
+  cp -r ".next/static" "$STANDALONE/.next/"
+  echo "✓ 已拷贝 .next/static → standalone/.next/"
+fi
