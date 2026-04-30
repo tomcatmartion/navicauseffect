@@ -58,9 +58,11 @@ ensure_node() {
 ensure_pnpm() {
   if ! command -v pnpm &>/dev/null; then
     info "安装 pnpm..."
+    # 优先用 npm 安装（腾讯云访问 get.pnpm.io 受限）
+    npm install -g pnpm 2>/dev/null || \
     curl -fsSL https://get.pnpm.io/install.sh | bash -
-    export PNPM_HOME="$HOME/.local/share/pnpm"
-    export PATH="$PNPM_HOME:$PATH"
+    # 确保 PATH 包含 pnpm
+    [ -d "$HOME/.local/share/pnpm" ] && export PATH="$HOME/.local/share/pnpm:$PATH"
   fi
   log "pnpm $(pnpm -v)"
 }
