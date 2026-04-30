@@ -29,6 +29,20 @@
 - **教训**：Prisma Client 必须保持为运行时加载，不能被 webpack 打包
 - **已修复**：`next.config.mjs` 中添加 `serverExternalPackages: ["@prisma/client"]`
 
+### E-54: PM2 管理 standalone server 时进程冲突
+
+- **现象**：PM2 启动 standalone server 后显示 errored，但端口已被占用；CSS/JS 返回 404
+- **根因**：PM2 的 daemon 模式与 standalone server 的端口绑定存在冲突，端口未正确释放
+- **教训**：standalone server 用 nohup 直接启动更简单稳定，不需要 PM2
+- **已修复**：`install-deploy.sh` 改用 nohup 直接启动，移除 PM2 依赖
+
+### E-53: standalone 模式下 CSS/JS 返回 404
+
+- **现象**：页面 HTML 加载成功，但样式完全丢失（CSS/JS 返回 404）
+- **根因**：`postbuild-copy-zvec-bindings.sh` 没有把 `.next/static` 复制进 standalone 输出；standalone server.js 运行时找不到静态文件
+- **教训**：Next.js standalone 模式虽然生成了 `.next/standalone/` 目录，但 `.next/static/`（静态资源）需要额外复制步骤
+- **已修复**：`postbuild-copy-zvec-bindings.sh` 中添加 `cp -r .next/static .next/standalone/.next/`
+
 ### E-49: 腾讯云无法访问 get.pnpm.io，pnpm 安装失败
 
 - **现象**：install-deploy.sh 执行 `curl -fsSL https://get.pnpm.io/install.sh | bash -` 报错 `curl: (52) Empty reply from server`
