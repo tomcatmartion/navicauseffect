@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-04-30 方案 C 部署踩坑（pack-deploy.sh / install-deploy.sh）
+
+### E-52: rsync `--exclude='data/'` 误杀 `packages/iztro/lib/data/`
+
+- **现象**：Next.js build 时报错 `Module not found: Can't resolve '../data'`
+- **根因**：`--exclude='data/'` 同时排除了 `./data/` 和 `./packages/iztro/lib/data/`
+- **教训**：排除规则要精确到项目根目录，用 `./data/` 而非 `data/`
+- **已修复**：`scripts/pack-deploy.sh` 中改为 `--exclude='./data/'`
+
+### E-51: pnpm 对本地 file: 包使用 hard-link，webpack 无法解析相对路径
+
+- **现象**：Next.js build 时 `dayjs` / `lunar-lite` 等包虽然存在于 .pnpm store，但 webpack 无法通过相对路径解析
+- **根因**：pnpm workspace 对 `file:./packages/iztro` 使用硬链接，webpack 的相对路径解析无法穿过 `.pnpm` 结构找到依赖
+- **教训**：pnpm 的 hard-link 机制与 Next.js webpack 的模块解析存在冲突，需将 `.pnpm` 中的硬链接目录替换为真实 symlink
+- **已修复**：`install-deploy.sh` 中添加 hard-link→symlink 修复脚本
+
+### E-50: `@prisma/client` 被 webpack 打包后 `.prisma/client/default.js` 找不到
+
+- **现象**：Next.js build 成功，但 standalone server 启动后 `require('@prisma/client')` 失败
+- **根因**：webpack 打包时将 `@prisma/client` 内联，但 `default.js` 引用了 `.prisma/client/default`（相对路径），webpack 无法解析 symlink 后的 .prisma 目录
+- **教训**：Prisma Client 必须保持为运行时加载，不能被 webpack 打包
+- **已修复**：`next.config.mjs` 中添加 `serverExternalPackages: ["@prisma/client"]`
+
+### E-49: 腾讯云无法访问 get.pnpm.io，pnpm 安装失败
+
+- **现象**：install-deploy.sh 执行 `curl -fsSL https://get.pnpm.io/install.sh | bash -` 报错 `curl: (52) Empty reply from server`
+- **根因**：腾讯云服务器无法访问外网（GitHub / get.pnpm.io）
+- **教训**：腾讯云部署脚本不能依赖外网下载，优先用 npm 安装全局工具
+- **已修复**：`install-deploy.sh` 改为 `npm install -g pnpm`
+
+---
+
 ## 2026-04-28 生产部署踩坑
 
 ### E-48: Mac 打包时 tar 写入 macOS xattr，Linux 解压大量警告
