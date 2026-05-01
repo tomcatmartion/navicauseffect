@@ -35,53 +35,60 @@ export interface AssembleContextParams {
 export function assembleContext(params: AssembleContextParams): string {
   const { chartSummary, rules, techs, knowledge, elements, sessionHistory, question, horoscopeSummary } = params
 
-  const knowledgeText = knowledge.length > 0
-    ? knowledge
-        .map((k, i) => `### ${i + 1}. ${k.title}\n${k.content}`)
-        .join('\n\n')
-    : '（无匹配知识）'
+  const parts: string[] = []
 
-  const analysisHints = elements.analysisPoints.length > 0
-    ? `\n## 本次解盘要点\n${elements.analysisPoints.map(p => `- ${p}`).join('\n')}`
-    : ''
+  // 命盘数据（完整 JSON，含天干地支+大限列表）
+  if (chartSummary) {
+    parts.push('## 用户命盘')
+    parts.push(chartSummary)
+  }
 
-  const techsSection = techs
-    ? `\n## 实战技法参考\n${techs}`
-    : ''
+  // 运限数据（当有目标年份时）
+  if (horoscopeSummary) {
+    parts.push('\n## 运限分析数据')
+    parts.push(horoscopeSummary)
+  }
 
-  const horoscopeSection = horoscopeSummary
-    ? `\n## 运限信息\n以下为用户当前大限及目标年份的流年/小限数据，分析时必须参考：\n${horoscopeSummary}`
-    : ''
+  // 解盘规则与实战技法
+  if (rules) {
+    parts.push('\n## 解盘规则（请严格遵循）')
+    parts.push(rules)
+  }
 
-  return `## 用户命盘
-${chartSummary}
-${analysisHints}
-${horoscopeSection}
+  // 命盘相关知识（已从知识库精准提取）
+  if (knowledge.length > 0) {
+    parts.push('\n## 相关紫微知识')
+    parts.push(knowledge.map(k => k.content).join('\n\n---\n\n'))
+  }
 
-## 解盘规则（请严格遵循）
-${rules}
-${techsSection}
+  // 对话历史
+  if (sessionHistory) {
+    parts.push('\n## 历史对话要点')
+    parts.push(sessionHistory)
+  }
 
-## 相关紫微知识
-${knowledgeText}
+  // 命主问题（最后）
+  parts.push('\n## 用户问题')
+  parts.push(question)
 
-## 历史对话要点
-${sessionHistory || '（本轮为首次问询）'}
-
-## 用户问题
-${question}`.trim()
+  return parts.join('\n')
 }
 
 // ── 大模型生成 ──────────────────────────────────────────
 
-const SYSTEM_PROMPT = `你是一位精通紫微斗数的命理师，风格专业、亲切、有温度。
+const SYSTEM_PROMPT = `你是一位精通紫微斗数的专业命理师，思考过程和分析全部用中文输出。
 
-解盘要求：
-1. 严格依照提供的【解盘规则】和【相关紫微知识】进行分析，不得超出范围凭空发挥
-2. 结合命盘实际情况具体分析，避免套话和模板式表达
-3. 吉凶判断要有理有据，说明是哪颗星、哪个四化、哪个格局导致的结论
-4. 语言亲切自然，像与朋友交谈，不要过于生硬学术
-5. 回答长度适中，重点突出，不要面面俱到流水账`
+## 输出要求（严格遵守）
+1. **只用中文输出**，所有星曜、宫位、术语、四化、分析理由全部用中文，不得出现英文或缩写
+2. **结构化输出**，按照命盘→大限→流年的层次，逐层分析，每个层次单独成段
+3. **有据可查**，每项判断必须说明依据（星曜名+四化+落宫），不可仅给结论
+4. **具体而非笼统**，必须引用命盘中实际存在的星曜和宫位，不虚构
+5. **风格亲切自然**，像与朋友深度交流，有温度、有深度，避免干巴巴的列表
+
+## 解盘原则
+- 结合命盘实际情况具体分析，避免套话和模板式表达
+- 吉凶判断要有理有据，说明是哪颗星、哪个四化、哪个格局导致的结论
+- 不做具体金额/时间预测，不做感情/事业最终结果的绝对判决`
 
 /**
  * 获取强推理模型配置（用于最终生成）
