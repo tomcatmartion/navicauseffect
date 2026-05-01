@@ -19,6 +19,7 @@ const adminNavItems = [
   { label: "短信网关", href: "/admin/sms", icon: "📱" },
   { label: "支付配置", href: "/admin/payment", icon: "💳" },
   { label: "数据统计", href: "/admin/stats", icon: "📈" },
+  { label: "舆情统计", href: "/admin/sentiment", icon: "🔎" },
 ];
 
 export default function AdminLayout({
@@ -138,7 +139,7 @@ export default function AdminLayout({
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </button>
-          <h1 className="text-base font-semibold md:text-lg">紫微心理 · 管理后台</h1>
+          <h1 className="text-base font-semibold md:text-lg">微著 · 管理后台</h1>
           {/* 移动端返回前台快捷入口 */}
           <Link
             href="/"

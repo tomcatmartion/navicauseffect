@@ -126,7 +126,7 @@ export default function SmsConfigPage() {
               <Input
                 value={config.signName}
                 onChange={(e) => setConfig({ ...config, signName: e.target.value })}
-                placeholder="紫微心理"
+                placeholder="微著"
               />
             </div>
             <div className="space-y-2">

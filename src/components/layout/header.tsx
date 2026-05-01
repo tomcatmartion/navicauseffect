@@ -48,7 +48,7 @@ export function Header() {
             ☯
           </div>
           <span className="hidden text-lg font-semibold text-primary font-[var(--font-serif-sc)] sm:block">
-            紫微心理
+            微著
           </span>
         </Link>
 

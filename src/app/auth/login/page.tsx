@@ -168,7 +168,7 @@ function LoginForm() {
           ☯
         </div>
         <CardTitle className="font-[var(--font-serif-sc)] text-2xl text-primary">
-          紫微心理
+          微著
         </CardTitle>
         <p className="text-sm text-muted-foreground">观己观人观世界</p>
       </CardHeader>

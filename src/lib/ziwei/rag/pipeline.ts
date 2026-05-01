@@ -51,6 +51,8 @@ export interface RunPipelineResult extends PipelineResult {
   debugInfo?: PipelineDebugInfo
   /** 意图检测结果（Step 0） */
   intent?: IntentDetectionResult
+  /** 各环节耗时（供路由层写入日志） */
+  timing?: Record<string, number>
 }
 
 /**
@@ -81,7 +83,7 @@ export async function runReadingPipeline(params: RunPipelineOptions): Promise<Ru
   if (intent.intent === IntentType.OFFTOPIC) {
     tick('Step0 闲聊分流')
     return {
-      reply: intent.suggestedReply ?? '您好！我是紫微心理的命理顾问，请问有什么可以帮您？',
+      reply: intent.suggestedReply ?? '您好！我是微著的命理顾问，请问有什么可以帮您？',
       elements: { palaces: [], stars: [], sihua: [], patterns: [], timeScope: '', analysisPoints: [] },
       sessionId: session.sessionId,
       intent,
@@ -188,7 +190,9 @@ export async function runReadingPipeline(params: RunPipelineOptions): Promise<Ru
       },
       step4: { context, horoscopeSummary },
       yearResolution: { originalQuestion: question, targetYear: yearResult.targetYear, clarifiedQuestion: yearResult.clarifiedQuestion },
-      timing,
+      timing, // 各环节耗时 { 'Step0': ms, 'Step1': ms, ... }
     },
+    // 各环节耗时供路由层写入日志
+    timing,
   }
 }

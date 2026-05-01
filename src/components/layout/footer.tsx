@@ -7,7 +7,7 @@ export function Footer() {
         <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           <div>
             <h3 className="mb-3 text-lg font-semibold text-primary font-[var(--font-serif-sc)]">
-              紫微心理
+              微著
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
               观己观人观世界
@@ -35,7 +35,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-primary/5 pt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} 紫微心理. All rights reserved.
+          © {new Date().getFullYear()} 微著. All rights reserved.
         </div>
       </div>
     </footer>

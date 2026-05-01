@@ -26,12 +26,12 @@ const notoSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "紫微心理 | 观己观人观世界，知微知著知真如",
+  title: "微著 | 观己观人观世界，知微知著知真如",
   description:
     "以紫微斗数与心理科学相融合，传统智慧指引方向，科学方法疏导心结。提供命理排盘、性格分析、情感咨询等专业服务。",
   keywords: "紫微斗数,命理,心理咨询,性格分析,运势,情感,亲子关系",
   openGraph: {
-    title: "紫微心理 | 传统智慧 × 现代科学",
+    title: "微著 | 传统智慧 × 现代科学",
     description: "观己观人观世界，知微知著知真如。紫微斗数与心理科学融合的命理咨询平台。",
     type: "website",
   },
