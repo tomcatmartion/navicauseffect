@@ -35,6 +35,10 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-primary/5 pt-6 text-center text-xs text-muted-foreground">
+          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+            辽ICP备2026007904号
+          </a>
+          <span className="mx-2">·</span>
           © {new Date().getFullYear()} 微著. All rights reserved.
         </div>
       </div>
