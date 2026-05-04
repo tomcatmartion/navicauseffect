@@ -85,104 +85,227 @@ async function preciseMatch(
 
 /**
  * 四化精确匹配：star + type + palace 三字段
+ * 优化：N 次串行查询 → 1 次批量 IN 查询
  */
 async function sihuaMatch(sihuaList: SihuaEvent[]): Promise<KnowledgeChunk[]> {
   if (sihuaList.length === 0) return []
 
-  const results: KnowledgeChunk[] = []
-
-  for (const s of sihuaList) {
-    const sql = `
-      SELECT id, title, content, stars, palaces, sihua, domains, patterns,
-             topicType, timeScope, priority
-      FROM ziwei_knowledge
-      WHERE JSON_CONTAINS(stars, JSON_QUOTE(?))
-      AND JSON_CONTAINS(sihua, JSON_QUOTE(?))
-      AND JSON_CONTAINS(palaces, JSON_QUOTE(?))
-      ORDER BY priority DESC
-      LIMIT 3
-    `
-
-    try {
-      const rows = await prisma.$queryRawUnsafe<
-        Array<{
-          id: number; title: string; content: string
-          stars: string; palaces: string; sihua: string
-          domains: string; patterns: string; topicType: string
-          timeScope: string; priority: number
-        }>
-      >(sql, s.star, s.type, s.palace)
-
-      results.push(...rows.map(r => ({
-        id: r.id,
-        title: r.title,
-        content: r.content,
-        stars: safeJsonParse(r.stars),
-        palaces: safeJsonParse(r.palaces),
-        sihua: safeJsonParse(r.sihua),
-        domains: safeJsonParse(r.domains),
-        patterns: safeJsonParse(r.patterns),
-        topicType: r.topicType,
-        timeScope: r.timeScope,
-        priority: r.priority,
-        score: 1.0,
-      })))
-    } catch (err) {
-      console.error(`[Step3] sihuaMatch 查询失败 (${s.star}${s.type}):`, err)
-    }
+  if (sihuaList.length === 1) {
+    // 单条时直接查，避免批量 overhead
+    const s = sihuaList[0]
+    return singleSihuaQuery(s)
   }
 
-  return results
+  // 批量：所有 star/type/palace 组合用 IN 查询，结果再过滤精确匹配
+  const stars = sihuaList.map(s => s.star)
+  const types = sihuaList.map(s => s.type)
+  const palaces = sihuaList.map(s => s.palace)
+
+  const sql = `
+    SELECT id, title, content, stars, palaces, sihua, domains, patterns,
+           topicType, timeScope, priority
+    FROM ziwei_knowledge
+    WHERE JSON_CONTAINS(stars, JSON_QUOTE(?))
+      AND JSON_CONTAINS(sihua, JSON_QUOTE(?))
+      AND JSON_CONTAINS(palaces, JSON_QUOTE(?))
+      AND (
+        stars IN (${stars.map(() => '?').join(',')})
+        OR palaces IN (${palaces.map(() => '?').join(',')})
+      )
+    ORDER BY priority DESC
+    LIMIT 20
+  `
+
+  // 三元组参数：star + type + palace + stars展开 + palaces展开
+  const values = [
+    sihuaList[0].star, sihuaList[0].type, sihuaList[0].palace,
+    ...stars, ...palaces,
+  ]
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: number; title: string; content: string
+        stars: string; palaces: string; sihua: string
+        domains: string; patterns: string; topicType: string
+        timeScope: string; priority: number
+      }>
+    >(sql, ...values)
+
+    // 四化三元组精确过滤（IN 查询结果可能包含不完全匹配的记录）
+    const matchSet = new Set(sihuaList.map(s => `${s.star}|${s.type}|${s.palace}`))
+    const matched = rows.filter(r => {
+      const rowSihua = safeJsonParse(r.sihua)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return rowSihua.some((sihuaItem: any) => matchSet.has(`${sihuaItem.star}|${sihuaItem.type}|${sihuaItem.palace}`))
+    })
+
+    return matched.map(r => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      stars: safeJsonParse(r.stars),
+      palaces: safeJsonParse(r.palaces),
+      sihua: safeJsonParse(r.sihua),
+      domains: safeJsonParse(r.domains),
+      patterns: safeJsonParse(r.patterns),
+      topicType: r.topicType,
+      timeScope: r.timeScope,
+      priority: r.priority,
+      score: 1.0,
+    }))
+  } catch (err) {
+    console.error('[Step3] sihuaMatch 批量查询失败，降级到逐条查询:', err)
+    // 降级：逐条查（保留原有逻辑）
+    const results: KnowledgeChunk[] = []
+    for (const s of sihuaList) {
+      const rows = await singleSihuaQuery(s)
+      results.push(...rows)
+    }
+    return results
+  }
+}
+
+async function singleSihuaQuery(s: SihuaEvent): Promise<KnowledgeChunk[]> {
+  const sql = `
+    SELECT id, title, content, stars, palaces, sihua, domains, patterns,
+           topicType, timeScope, priority
+    FROM ziwei_knowledge
+    WHERE JSON_CONTAINS(stars, JSON_QUOTE(?))
+    AND JSON_CONTAINS(sihua, JSON_QUOTE(?))
+    AND JSON_CONTAINS(palaces, JSON_QUOTE(?))
+    ORDER BY priority DESC
+    LIMIT 3
+  `
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: number; title: string; content: string
+        stars: string; palaces: string; sihua: string
+        domains: string; patterns: string; topicType: string
+        timeScope: string; priority: number
+      }>
+    >(sql, s.star, s.type, s.palace)
+    return rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      stars: safeJsonParse(r.stars),
+      palaces: safeJsonParse(r.palaces),
+      sihua: safeJsonParse(r.sihua),
+      domains: safeJsonParse(r.domains),
+      patterns: safeJsonParse(r.patterns),
+      topicType: r.topicType,
+      timeScope: r.timeScope,
+      priority: r.priority,
+      score: 1.0,
+    }))
+  } catch (err) {
+    console.error(`[Step3] singleSihuaQuery 失败 (${s.star}${s.type}):`, err)
+    return []
+  }
 }
 
 /**
  * 格局精确匹配
+ * 优化：N 次串行查询 → 1 次批量查询
  */
 async function patternMatch(patterns: string[]): Promise<KnowledgeChunk[]> {
   if (patterns.length === 0) return []
 
-  const results: KnowledgeChunk[] = []
-
-  for (const p of patterns) {
-    const sql = `
-      SELECT id, title, content, stars, palaces, sihua, domains, patterns,
-             topicType, timeScope, priority
-      FROM ziwei_knowledge
-      WHERE JSON_CONTAINS(patterns, JSON_QUOTE(?))
-      ORDER BY priority DESC
-      LIMIT 2
-    `
-
-    try {
-      const rows = await prisma.$queryRawUnsafe<
-        Array<{
-          id: number; title: string; content: string
-          stars: string; palaces: string; sihua: string
-          domains: string; patterns: string; topicType: string
-          timeScope: string; priority: number
-        }>
-      >(sql, p)
-
-      results.push(...rows.map(r => ({
-        id: r.id,
-        title: r.title,
-        content: r.content,
-        stars: safeJsonParse(r.stars),
-        palaces: safeJsonParse(r.palaces),
-        sihua: safeJsonParse(r.sihua),
-        domains: safeJsonParse(r.domains),
-        patterns: safeJsonParse(r.patterns),
-        topicType: r.topicType,
-        timeScope: r.timeScope,
-        priority: r.priority,
-        score: 1.0,
-      })))
-    } catch (err) {
-      console.error(`[Step3] patternMatch 查询失败 (${p}):`, err)
-    }
+  if (patterns.length === 1) {
+    return singlePatternQuery(patterns[0])
   }
 
-  return results
+  // 批量查询所有格局
+  const placeholders = patterns.map(() => 'JSON_QUOTE(?)').join(', ')
+  const sql = `
+    SELECT id, title, content, stars, palaces, sihua, domains, patterns,
+           topicType, timeScope, priority
+    FROM ziwei_knowledge
+    WHERE patterns IN (${patterns.map(() => '?').join(',')})
+    ORDER BY priority DESC
+    LIMIT ${patterns.length * 2}
+  `
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: number; title: string; content: string
+        stars: string; palaces: string; sihua: string
+        domains: string; patterns: string; topicType: string
+        timeScope: string; priority: number
+      }>
+    >(sql, ...patterns)
+
+    // JSON_CONTAINS 精确过滤（因为 patterns 是 JSON 数组字段）
+    const matchSet = new Set(patterns)
+    const matched = rows.filter(r => {
+      const rowPatterns = safeJsonParse(r.patterns)
+      return rowPatterns.some((p: string) => matchSet.has(p))
+    })
+
+    return matched.map(r => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      stars: safeJsonParse(r.stars),
+      palaces: safeJsonParse(r.palaces),
+      sihua: safeJsonParse(r.sihua),
+      domains: safeJsonParse(r.domains),
+      patterns: safeJsonParse(r.patterns),
+      topicType: r.topicType,
+      timeScope: r.timeScope,
+      priority: r.priority,
+      score: 1.0,
+    }))
+  } catch (err) {
+    console.error('[Step3] patternMatch 批量查询失败，降级到逐条查询:', err)
+    const results: KnowledgeChunk[] = []
+    for (const p of patterns) {
+      const rows = await singlePatternQuery(p)
+      results.push(...rows)
+    }
+    return results
+  }
+}
+
+async function singlePatternQuery(pattern: string): Promise<KnowledgeChunk[]> {
+  const sql = `
+    SELECT id, title, content, stars, palaces, sihua, domains, patterns,
+           topicType, timeScope, priority
+    FROM ziwei_knowledge
+    WHERE JSON_CONTAINS(patterns, JSON_QUOTE(?))
+    ORDER BY priority DESC
+    LIMIT 2
+  `
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: number; title: string; content: string
+        stars: string; palaces: string; sihua: string
+        domains: string; patterns: string; topicType: string
+        timeScope: string; priority: number
+      }>
+    >(sql, pattern)
+    return rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      stars: safeJsonParse(r.stars),
+      palaces: safeJsonParse(r.palaces),
+      sihua: safeJsonParse(r.sihua),
+      domains: safeJsonParse(r.domains),
+      patterns: safeJsonParse(r.patterns),
+      topicType: r.topicType,
+      timeScope: r.timeScope,
+      priority: r.priority,
+      score: 1.0,
+    }))
+  } catch (err) {
+    console.error(`[Step3] singlePatternQuery 失败 (${pattern}):`, err)
+    return []
+  }
 }
 
 /**

@@ -303,3 +303,52 @@ model ZiweiSession {
   @@index([userId])
   @@map("ziwei_sessions")
 }
+
+// ── 用户问答记录：问题收录与舆情分析 ──────────────────────
+model UserQuestionLog {
+  id           String   @id @default(cuid())
+  userId       String?  @map("user_id")
+  sessionId    String?  @map("session_id")
+
+  // 问题内容
+  question     String   @db.Text
+  domain       String?  // 领域：事业/财运/感情/健康/子女/六亲
+  intentType   String?  // 意图：normal/offtopic/chitchat
+
+  // 回答内容
+  answer       String   @db.LongText
+  answerModel  String?  @map("answer_model")
+
+  // 性能数据
+  latencyMs    Int?     @map("latency_ms")
+  step2Ms      Int?     @map("step2_ms")
+  step3Ms      Int?     @map("step3_ms")
+  step4Ms      Int?     @map("step4_ms")
+
+  // 命盘指纹
+  chartFingerprint String? @map("chart_fingerprint")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([domain])
+  @@index([createdAt])
+  @@index([chartFingerprint])
+  @@map("user_question_logs")
+}
+
+// ── 舆情分析报告 ──────────────────────────────────────────
+model SentimentReport {
+  id          String   @id @default(cuid())
+  reportDate  DateTime @db.Date @map("report_date")  // 报告日期（天）
+  keyword     String                             // 统计关键词
+  summary     String   @db.Text                 // AI 分析摘要
+  trendCount  Int      @default(0) @map("trend_count")      // 本期问题总数
+  topDomains  Json     @default("[]") @map("top_domains")    // [{domain, count}]
+  topKeywords Json     @default("[]") @map("top_keywords")    // [{question, count}]
+  sqlQuery    String?  @map("sql_query") @db.Text             // 生成的 SQL
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([reportDate, keyword])
+  @@map("sentiment_reports")
+}

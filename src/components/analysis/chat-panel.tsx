@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,7 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
+  const [skeletonText, setSkeletonText] = useState(""); // 骨架屏文本（立即显示）
   const [readingSessionId, setReadingSessionId] = useState<string | null>(null);
   const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
@@ -46,21 +47,38 @@ export function ChatPanel({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 检测用户是否手动滚动过消息容器
+  // 检测用户是否手动滚动过消息容器（流式时也检测，便于中途上滑阅读）
   const handleContainerScroll = useCallback(() => {
     const el = messagesContainerRef.current;
-    if (!el || streaming) return;
-    // 只有当消息数量 > 0 时才记录用户滚动状态
+    if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setUserScrolled(distanceFromBottom > 50 && messages.length > 0);
-  }, [streaming, messages.length]);
+  }, [messages.length]);
 
-  // 自动定位：仅在新消息追加且用户未手动滚动时定位，流式输出时不干预页面滚动
+  /** 仅在消息列表容器内滚到底，避免 scrollIntoView 带动整页 document 滚动 */
+  const scrollMessagesToBottom = useCallback((behavior: "auto" | "smooth" = "auto") => {
+    const root = messagesContainerRef.current;
+    if (!root) return;
+    if (behavior === "smooth" && typeof root.scrollTo === "function") {
+      root.scrollTo({ top: root.scrollHeight, behavior: "smooth" });
+    } else {
+      root.scrollTop = root.scrollHeight;
+    }
+  }, []);
+
+  // 新消息落库后：仅在用户未上滑时滚到底（只动消息区，不滚整页）
   useEffect(() => {
     if (!streaming && !userScrolled && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollMessagesToBottom("smooth");
     }
-  }, [messages, streaming, userScrolled]);
+  }, [messages, streaming, userScrolled, scrollMessagesToBottom]);
+
+  // 流式输出时仅在消息区内跟随到底，不触发整页滚动
+  useLayoutEffect(() => {
+    if (!streaming || !streamContent) return;
+    if (userScrolled) return;
+    scrollMessagesToBottom("auto");
+  }, [streamContent, streaming, userScrolled, scrollMessagesToBottom]);
 
   // 自动调整 textarea 高度
   useEffect(() => {
@@ -78,15 +96,16 @@ export function ChatPanel({
   const sendMessage = useCallback(async (text: string) => {
     if (!text || streaming) return;
 
-    const userMessage: ChatMessage = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    // ── 1. 立即显示骨架，让用户立刻看到反馈 ──────────────
+    setStreamContent("正在分析您的命盘，请稍候..."); // 骨架文本立即显示
     setStreaming(true);
-    setStreamContent("");
-    setUserScrolled(false); // 重置用户滚动状态，新消息允许自动定位
-    setUserScrolled(false); // 重置用户滚动状态，新消息允许自动定位
+    setUserScrolled(false);
+
+    // 立即显示用户消息（骨架在 streamContent 区显示，不加入 messages 列表）
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
 
     try {
+      setInput(""); // 清空输入框
       // 构造请求体：首次带 chartData，后续只带 sessionId
       const requestBody: Record<string, unknown> = {
         question: text,
@@ -108,10 +127,7 @@ export function ChatPanel({
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: `[错误] ${(err as Record<string, string>).error || "请求失败"}` },
-        ]);
+        setStreamContent(`[错误] ${(err as Record<string, string>).error || "请求失败"}`);
         setStreaming(false);
         return;
       }
@@ -121,10 +137,7 @@ export function ChatPanel({
       if (contentType.includes("application/json")) {
         const data = await response.json() as { reply?: string; sessionId?: string };
         if (data.sessionId) setReadingSessionId(data.sessionId);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.reply || "未收到回复" },
-        ]);
+        setStreamContent(data.reply || "未收到回复");
         setStreaming(false);
         return;
       }
@@ -132,27 +145,31 @@ export function ChatPanel({
       // SSE 流式处理
       const reader = response.body?.getReader();
       if (!reader) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "无法读取响应流" },
-        ]);
+        setStreamContent("无法读取响应流");
         setStreaming(false);
         return;
       }
 
       const decoder = new TextDecoder();
       let accumulated = "";
-      let sseCarry = "";
+      let sseCarry: string[] = [];
       let currentDebugInfo: PipelineDebugInfo | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
-        sseCarry += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        sseCarry.push(decoder.decode(value ?? new Uint8Array(), { stream: !done }));
 
-        const lines = sseCarry.split("\n");
-        sseCarry = done ? "" : (lines.pop() ?? "");
+        // 每次处理所有已接收的行，剩余不完整的保持在校验数组中
+        const allReceived = sseCarry.join('');
+        const lines = allReceived.split('\n');
+        sseCarry = lines.length > 0 ? [lines[lines.length - 1]] : [];
+        const lastLineIsComplete = allReceived.endsWith('\n');
+        if (!lastLineIsComplete && lines.length > 0) {
+          sseCarry = [lines[lines.length - 1]];
+        }
 
-        for (const raw of lines) {
+        for (let li = 0; li < lines.length - (lastLineIsComplete ? 0 : 1); li++) {
+          const raw = lines[li];
           const line = raw.replace(/\r$/, "").trimStart();
           if (!line.toLowerCase().startsWith("data:")) continue;
           const payload = line.slice(5).trimStart();
@@ -167,12 +184,10 @@ export function ChatPanel({
               debugInfo?: PipelineDebugInfo;
             };
 
-            // 从首个事件中提取 sessionId
             if (parsed.sessionId && !readingSessionId) {
               setReadingSessionId(parsed.sessionId);
             }
 
-            // 捕获调试信息
             if (parsed.type === "debug" && parsed.debugInfo) {
               currentDebugInfo = parsed.debugInfo;
               continue;
@@ -193,29 +208,31 @@ export function ChatPanel({
         if (done) break;
       }
 
-      // 流结束，追加 assistant 消息（含调试信息）
+      // 流结束，最终内容写入 messages
       if (accumulated) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: accumulated, debugInfo: currentDebugInfo },
-        ]);
+        setMessages((prev) => {
+          // 替换骨架消息为真实内容
+          const lastIdx = prev.length - 1;
+          return [
+            ...prev.slice(0, lastIdx),
+            { role: "assistant", content: accumulated, debugInfo: currentDebugInfo },
+          ];
+        });
       } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "未收到回复内容，请重试。" },
-        ]);
+        setMessages((prev) => {
+          const lastIdx = prev.length - 1;
+          return [
+            ...prev.slice(0, lastIdx),
+            { role: "assistant", content: "未收到回复内容，可能是网络超时，请稍后重试。" },
+          ];
+        });
       }
       setStreamContent("");
     } catch (err) {
       console.error("Reading error:", err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "网络错误，请检查连接后重试。" },
-      ]);
-      setStreamContent("");
+      setStreamContent("网络错误，请检查连接后重试。");
     } finally {
       setStreaming(false);
-      setUserScrolled(false); // 流结束后重置状态
     }
   }, [streaming, readingSessionId, astrolabeData]);
 

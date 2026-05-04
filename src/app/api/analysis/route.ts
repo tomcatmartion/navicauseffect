@@ -435,12 +435,13 @@ export async function POST(request: NextRequest) {
     if (error instanceof LogicdocIndexMissingError) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }
-    const message = error instanceof Error ? error.message : "服务器内部错误";
-    const isTimeout = message.includes("超时");
+    const errMsg = error instanceof Error ? error.message : "服务器内部错误";
+    // 识别 AbortError / 超时错误，返回 504 而非 500
+    const isTimeout = errMsg.includes("超时") || errMsg.includes("aborted");
     const isEmbCfg =
-      message.includes("未配置") && message.includes("embedding");
+      errMsg.includes("未配置") && errMsg.includes("embedding");
     return NextResponse.json(
-      { error: message },
+      { error: isTimeout ? "AI 生成超时，请稍后重试或换用其他模型" : errMsg },
       { status: isTimeout ? 504 : isEmbCfg ? 503 : 500 }
     );
   }

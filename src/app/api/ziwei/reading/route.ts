@@ -16,6 +16,7 @@ import { runReadingPipeline } from '@/lib/ziwei/rag/pipeline'
 import { SessionManager } from '@/lib/ziwei/rag/session-manager'
 import { ReadingRequestSchema } from '@/lib/ziwei/rag/types'
 import { parseOpenAiSseEventBlock } from '@/lib/ai/openai-sse'
+import { prisma } from '@/lib/db'
 
 const sessionManager = new SessionManager()
 
@@ -141,6 +142,28 @@ export async function POST(request: NextRequest) {
                 timestamp: Date.now(),
               }).catch(err => console.error('[Reading SSE] 会话保存失败:', err))
             }
+
+            // ── 写入用户问答记录 ──────────────────────────
+            const step2Ms = result.timing?.['Step2 要素提取'] ?? null
+            const step3Ms = result.timing?.['Step3 知识召回'] ?? null
+            const step4Ms = result.timing?.['Step4 流式生成'] ?? result.timing?.['Step4 同步生成'] ?? null
+            const totalMs = result.timing?.['Pipeline 完成'] ?? null
+            prisma.userQuestionLog.create({
+              data: {
+                userId: session.user.id,
+                sessionId: result.sessionId,
+                question,
+                domain: streamDomain?.domains?.[0] ?? null,
+                intentType: result.intent?.intent ?? null,
+                answer: fullReply || '[流式回复]',
+                answerModel: 'deepseek', // TODO: 从 pipeline 获取实际模型
+                latencyMs: totalMs ? Math.round(totalMs) : null,
+                step2Ms: step2Ms ? Math.round(step2Ms) : null,
+                step3Ms: step3Ms ? Math.round(step3Ms) : null,
+                step4Ms: step4Ms ? Math.round(step4Ms) : null,
+                chartFingerprint: streamSession?.chartSummary ? undefined : null,
+              },
+            }).catch(err => console.error('[Reading] UserQuestionLog 写入失败:', err))
           } catch (err) {
             console.error('[Reading SSE] 流处理错误:', err)
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: '生成中断' })}\n\n`))
@@ -160,6 +183,27 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 同步响应 ────────────────────────────────────────
+    // 同步模式也需要记录问答
+    const step2Ms = result.timing?.['Step2 要素提取'] ?? null
+    const step3Ms = result.timing?.['Step3 知识召回'] ?? null
+    const step4Ms = result.timing?.['Step4 同步生成'] ?? null
+    const totalMs = result.timing?.['Pipeline 完成'] ?? null
+    prisma.userQuestionLog.create({
+      data: {
+        userId: session.user.id,
+        sessionId: result.sessionId,
+        question,
+        domain: result.domain?.domains?.[0] ?? null,
+        intentType: result.intent?.intent ?? null,
+        answer: result.reply ?? '',
+        answerModel: 'deepseek',
+        latencyMs: totalMs ? Math.round(totalMs) : null,
+        step2Ms: step2Ms ? Math.round(step2Ms) : null,
+        step3Ms: step3Ms ? Math.round(step3Ms) : null,
+        step4Ms: step4Ms ? Math.round(step4Ms) : null,
+      },
+    }).catch(err => console.error('[Reading] UserQuestionLog 同步写入失败:', err))
+
     return NextResponse.json({
       reply: result.reply,
       sessionId: result.sessionId,
@@ -168,6 +212,15 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const isTimeout = errMsg.includes("超时") || errMsg.includes("aborted");
+    if (isTimeout) {
+      console.warn('[ZiWei Reading] AI 超时:', errMsg);
+      return NextResponse.json(
+        { error: "AI 解盘超时，请稍后重试或切换其他模型" },
+        { status: 504 }
+      );
+    }
     console.error('[ZiWei Reading Error]', err)
     return NextResponse.json(
       { error: '解盘失败，请稍后重试' },

@@ -293,8 +293,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Chat API error:", error);
-    const message = error instanceof Error ? error.message : "服务器内部错误";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : "服务器内部错误";
+    const isTimeout = errMsg.includes("超时") || errMsg.includes("aborted");
+    return NextResponse.json(
+      { error: isTimeout ? "AI 对话超时，请稍后重试或换用其他模型" : errMsg },
+      { status: isTimeout ? 504 : 500 }
+    );
   }
 }
 
