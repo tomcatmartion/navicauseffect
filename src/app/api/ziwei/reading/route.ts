@@ -25,6 +25,7 @@ import { SessionManager } from '@/lib/ziwei/rag/session-manager'
 import { ReadingRequestSchema } from '@/lib/ziwei/rag/types'
 import { parseOpenAiSseEventBlock } from '@/lib/ai/openai-sse'
 import { getArchitectureMode, ARCHITECTURE_MODE } from '@/lib/ziwei/architecture-mode'
+import { parseHybridAssistantPayload } from '@/lib/ziwei/hybrid/ai-parse'
 
 const sessionManager = new SessionManager()
 
@@ -312,16 +313,24 @@ function createSseStream(
       let sessionIdSent = false
       let debugSent = false
       let fullReply = ''
-      let jsonBlockStarted = false   // 检测到尾部 JSON 开始
-      let jsonCandidate = ''          // 收集可能的 JSON 块
 
-      // 检查文本是否包含尾部 JSON 块标记
-      const isJsonStart = (text: string): boolean => {
-        const trimmed = text.trim()
-        if (!trimmed) return false
-        // 换行后以 { 开头，且内容含 intent 或 memory_update
-        if (trimmed.startsWith('{')) return true
-        return false
+      // 尾部延迟缓冲：缓存最后 300 字符，流结束后用 parseHybridAssistantPayload 剥离 JSON
+      const TAIL_BUFFER_SIZE = 300
+      let tailBuffer = ''  // 延迟未发的尾部文本
+
+      /** 将文本安全地发往前端，处理 sessionId 和 debugInfo */
+      const emitText = (text: string) => {
+        if (!text) return
+        if (!sessionIdSent) {
+          sessionIdSent = true
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text, sessionId })}\n\n`))
+        } else {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+        }
+        if (!debugSent && debugInfo) {
+          debugSent = true
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
+        }
       }
 
       try {
@@ -342,59 +351,32 @@ function createSseStream(
               const chunk = parseOpenAiSseEventBlock(line)
               if (chunk?.deltaText) {
                 const deltaText = chunk.deltaText
-
-                // 如果已进入 JSON 块收集模式
-                if (jsonBlockStarted) {
-                  jsonCandidate += deltaText
-                  fullReply += deltaText
-                  continue
-                }
-
-                // 检测 JSON 块开始：换行后紧跟 {
-                // 常见模式："\n{" 或 "\n\n{"
-                const lastNewline = deltaText.lastIndexOf('\n')
-                if (lastNewline !== -1) {
-                  const afterNewline = deltaText.slice(lastNewline)
-                  if (isJsonStart(afterNewline)) {
-                    jsonBlockStarted = true
-                    // 发送 JSON 开始之前的内容
-                    const beforeJson = deltaText.slice(0, lastNewline)
-                    fullReply += deltaText
-                    if (beforeJson) {
-                      if (!sessionIdSent) {
-                        sessionIdSent = true
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeJson, sessionId })}\n\n`))
-                      } else {
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeJson })}\n\n`))
-                      }
-                      if (!debugSent && debugInfo) {
-                        debugSent = true
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
-                      }
-                    }
-                    jsonCandidate = afterNewline
-                    continue
-                  }
-                }
-
-                // 正常文本
                 fullReply += deltaText
 
-                if (!sessionIdSent) {
-                  sessionIdSent = true
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: deltaText, sessionId })}\n\n`))
-                } else {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: deltaText })}\n\n`))
-                }
+                // 将新文本追加到尾部缓冲
+                tailBuffer += deltaText
 
-                // 在首个文本块之后立即发送调试信息
-                if (!debugSent && debugInfo) {
-                  debugSent = true
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
+                // 如果缓冲超过阈值，把前面安全的部分发出去，只保留尾部
+                if (tailBuffer.length > TAIL_BUFFER_SIZE) {
+                  const safeLen = tailBuffer.length - TAIL_BUFFER_SIZE
+                  emitText(tailBuffer.slice(0, safeLen))
+                  tailBuffer = tailBuffer.slice(safeLen)
                 }
               }
             }
           }
+        }
+
+        // 流结束：用 parseHybridAssistantPayload 解析完整回复，剥离尾部 JSON
+        const { narrative } = parseHybridAssistantPayload(fullReply)
+
+        // 计算实际应该发送的总文本长度（narrative）
+        // 已经发送了 fullReply.length - tailBuffer.length 的文本
+        // 需要从 tailBuffer 中只发送 narrative 剩余的部分
+        const alreadySent = fullReply.length - tailBuffer.length
+        const remaining = narrative.length - alreadySent
+        if (remaining > 0) {
+          emitText(tailBuffer.slice(0, remaining))
         }
 
         // 如果没有发送过调试信息（在首个文本之前发送）
