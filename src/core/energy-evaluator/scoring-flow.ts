@@ -37,6 +37,7 @@ import {
 import { getSkeletonBrightness } from './skeleton'
 import { getDunGanSihua, getShengNianSihua } from '../sihua-calculator'
 import type { SihuaMap } from '../types'
+import { getScoringParams } from '../knowledge-dict/loader'
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -93,59 +94,63 @@ export interface ScoringContext {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 亮度 → 基础分/天花板映射表
+// 评分参数（从 JSON 加载）
 // ═══════════════════════════════════════════════════════════════════
 
-interface BrightnessConfig {
-  /** 骨架基础分 */
-  base: number
-  /** 天花板 */
-  ceiling: number
+/** 获取亮度配置（从 JSON 加载） */
+function getBrightnessConfig(brightness: PalaceBrightness): { base: number; ceiling: number } {
+  const params = getScoringParams()
+  const config = params.brightnessMap[brightness]
+  if (!config) {
+    // 回退默认值
+    return { base: 5.0, ceiling: 8.0 }
+  }
+  return config
 }
 
-const BRIGHTNESS_MAP: Record<PalaceBrightness, BrightnessConfig> = {
-  '极旺': { base: 8.5, ceiling: 8.5 },
-  '旺':   { base: 7.0, ceiling: 8.5 },
-  '平':   { base: 5.0, ceiling: 8.0 },
-  '陷':   { base: 3.0, ceiling: 7.3 },
-  '空':   { base: 2.0, ceiling: 5.3 },
-  '极弱': { base: 1.5, ceiling: 5.0 },
+/** 获取吉星加分 */
+function getJiStarScore(): number {
+  return getScoringParams().jiStarScore
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 吉星 / 煞星 固定分值
-// ═══════════════════════════════════════════════════════════════════
+/** 获取煞星减分 */
+function getShaStarScore(): number {
+  return getScoringParams().shaStarScore
+}
 
-/** 吉星加分（化禄/左辅/右弼/文昌/文曲/天魁/天钺） */
-const JI_STAR_SCORE = 0.5
+/** 获取只记录不加分四化类型 */
+function getRecordOnlySihua(): Array<'化权' | '化科'> {
+  return getScoringParams().recordOnlySihua as Array<'化权' | '化科'>
+}
 
-/** 煞星减分（火星/铃星/地空/地劫/化忌/擎羊/陀罗） */
-const SHA_STAR_SCORE = -0.5
+/** 获取吉星名称集合 */
+function getJiStarNames(): Set<string> {
+  return new Set(getScoringParams().jiStarNames)
+}
 
-/** 化权/化科：只记录，不计分 */
-const RECORD_ONLY_SIHUA: Array<'化权' | '化科'> = ['化权', '化科']
+/** 获取煞星名称集合 */
+function getShaStarNames(): Set<string> {
+  return new Set(getScoringParams().shaStarNames)
+}
 
-/** 加分用吉星集合 */
-const JI_STAR_NAMES = new Set([
-  '左辅', '右弼', '文昌', '文曲', '天魁', '天钺',
-])
+/** 获取格局倍率 */
+function getPatternMultiplier(level: string): number {
+  return getScoringParams().patternMultiplierMap[level] ?? 1.0
+}
 
-/** 减分用煞星集合（步骤⑧） */
-const SHA_STAR_NAMES = new Set([
-  '火星', '铃星', '地空', '地劫', '擎羊', '陀罗',
-])
+/** 获取父母化忌减分 */
+function getParentPenalty(type: 'fatherShengNianJi' | 'fatherDunGanJi' | 'motherShengNianJi' | 'motherDunGanJi'): number {
+  return getScoringParams().parentPenalty[type]
+}
 
-// ═══════════════════════════════════════════════════════════════════
-// 格局倍率表
-// ═══════════════════════════════════════════════════════════════════
+/** 获取太岁宫宫干化禄加分 */
+function getDunGanLuBonus(): number {
+  return getScoringParams().dunGanLuBonus
+}
 
-const PATTERN_MULTIPLIER_MAP: Record<string, number> = {
-  '大吉': 1.5,
-  '中吉': 1.3,
-  '小吉': 1.0,  // 只标注，不加分
-  '小凶': 1.0,  // 只标注
-  '中凶': 0.7,
-  '大凶': 0.5,
+/** 获取太岁宫宫干化禄衰减 */
+function getDunGanLuDecay(): number {
+  return getScoringParams().dunGanLuDecay
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -201,7 +206,7 @@ interface Step1Result {
 
 /** 根据旺弱等级获取基础分和天花板 */
 function step1_skeletonBase(brightness: PalaceBrightness): Step1Result {
-  const config = BRIGHTNESS_MAP[brightness]
+  const config = getBrightnessConfig(brightness)
   return { base: config.base, ceiling: config.ceiling }
 }
 
@@ -255,12 +260,12 @@ function step2_bonus(
     for (const star of targetPalace.stars) {
       // 化禄星：+0.5 × 衰减
       if (star.sihua === '化禄') {
-        bonus += JI_STAR_SCORE * pos.decay
+        bonus += getJiStarScore() * pos.decay
       }
 
       // 六吉星：+0.5 × 衰减
-      if (JI_STAR_NAMES.has(star.name)) {
-        bonus += JI_STAR_SCORE * pos.decay
+      if (getJiStarNames().has(star.name)) {
+        bonus += getJiStarScore() * pos.decay
       }
 
       // 化权/化科：只记录
@@ -285,12 +290,12 @@ function step2_bonus(
     for (const star of flankPalace.stars) {
       // 化禄星
       if (star.sihua === '化禄') {
-        bonus += JI_STAR_SCORE * decay
+        bonus += getJiStarScore() * decay
       }
 
       // 六吉星
-      if (JI_STAR_NAMES.has(star.name)) {
-        bonus += JI_STAR_SCORE * decay
+      if (getJiStarNames().has(star.name)) {
+        bonus += getJiStarScore() * decay
       }
 
       // 化权/化科：只记录
@@ -373,7 +378,7 @@ function step2_bonus(
   // 凶格倍率移至 step4(减分阶段) 应用
   let patternMultiplier = 1.0
   for (const pattern of ctx.patterns) {
-    const mult = PATTERN_MULTIPLIER_MAP[pattern.level] ?? 1.0
+    const mult = getPatternMultiplier(pattern.level) ?? 1.0
     // 只在加分阶段应用吉格倍率（大吉/中吉）
     // 小吉×1.0 只标注不加分
     if (pattern.level === '大吉' || pattern.level === '中吉') {
@@ -446,13 +451,13 @@ function step4_penalty(
 
     for (const star of targetPalace.stars) {
       // 六煞星：-0.5 × 衰减
-      if (SHA_STAR_NAMES.has(star.name)) {
-        penalty += SHA_STAR_SCORE * pos.decay
+      if (getShaStarNames().has(star.name)) {
+        penalty += getShaStarScore() * pos.decay
       }
 
       // 化忌：-0.5 × 衰减
       if (star.sihua === '化忌') {
-        penalty += SHA_STAR_SCORE * pos.decay
+        penalty += getShaStarScore() * pos.decay
       }
     }
   }
@@ -465,11 +470,11 @@ function step4_penalty(
     const decay = getFlankingDecay(palace.brightness, flankPalace.brightness)
 
     for (const star of flankPalace.stars) {
-      if (SHA_STAR_NAMES.has(star.name)) {
-        penalty += SHA_STAR_SCORE * decay
+      if (getShaStarNames().has(star.name)) {
+        penalty += getShaStarScore() * decay
       }
       if (star.sihua === '化忌') {
-        penalty += SHA_STAR_SCORE * decay
+        penalty += getShaStarScore() * decay
       }
     }
   }
@@ -482,7 +487,7 @@ function step4_penalty(
     const fatherShengNianJi = fatherShengNianSihua.忌
     for (const star of palace.stars) {
       if (star.name === fatherShengNianJi) {
-        penalty += 0.9
+        penalty += getParentPenalty("fatherShengNianJi")
         break
       }
     }
@@ -492,7 +497,7 @@ function step4_penalty(
       const fatherDunGanJi = fatherDunGanSihua.忌
       for (const star of palace.stars) {
         if (star.name === fatherDunGanJi) {
-          penalty += 0.9
+          penalty += getParentPenalty("fatherDunGanJi")
           break
         }
       }
@@ -506,7 +511,7 @@ function step4_penalty(
     const motherShengNianJi = motherShengNianSihua.忌
     for (const star of palace.stars) {
       if (star.name === motherShengNianJi) {
-        penalty += 0.9
+        penalty += getParentPenalty("motherShengNianJi")
         break
       }
     }
@@ -516,7 +521,7 @@ function step4_penalty(
       const motherDunGanJi = motherDunGanSihua.忌
       for (const star of palace.stars) {
         if (star.name === motherDunGanJi) {
-          penalty += 0.9
+          penalty += getParentPenalty("motherDunGanJi")
           break
         }
       }
@@ -649,8 +654,8 @@ function detectAbsoluteFail(
     const p = ctx.palaces[idx]
     if (!p) continue
     for (const star of p.stars) {
-      if (JI_STAR_NAMES.has(star.name) || star.sihua === '化禄') auspiciousCount++
-      if (SHA_STAR_NAMES.has(star.name) || star.sihua === '化忌') inauspiciousCount++
+      if (getJiStarNames().has(star.name) || star.sihua === '化禄') auspiciousCount++
+      if (getShaStarNames().has(star.name) || star.sihua === '化忌') inauspiciousCount++
     }
   }
   const jiGtSha = auspiciousCount > inauspiciousCount

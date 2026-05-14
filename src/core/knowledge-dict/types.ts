@@ -80,3 +80,52 @@ export interface AstroRules {
   auspiciousScore: number
   inauspiciousScore: number
 }
+
+export interface BrightnessConfig {
+  base: number
+  ceiling: number
+}
+
+export interface CriticalThreshold {
+  min: number
+  max: number
+  brightness: string[]
+}
+
+export interface AbsoluteFailException {
+  description: string
+  majorStar: string[]
+  condition: string
+}
+
+export interface AbsoluteFailCondition {
+  description: string
+  requires?: string[]
+  scope: string
+  exceptions?: AbsoluteFailException[]
+  jiCountThreshold?: number
+}
+
+export interface ParentPenalty {
+  fatherShengNianJi: number
+  fatherDunGanJi: number
+  motherShengNianJi: number
+  motherDunGanJi: number
+}
+
+export interface ScoringParams {
+  brightnessMap: Record<string, BrightnessConfig>
+  jiStarScore: number
+  shaStarScore: number
+  recordOnlySihua: string[]
+  jiStarNames: string[]
+  shaStarNames: string[]
+  patternMultiplierMap: Record<string, number>
+  warmCoolThresholds: Record<string, number>
+  toneThresholds: Record<string, number>
+  criticalThresholds: Record<string, CriticalThreshold>
+  absoluteFailRules: Record<string, AbsoluteFailCondition>
+  parentPenalty: ParentPenalty
+  dunGanLuBonus: number
+  dunGanLuDecay: number
+}

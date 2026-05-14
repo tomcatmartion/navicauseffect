@@ -1,5 +1,7 @@
 /**
  * M2: 格局判定 — 统一导出
+ *
+ * 格局元数据从 data/patterns.json 加载，判定函数保留在 TypeScript 中
  */
 
 export { greatAuspiciousPatterns } from './great-auspicious'
@@ -27,8 +29,9 @@ import { smallAuspiciousPatterns } from './small-auspicious'
 import { smallInauspiciousPatterns } from './small-inauspicious'
 import { mediumInauspiciousPatterns } from './medium-inauspicious'
 import { greatInauspiciousPatterns } from './great-inauspicious'
+import { getPatternConfig } from '../../knowledge-dict/loader'
 
-/** 所有格局的扁平数组 */
+/** 所有格局的扁平数组（从代码加载） */
 export const allPatterns = [
   ...greatAuspiciousPatterns,
   ...mediumAuspiciousPatterns,
@@ -37,3 +40,18 @@ export const allPatterns = [
   ...mediumInauspiciousPatterns,
   ...greatInauspiciousPatterns,
 ]
+
+/** 获取格局倍率（从 JSON 加载） */
+export function getPatternMultiplier(level: string): number {
+  return getPatternConfig().multipliers[level] ?? 1.0
+}
+
+/** 获取格局分类（从 JSON 加载） */
+export function getPatternCategories(): Record<string, string[]> {
+  return getPatternConfig().categories
+}
+
+/** 获取格局定义（从 JSON 加载） */
+export function getPatternDefinition(name: string): Record<string, unknown> | null {
+  return getPatternConfig().definitions[name] ?? null
+}

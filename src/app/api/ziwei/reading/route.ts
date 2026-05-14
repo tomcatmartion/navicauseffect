@@ -128,7 +128,21 @@ export async function POST(request: NextRequest) {
 
       // 流式响应
       if (useStream) {
-        const transformedStream = createSseStream(stream, newSessionId, debugInfo)
+        const transformedStream = createSseStream(stream, newSessionId, debugInfo, (fullReply) => {
+          // 流结束后保存完整 AI 回复到会话历史
+          void sessionManager.loadSession(newSessionId).then(session => {
+            if (session) {
+              // 更新最后一轮的 assistantReply
+              const lastTurn = session.turns[session.turns.length - 1]
+              if (lastTurn) {
+                lastTurn.assistantReply = fullReply
+                void sessionManager.persistSessionSnapshot(session).catch(err =>
+                  console.error('[Skill] 保存完整回复失败:', err),
+                )
+              }
+            }
+          }).catch(err => console.error('[Skill] 加载会话失败:', err))
+        })
         return new Response(transformedStream, {
           headers: {
             'Content-Type': 'text/event-stream',

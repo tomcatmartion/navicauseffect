@@ -16,7 +16,7 @@ import type { ZiweiSessionData, ConversationTurn, ReadingDomain, ReadingElements
 import { createEmptyHybridPersisted, type HybridPersisted } from '@/lib/ziwei/hybrid/types'
 
 const SESSION_TTL = 60 * 60 * 24      // 24小时（秒）
-const MAX_TURNS = 5                    // 保留最近5轮
+const MAX_TURNS = 15                   // 保留最近15轮
 const REDIS_PREFIX = 'ziwei:session:'
 const MAX_REPLY_LENGTH = 500           // 助手回复截断长度
 

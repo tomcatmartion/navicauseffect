@@ -131,7 +131,6 @@ export async function runReadingPipeline(params: RunPipelineParams): Promise<Run
 
   // ── 会话管理 ────────────────────────────────────────────
   const session = await sessionManager.getOrCreate(sessionId, userId, chartData)
-  const sessionHistory = sessionManager.getRecentSummary(session)
 
   // ── Step 0: 领域识别（代码，毫秒级）───────────────────
   const domain = detectDomain(question, session.currentDomain)
@@ -197,29 +196,31 @@ export async function runReadingPipeline(params: RunPipelineParams): Promise<Run
     horoscopeSummary = await computeHoroscopeSummary(session.chartData, yearResult.targetYear) ?? undefined
     horoscopeData = await computeHoroscopeData(session.chartData, yearResult.targetYear) ?? undefined
   }
-  const userMessage = buildUserMessage(session, domainContext, knowledgeContext, sessionHistory, question, horoscopeSummary, horoscopeData)
-  debugInfo.fullPrompt = userMessage
 
-  // ── Step 5: 唯一一次 AI 调用（流式）──────────────────────
-  const tools = buildTools()
-
-  const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: userMessage },
-  ]
+  // ── Step 5: 组装 AI 消息链 ─────────────────────────────────
+  const messages = buildMessageChain(
+    session,
+    domainContext,
+    knowledgeContext,
+    question,
+    horoscopeSummary,
+    horoscopeData,
+  )
+  debugInfo.fullPrompt = messages.map(m => `=== ${m.role} ===\n${m.content ?? ''}`).join('\n\n')
 
   // 工具调用循环（最多3轮兜底）
+  const tools = buildTools()
   await runToolLoop(messages, tools, debugInfo)
 
   // 最终流式生成
   const stream = await callAIStream({ messages })
 
-  // 异步保存会话
+  // 异步保存会话（ assistantReply 会在流结束后通过回调更新为完整内容 ）
   sessionManager.addTurn(session, {
     userQuestion: question,
     domain: { domains: [domain], timeScope: '本命' as const },
     elements: { palaces: [], stars: [], sihua: [], patterns: [], timeScope: '', analysisPoints: [] },
-    assistantReply: '（流式输出）',
+    assistantReply: '[等待流式输出完成...]',
     timestamp: Date.now(),
   }).catch(err => console.error('[pipeline] 会话保存失败:', err))
 
@@ -341,11 +342,14 @@ async function runToolLoop(
 // 辅助函数
 // ═══════════════════════════════════════════════════════════════════
 
-function buildUserMessage(
+/**
+ * 构建单条用户消息内容（命盘数据 + 规则 + 知识 + 当前问题）
+ * 用于作为消息链中每条 user 消息的内容
+ */
+function buildUserMessageContent(
   session: ZiweiSessionData,
   domainContext: string,
   knowledgeContext: string,
-  sessionHistory: string,
   question: string,
   horoscopeSummary?: string,
   horoscopeData?: { decadal: ScopeData; yearly: ScopeData; age: ScopeData }
@@ -373,15 +377,65 @@ function buildUserMessage(
     parts.push(knowledgeContext)
   }
 
-  // 对话历史
-  if (sessionHistory) {
-    parts.push('\n## 历史对话要点')
-    parts.push(sessionHistory)
-  }
-
   // 命主问题
   parts.push('\n## 用户问题')
   parts.push(question)
 
   return parts.join('\n')
+}
+
+/**
+ * 构建完整的 AI 消息链
+ *
+ * 核心修复：将历史对话作为独立的 user/assistant 消息放入 messages 数组，
+ * 而不是只作为文本摘要嵌入在单个 user message 中。
+ *
+ * 这样 AI 能看到完整的对话上下文，包括：
+ * - 用户之前问了什么问题
+ * - AI 之前回复了什么（包括要求补充的信息）
+ * - 用户补充了什么信息
+ */
+function buildMessageChain(
+  session: ZiweiSessionData,
+  domainContext: string,
+  knowledgeContext: string,
+  question: string,
+  horoscopeSummary?: string,
+  horoscopeData?: { decadal: ScopeData; yearly: ScopeData; age: ScopeData }
+): ChatMessage[] {
+  const messages: ChatMessage[] = []
+
+  // 1. System Prompt
+  messages.push({ role: 'system', content: SYSTEM_PROMPT })
+
+  // 2. 历史对话轮次（作为独立的 user/assistant 消息对）
+  // 最多保留最近 15 轮，避免超出上下文窗口
+  const historyTurns = session.turns.slice(-15)
+  for (const turn of historyTurns) {
+    // 用户消息：只包含问题和命盘上下文（精简版）
+    messages.push({
+      role: 'user',
+      content: `【历史提问】${turn.userQuestion}`,
+    })
+    // AI 回复摘要（跳过占位符）
+    if (turn.assistantReply && turn.assistantReply !== '（流式输出）' && turn.assistantReply !== '[等待流式输出完成...]') {
+      messages.push({
+        role: 'assistant',
+        content: turn.assistantReply,
+      })
+    }
+  }
+
+  // 3. 当前用户消息（完整上下文）
+  const currentUserContent = buildUserMessageContent(
+    session,
+    domainContext,
+    knowledgeContext,
+    question,
+    horoscopeSummary,
+    horoscopeData,
+  )
+  messages.push({ role: 'user', content: currentUserContent })
+
+  return messages
 }
