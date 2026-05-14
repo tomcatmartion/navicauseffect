@@ -1,6 +1,6 @@
 import { AIProvider, ChatMessage, ChatOptions } from "../types";
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 export class ZhiPuProvider implements AIProvider {
   id = "zhipu";

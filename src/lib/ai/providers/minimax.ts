@@ -1,6 +1,6 @@
 import { AIProvider, ChatMessage, ChatOptions } from "../types";
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 /** MiniMax 开放平台 OpenAI 兼容接口（https://api.minimaxi.com/v1） */
 export class MiniMaxProvider implements AIProvider {
