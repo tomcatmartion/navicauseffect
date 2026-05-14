@@ -2,8 +2,8 @@
  * 自测：数据库读写 + admin 账号与密码校验
  * 运行: npx tsx scripts/check-admin-db.ts
  *
- * 管理员密码存放在 AdminConfig 表的 admin_password_hash 键中，
- * seed 时从环境变量 ADMIN_PASSWORD 读取（未设置则默认 "changeme"）。
+ * AdminConfig.admin_password_hash 与 User.password 在 seed 中写入同一明文对应的 bcrypt。
+ * NextAuth 只读 User.password。本 seed 每次固定写入明文 ffffff 的 bcrypt。
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
@@ -27,7 +27,7 @@ async function main() {
   console.log("✅ 从 AdminConfig 读取到 admin_password_hash");
 
   // 2. 用环境变量或默认值验证密码匹配
-  const testPassword = process.env.ADMIN_PASSWORD || "changeme";
+  const testPassword = "ffffff";
   const match = await bcrypt.compare(testPassword, storedHash);
   console.log(`  bcrypt.compare('${testPassword}', hash):`, match ? "✅ 匹配" : "❌ 不匹配");
   console.log("");

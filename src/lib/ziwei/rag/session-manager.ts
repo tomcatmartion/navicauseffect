@@ -13,13 +13,91 @@ import { redis } from '@/lib/redis'
 import { prisma } from '@/lib/db'
 import type { Prisma } from '@prisma/client'
 import type { ZiweiSessionData, ConversationTurn, ReadingDomain, ReadingElements } from './types'
+import { createEmptyHybridPersisted, type HybridPersisted } from '@/lib/ziwei/hybrid/types'
 
 const SESSION_TTL = 60 * 60 * 24      // 24小时（秒）
 const MAX_TURNS = 5                    // 保留最近5轮
 const REDIS_PREFIX = 'ziwei:session:'
 const MAX_REPLY_LENGTH = 500           // 助手回复截断长度
 
+function sessionFromDbRow(dbSession: {
+  id: string
+  userId: string
+  chartData: Prisma.JsonValue
+  chartSummary: string
+  turns: Prisma.JsonValue
+  turnCount: number
+  currentDomain: string
+  createdAt: Date
+  expiresAt: Date
+  hybridState: Prisma.JsonValue | null
+}): ZiweiSessionData {
+  return {
+    sessionId: dbSession.id,
+    userId: dbSession.userId,
+    chartData: dbSession.chartData as Record<string, unknown>,
+    chartSummary: dbSession.chartSummary,
+    turns: dbSession.turns as unknown as ConversationTurn[],
+    currentDomain: dbSession.currentDomain,
+    turnCount: dbSession.turnCount,
+    createdAt: dbSession.createdAt.getTime(),
+    expiresAt: dbSession.expiresAt.getTime(),
+    hybridPersisted: (dbSession.hybridState as HybridPersisted | null) ?? createEmptyHybridPersisted(),
+  }
+}
+
 export class SessionManager {
+
+  /**
+   * 仅加载会话（不创建）。Hybrid 追加历史等场景使用。
+   */
+  async loadSession(sessionId: string): Promise<ZiweiSessionData | null> {
+    const cached = await redis.get(`${REDIS_PREFIX}${sessionId}`)
+    if (cached) {
+      try {
+        const session = JSON.parse(cached) as ZiweiSessionData
+        if (!session.hybridPersisted) {
+          const row = await prisma.ziweiSession.findUnique({
+            where: { id: sessionId },
+            select: { hybridState: true },
+          })
+          session.hybridPersisted = (row?.hybridState as HybridPersisted | null) ?? createEmptyHybridPersisted()
+        }
+        return session
+      } catch {
+        return null
+      }
+    }
+
+    const dbSession = await prisma.ziweiSession.findUnique({ where: { id: sessionId } })
+    if (!dbSession) return null
+    const session = sessionFromDbRow(dbSession)
+    await redis.setex(`${REDIS_PREFIX}${sessionId}`, SESSION_TTL, JSON.stringify(session))
+    return session
+  }
+
+  /**
+   * 将当前会话快照写入 Redis + MySQL（含 hybrid_state）
+   */
+  async persistSessionSnapshot(session: ZiweiSessionData): Promise<void> {
+    await redis.setex(
+      `${REDIS_PREFIX}${session.sessionId}`,
+      SESSION_TTL,
+      JSON.stringify(session),
+    )
+    await prisma.ziweiSession.update({
+      where: { id: session.sessionId },
+      data: {
+        chartData: session.chartData as unknown as Prisma.InputJsonValue,
+        chartSummary: session.chartSummary,
+        turns: session.turns as unknown as Prisma.InputJsonValue,
+        turnCount: session.turnCount,
+        currentDomain: session.currentDomain,
+        hybridState: (session.hybridPersisted ?? createEmptyHybridPersisted()) as unknown as Prisma.InputJsonValue,
+        updatedAt: new Date(),
+      },
+    })
+  }
 
   /**
    * 获取或创建会话
@@ -35,7 +113,15 @@ export class SessionManager {
     const cached = await redis.get(`${REDIS_PREFIX}${sessionId}`)
     if (cached) {
       try {
-        return JSON.parse(cached) as ZiweiSessionData
+        const session = JSON.parse(cached) as ZiweiSessionData
+        if (!session.hybridPersisted) {
+          const row = await prisma.ziweiSession.findUnique({
+            where: { id: sessionId },
+            select: { hybridState: true },
+          })
+          session.hybridPersisted = (row?.hybridState as HybridPersisted | null) ?? createEmptyHybridPersisted()
+        }
+        return session
       } catch {
         // Redis 数据损坏，继续走 MySQL
       }
@@ -47,17 +133,7 @@ export class SessionManager {
     })
 
     if (dbSession) {
-      const session: ZiweiSessionData = {
-        sessionId: dbSession.id,
-        userId: dbSession.userId,
-        chartData: dbSession.chartData as Record<string, unknown>,
-        chartSummary: dbSession.chartSummary,
-        turns: dbSession.turns as unknown as ConversationTurn[],
-        currentDomain: dbSession.currentDomain,
-        turnCount: dbSession.turnCount,
-        createdAt: dbSession.createdAt.getTime(),
-        expiresAt: dbSession.expiresAt.getTime(),
-      }
+      const session = sessionFromDbRow(dbSession)
       // 写回 Redis
       await redis.setex(`${REDIS_PREFIX}${sessionId}`, SESSION_TTL, JSON.stringify(session))
       return session
@@ -72,6 +148,7 @@ export class SessionManager {
     const now = Date.now()
     const expiresAt = now + SESSION_TTL * 1000
 
+    const hybridInit = createEmptyHybridPersisted()
     const session: ZiweiSessionData = {
       sessionId,
       userId,
@@ -82,6 +159,7 @@ export class SessionManager {
       turnCount: 0,
       createdAt: now,
       expiresAt,
+      hybridPersisted: hybridInit,
     }
 
     // 持久化到 MySQL
@@ -94,6 +172,7 @@ export class SessionManager {
         turns: [],
         turnCount: 0,
         currentDomain: '',
+        hybridState: hybridInit as unknown as Prisma.InputJsonValue,
         expiresAt: new Date(expiresAt),
       },
     })
@@ -142,6 +221,7 @@ export class SessionManager {
         turns: session.turns as unknown as Prisma.InputJsonValue,
         turnCount: session.turnCount,
         currentDomain: session.currentDomain,
+        hybridState: (session.hybridPersisted ?? createEmptyHybridPersisted()) as unknown as Prisma.InputJsonValue,
         updatedAt: new Date(),
       },
     }).catch(err => console.error('[SessionManager] MySQL 更新失败:', err))

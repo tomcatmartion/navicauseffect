@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
   const typeLabel = chunkIds.length > 0 ? "chunkIds" : retagFailed ? "retagFailed" : "full";
 
   // 启动后台任务（不 await，让它在后台运行）
+  // 先清除旧的 error 状态，确保重新执行时不会残留之前的错误信息
+  await writeRetagProgress({ status: "idle", error: undefined });
   runRetagBackground({ family, targetFile, mode, chunkIds, retagFailed, typeLabel }).catch((e) => {
     console.error("[retag] 后台任务异常退出:", e);
   });

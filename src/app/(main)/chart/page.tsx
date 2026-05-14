@@ -1,22 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
 import { Button } from "@/components/ui/button";
+import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 
 
 // 重型依赖：排盘后才需要，用 dynamic import 按需加载
 const Iztrolabe = dynamic(
   () =>
     import("react-iztro").then((mod) => {
-      // CSS 必须在组件加载时同步引入，避免闪烁
+      /* eslint-disable @typescript-eslint/no-require-imports -- 动态 chunk 内需同步 require CSS，避免首帧无样式 */
       require("react-iztro/lib/theme/default.css");
       require("react-iztro/lib/Iztrolabe/Iztrolabe.css");
       require("react-iztro/lib/IzpalaceCenter/IzpalaceCenter.css");
       require("react-iztro/lib/Izpalace/Izpalace.css");
+      /* eslint-enable @typescript-eslint/no-require-imports */
       return mod.Iztrolabe as unknown as React.ComponentType<Record<string, unknown>>;
     }),
   { ssr: false }
@@ -27,8 +29,8 @@ const ZiweiAnalysisPanel = dynamic(
   { ssr: false }
 );
 
-const ChatPanel = dynamic(
-  () => import("@/components/analysis/chat-panel").then((m) => m.ChatPanel),
+const DualChatPanel = dynamic(
+  () => import("@/components/analysis/dual-chat-panel").then((m) => m.DualChatPanel),
   { ssr: false }
 );
 
@@ -59,7 +61,7 @@ function preloadHeavyDeps() {
   // 规则分析面板
   import("@/components/analysis/ziwei-analysis-panel");
   // AI 对话面板
-  import("@/components/analysis/chat-panel");
+  import("@/components/analysis/dual-chat-panel");
 }
 
 export default function ChartPage() {
@@ -67,7 +69,6 @@ export default function ChartPage() {
   const [horoscope, setHoroscope] = useState<IFunctionalHoroscope | null>(null);
   const [trueSolarTimeInfo, setTrueSolarTimeInfo] = useState("");
   const [birthTimeIndex, setBirthTimeIndex] = useState(0);
-  const [horoscopeDate, setHoroscopeDate] = useState(() => new Date());
   const [horoscopeTimeIndex, setHoroscopeTimeIndex] = useState(0);
   const [birthData, setBirthData] = useState<{
     gender: "MALE" | "FEMALE";
@@ -78,6 +79,18 @@ export default function ChartPage() {
     solar?: boolean;
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const chartDataForPipeline = useMemo(() => {
+    if (!astrolabe || !birthData) return null;
+    return serializeAstrolabeForReading(astrolabe, {
+      year: birthData.year,
+      month: birthData.month,
+      day: birthData.day,
+      hour: birthData.hour,
+      gender: birthData.gender === "MALE" ? "男" : "女",
+      solar: birthData.solar,
+    }) as Record<string, unknown>;
+  }, [astrolabe, birthData]);
 
   // 命盘缩放：必须在组件顶层调用（Rules of Hooks）
   const chartWrapperRef = useRef<HTMLDivElement>(null);
@@ -129,7 +142,6 @@ export default function ChartPage() {
           setBirthData(saved);
           setBirthTimeIndex(saved.hour);
           setHoroscopeTimeIndex(saved.hour);
-          setHoroscopeDate(new Date());
           const horo = result.horoscope(new Date(), saved.hour);
           setHoroscope(horo);
           setTrueSolarTimeInfo(saved.trueSolarTimeInfo ?? "");
@@ -140,9 +152,7 @@ export default function ChartPage() {
     })();
   }, []);
 
-  // horoscope 运限由 Iztrolabe 组件内部管理（useIztro hook）
-  // chart page 只维护 horoscopeDate/horoscopeTimeIndex 用于传给右侧分析面板
-  // 不再自己计算 horoscope，避免与 Iztrolabe 内部 horoscope 计算冲突
+  // horoscope 运限由 Iztrolabe 内部管理；本页仅维护 horoscopeTimeIndex 与初始 horoscope 供面板
 
   const handleGenerateChart = async (data: {
     solarDate: string;
@@ -197,7 +207,6 @@ export default function ChartPage() {
       setTrueSolarTimeInfo(data.trueSolarTimeInfo);
       setBirthTimeIndex(data.timeIndex);
       setHoroscopeTimeIndex(data.timeIndex);
-      setHoroscopeDate(new Date());
       const horo = result.horoscope(new Date(), data.timeIndex);
       setHoroscope(horo);
 
@@ -211,11 +220,6 @@ export default function ChartPage() {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleHoroscopeDateChange = (date: string | Date) => {
-    const d = typeof date === "string" ? new Date(date) : date;
-    if (!Number.isNaN(d.getTime())) setHoroscopeDate(d);
   };
 
   const handleHoroscopeHourChange = (hour: number) => {
@@ -293,9 +297,7 @@ export default function ChartPage() {
                 birthdayType="solar"
                 astrolabe={astrolabe}
                 horoscope={horoscope ?? undefined}
-                horoscopeDate={horoscopeDate}
                 horoscopeHour={horoscopeTimeIndex <= 11 ? horoscopeTimeIndex : 0}
-                onHoroscopeDateChange={handleHoroscopeDateChange}
                 onHoroscopeHourChange={handleHoroscopeHourChange}
                 defaultShowDecadal={true}
                 defaultShowYearly={true}
@@ -314,7 +316,7 @@ export default function ChartPage() {
           {/* 规则解析 */}
           <div className="w-full flex-none">
             {birthData ? (
-              <ZiweiAnalysisPanel birthData={birthData} />
+              <ZiweiAnalysisPanel birthData={birthData} chartData={chartDataForPipeline} />
             ) : (
               <div className="p-8 text-center text-muted-foreground">
                 暂无出生数据，请重新排盘
@@ -324,7 +326,7 @@ export default function ChartPage() {
 
           {/* AI 对话区 */}
           <div className="flex-1 min-h-0">
-            <ChatPanel
+            <DualChatPanel
               astrolabeData={astrolabe}
               birthData={birthData}
             />

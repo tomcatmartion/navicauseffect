@@ -4,18 +4,18 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  /** 与表初始化一致：固定管理员账号（勿依赖环境变量） */
   const adminUsername = "admin";
-  // 从环境变量读取管理员密码，未设置则使用默认值（仅开发环境）
-  const adminPassword = process.env.ADMIN_PASSWORD || "changeme";
-  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  const adminPlainPassword = "ffffff";
+  const hashedPassword = await bcrypt.hash(adminPlainPassword, 10);
 
-  // 将管理员密码存入 AdminConfig 表，运行时从数据库读取
+  // 与 User.password 同步一份到 AdminConfig（其它脚本可读）
   await prisma.adminConfig.upsert({
     where: { configKey: "admin_password_hash" },
     update: { configValue: hashedPassword },
     create: { configKey: "admin_password_hash", configValue: hashedPassword },
   });
-  console.log("管理员密码已写入 AdminConfig");
+  console.log("管理员密码哈希已写入 AdminConfig（与 users.password 一致）");
 
   let existing = await prisma.user.findUnique({ where: { username: adminUsername } });
 
@@ -26,30 +26,46 @@ async function main() {
     existing = await prisma.user.findUnique({ where: { inviteCode: "ADMIN001" } });
   }
 
+  const adminUserData = {
+    username: adminUsername,
+    password: hashedPassword,
+    nickname: "管理员",
+    role: "ADMIN" as const,
+    inviteCode: "ADMIN001",
+    membership: {
+      upsert: {
+        create: { plan: "YEARLY" as const, status: "ACTIVE" as const },
+        update: { plan: "YEARLY" as const, status: "ACTIVE" as const },
+      },
+    },
+  };
+
   if (existing) {
     await prisma.user.update({
       where: { id: existing.id },
       data: {
-        username: adminUsername,
-        password: hashedPassword,
-        role: "ADMIN",
+        username: adminUserData.username,
+        password: adminUserData.password,
+        nickname: adminUserData.nickname,
+        role: adminUserData.role,
+        inviteCode: adminUserData.inviteCode,
+        membership: adminUserData.membership,
       },
     });
-    console.log(`管理员账号已更新: username=${adminUsername}`);
+    console.log("管理员已初始化/更新: admin / ffffff · ADMIN · 年度会员 ACTIVE");
   } else {
     const admin = await prisma.user.create({
       data: {
-        username: adminUsername,
-        password: hashedPassword,
-        nickname: "管理员",
-        role: "ADMIN",
-        inviteCode: "ADMIN001",
+        username: adminUserData.username,
+        password: adminUserData.password,
+        nickname: adminUserData.nickname,
+        role: adminUserData.role,
+        inviteCode: adminUserData.inviteCode,
         membership: { create: { plan: "YEARLY", status: "ACTIVE" } },
       },
     });
-    console.log("管理员账号创建成功:");
-    console.log(`  用户名: ${adminUsername}`);
-    console.log(`  ID: ${admin.id}`);
+    console.log("管理员已创建: admin / ffffff · ADMIN · 年度会员 ACTIVE");
+    console.log(`  user id: ${admin.id}`);
   }
 
   const plans = [

@@ -15,6 +15,8 @@ const providerFactories: Record<
   (config: AIModelConfig) => AIProvider
 > = {
   deepseek: (c) => new DeepSeekProvider(c.apiKey, c.baseUrl, c.modelId),
+  /** DeepSeek v4 等：Anthropic Messages API 兼容端点（如 https://api.deepseek.com/anthropic） */
+  "deepseek-anthropic": (c) => new ClaudeProvider(c.apiKey, c.baseUrl, c.modelId),
   zhipu: (c) => new ZhiPuProvider(c.apiKey, c.baseUrl, c.modelId),
   qwen: (c) => new QwenProvider(c.apiKey, c.baseUrl, c.modelId),
   claude: (c) => new ClaudeProvider(c.apiKey, c.baseUrl, c.modelId),

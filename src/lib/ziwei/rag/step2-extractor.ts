@@ -91,9 +91,9 @@ export interface ExtractElementsParams {
  * 获取可用的 AI 模型配置（优先使用轻量模型做要素提取）
  */
 async function getExtractorModelConfig(): Promise<AIModelConfig | null> {
-  // 优先用 DeepSeek（轻量快速、结构化输出好）
+  // 优先 OpenAI 兼容 DeepSeek，其次 Anthropic 兼容 DeepSeek（v4 等）
   const deepseek = await prisma.aIModelConfig.findFirst({
-    where: { isActive: true, provider: 'deepseek' },
+    where: { isActive: true, provider: "deepseek" },
   })
   if (deepseek) {
     return {
@@ -103,6 +103,20 @@ async function getExtractorModelConfig(): Promise<AIModelConfig | null> {
       apiKey: deepseek.apiKeyEncrypted,
       baseUrl: deepseek.baseUrl,
       modelId: deepseek.modelId,
+    }
+  }
+
+  const deepseekAnthropic = await prisma.aIModelConfig.findFirst({
+    where: { isActive: true, provider: "deepseek-anthropic" },
+  })
+  if (deepseekAnthropic) {
+    return {
+      id: deepseekAnthropic.id,
+      name: deepseekAnthropic.name,
+      provider: deepseekAnthropic.provider,
+      apiKey: deepseekAnthropic.apiKeyEncrypted,
+      baseUrl: deepseekAnthropic.baseUrl,
+      modelId: deepseekAnthropic.modelId,
     }
   }
 

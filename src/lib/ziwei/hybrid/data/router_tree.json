@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "_comment": "意图根 + 事项问诊树（与 decision-tree.ts 求财等路由对齐；M5 编排可逐步改为读此配置）。Claude 评审：须给出可执行 JSON 样例。",
+  "roots": [
+    { "id": "wealth", "label": "求财", "keywords": ["财", "钱", "投资", "生意"] },
+    { "id": "career", "label": "事业", "keywords": ["工作", "升职", "事业", "职场"] },
+    { "id": "love", "label": "求爱", "keywords": ["感情", "恋爱", "婚姻", "对象"] },
+    { "id": "health", "label": "求健康", "keywords": ["健康", "身体", "病"] },
+    { "id": "interaction", "label": "互动关系", "keywords": ["对方", "伴侣", "夫妻", "合伙"] }
+  ],
+  "domainFlows": {
+    "wealth": {
+      "matterType": "求财",
+      "entryQuestionId": "wealth_1",
+      "questions": [
+        {
+          "id": "wealth_1",
+          "question": "你现在主要是怎么赚钱的——是上班拿工资、自己做生意，还是做投资？",
+          "answerMap": {
+            "上班/打工": { "next": null, "mainPalace": "财帛宫", "sidePalaces": [] },
+            "自己做生意": { "next": "wealth_2a", "mainPalace": null, "sidePalaces": [] },
+            "纯投资": { "next": "wealth_6", "mainPalace": "福德宫", "sidePalaces": ["迁移宫"] }
+          },
+          "_codeMap": {
+            "上班/打工": { "value": "labor", "note": "与 TS wealth_1 劳力路径对齐时可映射为 labor+后续" },
+            "自己做生意": { "value": "labor", "nextCode": "wealth_2a" },
+            "纯投资": { "value": "invest", "nextCode": "wealth_6" }
+          }
+        },
+        {
+          "id": "wealth_2a",
+          "question": "有没有实体门店或固定营业场地？",
+          "answerMap": {
+            "有，规模较大": { "next": "wealth_2b", "sidePalaces": ["田宅宫"] },
+            "没有": { "next": "wealth_3", "sidePalaces": [] }
+          },
+          "_codeMap": {
+            "有，规模较大": { "value": "has_site", "nextCode": "wealth_2b" },
+            "没有": { "value": "no_site", "nextCode": "wealth_3" }
+          }
+        }
+      ]
+    }
+  }
+}

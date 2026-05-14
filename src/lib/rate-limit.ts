@@ -20,7 +20,7 @@ export async function checkDailyLimit(
     ? `daily_limit:user:${userId}:${today}`
     : `daily_limit:ip:${ip}:${today}`;
 
-  const limit = userId ? 5 : 3;
+  const limit = userId ? 100 : 5;
 
   const current = await redis.get(key);
   const count = current ? parseInt(current, 10) : 0;

@@ -625,7 +625,18 @@ export default function KnowledgeBasePage() {
       {retagProgress.status === "error" && (
         <Card className="border-red-200 bg-red-50/50">
           <CardContent className="py-3 text-sm text-red-800">
-            <span className="font-medium">打标出错：</span>{retagProgress.error}
+            <span className="font-medium">打标出错：</span>
+            {retagProgress.error}
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-100"
+                onClick={() => setShowRetagDialog(true)}
+              >
+                重新执行打标
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

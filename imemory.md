@@ -6,51 +6,23 @@
 
 ---
 
-## 2026-04-30 方案 C 部署踩坑（pack-deploy.sh / install-deploy.sh）
+## 2026-05-12 Hybrid 解盘 500 与冒烟超时
 
-### E-52: rsync `--exclude='data/'` 误杀 `packages/iztro/lib/data/`
+### E-50: 已 `db push`/迁移加列，仍报 `Unknown argument hybridState` / Prisma create 失败
 
-- **现象**：Next.js build 时报错 `Module not found: Can't resolve '../data'`
-- **根因**：`--exclude='data/'` 同时排除了 `./data/` 和 `./packages/iztro/lib/data/`
-- **教训**：排除规则要精确到项目根目录，用 `./data/` 而非 `data/`
-- **已修复**：`scripts/pack-deploy.sh` 中改为 `--exclude='./data/'`
+- **现象**：`_debug` 里 `Unknown argument 'hybridState'. Available options are marked with ?`，或长 JSON 截断后误判为 chartData 问题
+- **根因**：**`@prisma/client` 未随 schema 重新生成**（或 dev 进程未重启仍加载旧 client），运行时 API 与当前 `schema.prisma` 不一致；`_debug` 只截前 800 字时看不到句末的真正原因
+- **教训**：变更 Prisma 模型/字段后必须 **`pnpm prisma generate`**，并 **重启 Next**；交付前对 Prisma 类错误把 `_debug` 拉长或保留尾部，避免只看到半截 `data: { ...`
+- **关联**：`pnpm run smoke:reading` 交付前至少 `SMOKE_SKIP_LLM=1` 跑通快路径；全量流式须模型可用；Node 默认 `fetch` 对慢响应头有 **300s** 限制时解盘请求用 undici `Agent`（见 `scripts/smoke-hybrid-reading.ts`）；**Anthropic 兼容 `ClaudeProvider` 流式 `fetch` 须带超时**，否则上游挂死时 Next 长期不返回响应头
 
-### E-51: pnpm 对本地 file: 包使用 hard-link，webpack 无法解析相对路径
+## 2026-05-11 登录与 seed 约定
 
-- **现象**：Next.js build 时 `dayjs` / `lunar-lite` 等包虽然存在于 .pnpm store，但 webpack 无法通过相对路径解析
-- **根因**：pnpm workspace 对 `file:./packages/iztro` 使用硬链接，webpack 的相对路径解析无法穿过 `.pnpm` 结构找到依赖
-- **教训**：pnpm 的 hard-link 机制与 Next.js webpack 的模块解析存在冲突，需将 `.pnpm` 中的硬链接目录替换为真实 symlink
-- **已修复**：`install-deploy.sh` 中添加 hard-link→symlink 修复脚本
+### E-49: admin / ffffff 无法登录 — seed 默认密码与文档不一致
 
-### E-50: `@prisma/client` 被 webpack 打包后 `.prisma/client/default.js` 找不到
-
-- **现象**：Next.js build 成功，但 standalone server 启动后 `require('@prisma/client')` 失败
-- **根因**：webpack 打包时将 `@prisma/client` 内联，但 `default.js` 引用了 `.prisma/client/default`（相对路径），webpack 无法解析 symlink 后的 .prisma 目录
-- **教训**：Prisma Client 必须保持为运行时加载，不能被 webpack 打包
-- **已修复**：`next.config.mjs` 中添加 `serverExternalPackages: ["@prisma/client"]`
-
-### E-54: PM2 管理 standalone server 时进程冲突
-
-- **现象**：PM2 启动 standalone server 后显示 errored，但端口已被占用；CSS/JS 返回 404
-- **根因**：PM2 的 daemon 模式与 standalone server 的端口绑定存在冲突，端口未正确释放
-- **教训**：standalone server 用 nohup 直接启动更简单稳定，不需要 PM2
-- **已修复**：`install-deploy.sh` 改用 nohup 直接启动，移除 PM2 依赖
-
-### E-53: standalone 模式下 CSS/JS 返回 404
-
-- **现象**：页面 HTML 加载成功，但样式完全丢失（CSS/JS 返回 404）
-- **根因**：`postbuild-copy-zvec-bindings.sh` 没有把 `.next/static` 复制进 standalone 输出；standalone server.js 运行时找不到静态文件
-- **教训**：Next.js standalone 模式虽然生成了 `.next/standalone/` 目录，但 `.next/static/`（静态资源）需要额外复制步骤
-- **已修复**：`postbuild-copy-zvec-bindings.sh` 中添加 `cp -r .next/static .next/standalone/.next/`
-
-### E-49: 腾讯云无法访问 get.pnpm.io，pnpm 安装失败
-
-- **现象**：install-deploy.sh 执行 `curl -fsSL https://get.pnpm.io/install.sh | bash -` 报错 `curl: (52) Empty reply from server`
-- **根因**：腾讯云服务器无法访问外网（GitHub / get.pnpm.io）
-- **教训**：腾讯云部署脚本不能依赖外网下载，优先用 npm 安装全局工具
-- **已修复**：`install-deploy.sh` 改为 `npm install -g pnpm`
-
----
+- **现象**：用 `admin` / `ffffff` 登录 NextAuth 失败；误以为未写入数据库
+- **根因**：`NextAuth` 的 `authorize` **只校验 `User.password`**，与 `AdminConfig.admin_password_hash` 无直接关系；`prisma/seed` 曾默认 `ADMIN_PASSWORD=changeme`，与 `install.sh`、CLAUDE 文档中的 **ffffff** 不一致
+- **教训**：seed 默认管理员明文须与 `install.sh`、文档、自测脚本一致；说明「登录读 User 表」避免与 AdminConfig 混淆
+- **已修复**：`prisma/seed.ts` **固定**写入 `admin` / `ffffff`、`ADMIN`、`YEARLY` 会员；`check-admin-db` / `auth-flow-test` 同步。已用旧 seed 的库执行 `pnpm db:seed` 覆盖即可
 
 ## 2026-04-28 生产部署踩坑
 

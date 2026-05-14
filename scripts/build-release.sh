@@ -8,7 +8,7 @@
 #   bash scripts/build-release.sh           # 构建 + 打包
 #   bash scripts/build-release.sh --skip-build  # 跳过构建，仅打包
 #
-# 输出：dist/navicauseffect-release.tar.gz
+# 输出：dist/navicauseffect_v2-release.tar.gz
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -16,8 +16,8 @@ cd "$(dirname "$0")/.."
 PROJECT_DIR="$(pwd)"
 
 DIST_DIR="$PROJECT_DIR/dist"
-STAGING="$DIST_DIR/staging/navicauseffect"
-ARCHIVE="$DIST_DIR/navicauseffect-release.tar.gz"
+STAGING="$DIST_DIR/staging/navicauseffect_v2"
+ARCHIVE="$DIST_DIR/navicauseffect_v2-release.tar.gz"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -180,14 +180,14 @@ echo "[5/5] 打包 tarball..."
 mkdir -p "$DIST_DIR"
 rm -f "$ARCHIVE"
 
-# 从 staging 的父目录打包，这样解压后得到 navicauseffect/ 目录
+# 从 staging 的父目录打包，这样解压后得到 navicauseffect_v2/ 目录
 cd "$DIST_DIR/staging"
 # COPYFILE_DISABLE: 排除 macOS ._ 资源分叉文件
 # --no-xattrs: 不写入 macOS 扩展属性（quarantine/provenance 等，Linux tar 会报警告）
 COPYFILE_DISABLE=1 tar czf "$ARCHIVE" \
   --no-xattrs \
   --no-recursion \
-  -T <(find navicauseffect -type f -o -type l | grep -v '.DS_Store')
+  -T <(find navicauseffect_v2 -type f -o -type l | grep -v '.DS_Store')
 cd "$PROJECT_DIR"
 
 SIZE=$(du -h "$ARCHIVE" | cut -f1)
@@ -204,8 +204,8 @@ echo "  上传到服务器："
 echo "    scp $ARCHIVE user@server:/opt/"
 echo ""
 echo "  服务器上执行："
-echo "    cd /opt && tar xzf navicauseffect-release.tar.gz"
-echo "    cd navicauseffect && bash scripts/install.sh"
+echo "    cd /opt && tar xzf navicauseffect_v2-release.tar.gz"
+echo "    cd navicauseffect_v2 && bash scripts/install.sh"
 echo ""
 
 # 清理 staging

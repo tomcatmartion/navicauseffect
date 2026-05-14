@@ -1,9 +1,9 @@
 /**
  * 自测：登录后带 callbackUrl 跳转 + 访问 /admin 不再被要求登录
  * 运行: node scripts/auth-flow-test.mjs [BASE_URL]
- * 默认 BASE_URL=http://localhost:3000
+ * 默认 BASE_URL=http://127.0.0.1:3333（与 `pnpm dev` 一致）
  */
-const BASE = process.env.BASE_URL || process.argv[2] || "http://localhost:3000";
+const BASE = process.env.BASE_URL || process.argv[2] || "http://127.0.0.1:3333";
 
 function parseSetCookie(headers) {
   const getSetCookie = headers.getSetCookie?.();
@@ -45,7 +45,7 @@ async function run() {
   }
   console.log("   ok, csrfToken received");
 
-  const testPassword = process.env.ADMIN_PASSWORD || "changeme";
+  const testPassword = "ffffff";
   console.log(`2. POST /api/auth/callback/credentials (admin/${testPassword}, callbackUrl=/admin) ...`);
   const body = new URLSearchParams({
     username: "admin",

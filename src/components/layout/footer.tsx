@@ -34,12 +34,27 @@ export function Footer() {
             </p>
           </div>
         </div>
-        <div className="mt-8 border-t border-primary/5 pt-6 text-center text-xs text-muted-foreground">
-          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-            辽ICP备2026007904号
-          </a>
-          <span className="mx-2">·</span>
-          © {new Date().getFullYear()} 微著. All rights reserved.
+        <div className="mt-8 space-y-2 border-t border-primary/5 pt-6 text-center text-xs text-muted-foreground">
+          <p>
+            投诉建议：
+            <a
+              href="mailto:support@ziyunpai.com"
+              className="text-primary underline-offset-2 hover:text-primary/90 hover:underline"
+            >
+              support@ziyunpai.com
+            </a>
+          </p>
+          <p>© {new Date().getFullYear()} 微著. All rights reserved.</p>
+          <p>
+            <a
+              href="https://beian.miit.gov.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline-offset-2 hover:text-primary/90 hover:underline"
+            >
+              辽ICP备2026007904号-1
+            </a>
+          </p>
         </div>
       </div>
     </footer>

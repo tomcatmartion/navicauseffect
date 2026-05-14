@@ -47,18 +47,10 @@ ensure_env() {
       cat > .env << 'ENVEOF'
 MYSQL_ROOT_PASSWORD=navicause_root_2024
 MYSQL_PASSWORD=navicause_pass_2024
-DATABASE_URL="mysql://navicause:navicause_pass_2024@mysql:3306/navicauseffect"
+DATABASE_URL="mysql://navicause:navicause_pass_2024@mysql:3306/navicauseffect_v2"
 REDIS_URL="redis://redis:6379"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3333"
 NEXTAUTH_SECRET="generate-a-strong-secret-here"
-DEEPSEEK_API_KEY=""
-DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"
-ZHIPU_API_KEY=""
-ZHIPU_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
-QWEN_API_KEY=""
-QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-CLAUDE_API_KEY=""
-CLAUDE_BASE_URL="https://api.anthropic.com"
 ENVEOF
     fi
     warn "已创建 .env 文件，请编辑后重新运行："
@@ -94,8 +86,8 @@ deploy_up() {
   echo -e "${GREEN} 🎉 部署完成！${NC}"
   echo -e "${GREEN}══════════════════════════════════════════${NC}"
   echo ""
-  echo -e "  访问地址:    ${CYAN}http://localhost:3000${NC}"
-  echo -e "  管理后台:    ${CYAN}http://localhost:3000/admin${NC}"
+  echo -e "  访问地址:    ${CYAN}http://localhost:3333${NC}"
+  echo -e "  管理后台:    ${CYAN}http://localhost:3333/admin${NC}"
   echo ""
   echo -e "  查看日志:    ${CYAN}./scripts/deploy.sh logs${NC}"
   echo -e "  停止服务:    ${CYAN}./scripts/deploy.sh down${NC}"

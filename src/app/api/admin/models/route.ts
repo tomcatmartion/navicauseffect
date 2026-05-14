@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 
+/** 去掉误粘贴的终端 ANSI 控制序列（如 ESC[1m），及字面量「[1m]」等复制残留，避免 modelId 写入 DB 后上游 API 拒绝 */
+function sanitizeAiConfigString(s: string): string {
+  return s
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/\[1m\]/g, "")
+    .trim();
+}
+
 async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id || session.user.role !== "ADMIN") {
@@ -72,11 +80,11 @@ export async function POST(request: NextRequest) {
 
   const model = await prisma.aIModelConfig.create({
     data: {
-      name: String(name).trim(),
-      provider: String(provider).trim(),
-      apiKeyEncrypted: String(apiKey).trim(),
-      baseUrl: String(baseUrl).trim(),
-      modelId: String(modelId).trim(),
+      name: sanitizeAiConfigString(String(name)),
+      provider: sanitizeAiConfigString(String(provider)),
+      apiKeyEncrypted: sanitizeAiConfigString(String(apiKey)),
+      baseUrl: sanitizeAiConfigString(String(baseUrl)),
+      modelId: sanitizeAiConfigString(String(modelId)),
       isActive: true,
       isDefault: !!isDefault,
     },
@@ -99,11 +107,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const update: Record<string, unknown> = {};
-  if (typeof name === "string") update.name = name.trim();
-  if (typeof provider === "string") update.provider = provider.trim();
-  if (typeof modelId === "string") update.modelId = modelId.trim();
-  if (typeof baseUrl === "string") update.baseUrl = baseUrl.trim();
-  if (typeof apiKey === "string" && apiKey.trim() !== "") update.apiKeyEncrypted = apiKey.trim();
+  if (typeof name === "string") update.name = sanitizeAiConfigString(name);
+  if (typeof provider === "string") update.provider = sanitizeAiConfigString(provider);
+  if (typeof modelId === "string") update.modelId = sanitizeAiConfigString(modelId);
+  if (typeof baseUrl === "string") update.baseUrl = sanitizeAiConfigString(baseUrl);
+  if (typeof apiKey === "string" && apiKey.trim() !== "") update.apiKeyEncrypted = sanitizeAiConfigString(apiKey);
   if (typeof isActive === "boolean") update.isActive = isActive;
   if (isDefault === true) {
     await prisma.aIModelConfig.updateMany({

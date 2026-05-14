@@ -63,6 +63,12 @@ const PROVIDERS: { id: string; label: string; baseUrl: string; modelId: string }
   },
   { id: "zhipu", label: "智谱 GLM（Embedding 1024 维）", baseUrl: "https://open.bigmodel.cn/api/paas/v4", modelId: "glm-4-flash" },
   { id: "deepseek", label: "DeepSeek（Embedding 1024 维）", baseUrl: "https://api.deepseek.com/v1", modelId: "deepseek-chat" },
+  {
+    id: "deepseek-anthropic",
+    label: "DeepSeek V4（Anthropic 协议 / Embedding 1024 维）",
+    baseUrl: "https://api.deepseek.com/anthropic",
+    modelId: "deepseek-v4-pro[1m]",
+  },
   { id: "qwen", label: "通义千问（Embedding 1024 维）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", modelId: "qwen-turbo" },
   {
     id: "doubao",

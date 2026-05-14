@@ -46,11 +46,7 @@ export function extractFromOpenAiStreamJson(parsed: unknown): ParsedChunk {
     deltaText += content;
   }
 
-  // DeepSeek 思考链、部分模型推理阶段
-  const reasoning = d.reasoning_content;
-  if (typeof reasoning === "string" && reasoning.length > 0) {
-    deltaText += reasoning;
-  }
+  // reasoning_content 是模型的内部推理过程，不输出给用户
 
   return { deltaText, providerError: null };
 }

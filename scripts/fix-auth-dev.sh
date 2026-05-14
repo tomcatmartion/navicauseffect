@@ -10,4 +10,4 @@ echo "3. 校验 admin 账号（数据库）..."
 npx tsx scripts/check-admin-db.ts
 echo ""
 echo "请重新启动开发服务器: npm run dev"
-echo "然后使用 admin / <ADMIN_PASSWORD 环境变量对应的密码> 登录。"
+echo "然后使用 admin / ffffff 登录。"

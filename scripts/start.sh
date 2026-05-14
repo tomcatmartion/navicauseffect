@@ -64,23 +64,15 @@ ensure_env() {
   if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
       cp .env.example .env
-      warn "已从 .env.example 创建 .env，请编辑填入 AI 模型 API Key"
+      warn "已从 .env.example 创建 .env；大模型请在管理后台「AI 模型」配置（勿在 .env 写密钥）"
     else
       cat > .env << 'ENVEOF'
-DATABASE_URL="mysql://navicause:navicause_pass_2024@localhost:3306/navicauseffect"
+DATABASE_URL="mysql://navicause:navicause_pass_2024@localhost:3306/navicauseffect_v2"
 REDIS_URL="redis://localhost:6379"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3333"
 NEXTAUTH_SECRET="dev-secret-change-in-production-abc123xyz"
-DEEPSEEK_API_KEY=""
-DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"
-ZHIPU_API_KEY=""
-ZHIPU_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
-QWEN_API_KEY=""
-QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-CLAUDE_API_KEY=""
-CLAUDE_BASE_URL="https://api.anthropic.com"
 ENVEOF
-      warn "已创建默认 .env，请编辑填入 AI 模型 API Key"
+      warn "已创建默认 .env；大模型请在管理后台「AI 模型」配置"
     fi
   fi
   log ".env 配置就绪"
@@ -126,7 +118,7 @@ init_db() {
   log "数据库结构同步完成"
 }
 
-# ─── 注入默认 AI 模型配置 ───
+# ─── 注入默认数据（会员价等；大模型请在管理后台配置）───
 seed_defaults() {
   info "检查默认数据..."
   node -e "
@@ -134,16 +126,8 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 async function main() {
   const count = await prisma.aIModelConfig.count();
-  if (count > 0) { console.log('AI 模型配置已存在，跳过'); return; }
-
-  const models = [
-    { name: 'DeepSeek Chat', provider: 'deepseek', modelId: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', apiKeyEncrypted: process.env.DEEPSEEK_API_KEY || '', isActive: true, isDefault: true },
-    { name: '智谱 GLM-4', provider: 'zhipu', modelId: 'glm-4-flash', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKeyEncrypted: process.env.ZHIPU_API_KEY || '', isActive: false, isDefault: false },
-    { name: '通义千问', provider: 'qwen', modelId: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKeyEncrypted: process.env.QWEN_API_KEY || '', isActive: false, isDefault: false },
-    { name: 'Claude', provider: 'claude', modelId: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com', apiKeyEncrypted: process.env.CLAUDE_API_KEY || '', isActive: false, isDefault: false },
-  ];
-  for (const m of models) { await prisma.aIModelConfig.create({ data: m }); }
-  console.log('已创建 4 个默认 AI 模型配置');
+  if (count > 0) { console.log('AI 模型配置已存在，跳过'); }
+  else { console.log('无 AI 模型记录：请在管理后台 /admin/models 添加并填写密钥（仅存数据库）'); }
 
   const pricingCount = await prisma.membershipPricing.count();
   if (pricingCount === 0) {
@@ -181,10 +165,10 @@ stop_all() {
 
   # 停止 Next.js dev server
   local pids
-  pids=$(lsof -ti:3000 2>/dev/null || true)
+  pids=$(lsof -ti:3333 2>/dev/null || true)
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -9 2>/dev/null || true
-    log "已停止端口 3000 上的进程"
+    log "已停止端口 3333 上的进程"
   fi
 
   # 停止 Docker 容器
@@ -239,10 +223,10 @@ start_dev() {
   echo -e "${GREEN} 🎉 一切就绪！正在启动开发服务器...${NC}"
   echo -e "${GREEN}══════════════════════════════════════════${NC}"
   echo ""
-  echo -e "  前台首页:  ${CYAN}http://localhost:3000${NC}"
-  echo -e "  排盘页面:  ${CYAN}http://localhost:3000/chart${NC}"
-  echo -e "  管理后台:  ${CYAN}http://localhost:3000/admin${NC}"
-  echo -e "  登录页面:  ${CYAN}http://localhost:3000/auth/login${NC}"
+  echo -e "  前台首页:  ${CYAN}http://localhost:3333${NC}"
+  echo -e "  排盘页面:  ${CYAN}http://localhost:3333/chart${NC}"
+  echo -e "  管理后台:  ${CYAN}http://localhost:3333/admin${NC}"
+  echo -e "  登录页面:  ${CYAN}http://localhost:3333/auth/login${NC}"
   echo ""
   echo -e "  管理员账号: ${YELLOW}admin@navicause.com${NC} / ${YELLOW}admin123${NC}"
   echo ""
@@ -277,7 +261,7 @@ start_prod() {
   echo -e "${GREEN} 🚀 生产环境启动中...${NC}"
   echo -e "${GREEN}══════════════════════════════════════════${NC}"
   echo ""
-  echo -e "  访问地址:  ${CYAN}http://localhost:3000${NC}"
+  echo -e "  访问地址:  ${CYAN}http://localhost:3333${NC}"
   echo ""
 
   exec npm run start

@@ -71,7 +71,6 @@ enum SharePlatform {
 
 model User {
   id            String    @id @default(cuid())
-  username      String?   @unique
   phone         String?   @unique
   email         String?   @unique
   wechatOpenId  String?   @unique @map("wechat_openid")
@@ -84,6 +83,7 @@ model User {
   inviteCode    String    @unique @map("invite_code")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  username      String?   @unique
 
   membership          Membership?
   consultationRecords ConsultationRecord[]
@@ -296,6 +296,8 @@ model ZiweiSession {
   turns         Json     @default("[]")          // ConversationTurn[]，assistantReply 截断存摘要
   turnCount     Int      @default(0) @map("turn_count")  // 轮次计数，方便查询统计
   currentDomain String   @default("") @map("current_domain") // 当前对话领域
+  /** Hybrid 编排：状态机 + stage JSON + 对话历史（程序混合架构） */
+  hybridState     Json?    @map("hybrid_state")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   expiresAt     DateTime @map("expires_at")

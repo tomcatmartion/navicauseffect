@@ -1,13 +1,12 @@
 /**
  * 格局库
- * 包含84条格局的成格条件与引动条件
+ * 包含格局的成格条件与引动条件
  */
 
 import type { PatternCategory } from '../types';
 import type { Chart, Palace, StarName, Branch } from '../types/chart';
 import type { PatternMatch } from '../types/analysis';
 import { getOppositeBranch, getTriadBranches, getFlankBranches } from '../utils/spatial';
-import { getHuaByStem } from './fiveTiger';
 
 /**
  * 格局定义
@@ -16,6 +15,7 @@ export interface Pattern {
   name: string;
   category: PatternCategory;
   type: 'natal' | 'decennial' | 'annual'; // 原局/大限/流年
+  scope: 'chart' | 'palace'; // 图表级 vs 宫位级
   description: string;
   check: (chart: Chart, palace?: Palace) => boolean;
   effect: string;
@@ -29,31 +29,45 @@ function hasStarInPalace(palace: Palace, starName: StarName): boolean {
 }
 
 /**
- * 辅助函数：检查化禄星是否在宫位中
+ * 辅助函数：检查宫位中是否有化禄（通过 star.huaType）
  */
 function hasHuaLuInPalace(palace: Palace): boolean {
-  return palace.stars.some(s => s.name === '化禄');
+  return palace.stars.some(s => s.huaType === 'lu');
 }
 
 /**
- * 辅助函数：检查化禄星是否在指定地支的宫位中
+ * 辅助函数：检查指定地支的宫位中是否有化禄
  */
 function hasHuaLuInBranch(chart: Chart, branch: Branch): boolean {
-  const palace = chart.palaces[branch];
-  return hasHuaLuInPalace(palace);
+  return hasHuaLuInPalace(chart.palaces[branch]);
 }
 
 /**
- * 辅助函数：获取命盘中的化禄星位置
+ * 辅助函数：检查宫位中是否有化忌（通过 star.huaType）
  */
-function getHuaLuBranches(chart: Chart): Branch[] {
-  const branches: Branch[] = [];
-  for (const branch of Object.keys(chart.palaces) as Branch[]) {
-    if (hasHuaLuInBranch(chart, branch)) {
-      branches.push(branch);
-    }
-  }
-  return branches;
+function hasHuaJiInPalace(palace: Palace): boolean {
+  return palace.stars.some(s => s.huaType === 'ji');
+}
+
+/**
+ * 辅助函数：检查指定地支的宫位中是否有化忌
+ */
+function hasHuaJiInBranch(chart: Chart, branch: Branch): boolean {
+  return hasHuaJiInPalace(chart.palaces[branch]);
+}
+
+/**
+ * 辅助函数：检查宫位中是否有禄存
+ */
+function hasLucunInPalace(palace: Palace): boolean {
+  return palace.stars.some(s => s.name === '禄存');
+}
+
+/**
+ * 辅助函数：检查指定地支的宫位中是否有禄存
+ */
+function hasLucunInBranch(chart: Chart, branch: Branch): boolean {
+  return hasLucunInPalace(chart.palaces[branch]);
 }
 
 /**
@@ -69,19 +83,23 @@ function hasStarInBranch(chart: Chart, starName: StarName, branch: Branch): bool
  */
 const MAJOR_LUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'palace',
     name: '双禄夹',
     category: '大吉',
     type: 'natal',
-    description: '目标宫位左右两侧各有化禄星',
+    description: '目标宫位左右两侧各有化禄或禄存',
     check: (chart, palace) => {
       if (!palace) return false;
-      // 检查夹宫是否有禄星
       const [flank1, flank2] = getFlankBranches(palace.branch);
-      return hasHuaLuInBranch(chart, flank1) && hasHuaLuInBranch(chart, flank2);
+      // 两侧各有禄（化禄或禄存均可）
+      const hasLuOnFlank1 = hasHuaLuInBranch(chart, flank1) || hasLucunInBranch(chart, flank1);
+      const hasLuOnFlank2 = hasHuaLuInBranch(chart, flank2) || hasLucunInBranch(chart, flank2);
+      return hasLuOnFlank1 && hasLuOnFlank2;
     },
     effect: '护佑格局，凶限时能守住底线，不易彻底崩盘',
   },
   {
+    scope: 'chart',
     name: '禄马交驰',
     category: '大吉',
     type: 'natal',
@@ -109,6 +127,7 @@ const MAJOR_LUCKY_PATTERNS: Pattern[] = [
     effect: '财运动态来财，奔波中有财，利于异地发展',
   },
   {
+    scope: 'chart',
     name: '府相朝元',
     category: '大吉',
     type: 'natal',
@@ -140,6 +159,7 @@ const MAJOR_LUCKY_PATTERNS: Pattern[] = [
     effect: '综合管理能力强，财经稳健，有格局',
   },
   {
+    scope: 'chart',
     name: '紫府朝垣',
     category: '大吉',
     type: 'natal',
@@ -171,44 +191,53 @@ const MAJOR_LUCKY_PATTERNS: Pattern[] = [
     effect: '权贵格局，领导力强，利于从政或管理',
   },
   {
+    scope: 'palace',
     name: '阳梁昌禄',
     category: '大吉',
     type: 'natal',
     description: '太阳、天梁、文昌、化禄同宫',
     check: (chart, palace) => {
       if (!palace) return false;
-      // 检查太阳、天梁、文昌、化禄是否同宫
-      const stars = palace.stars.map(s => s.name);
-      const hasSun = stars.includes('太阳');
-      const hasLiang = stars.includes('天梁');
-      const hasChang = stars.includes('文昌');
-      const hasLu = stars.includes('化禄');
+      // 检查太阳、天梁、文昌同宫，且其中一颗有化禄
+      const stars = palace.stars;
+      const hasSun = stars.some(s => s.name === '太阳');
+      const hasLiang = stars.some(s => s.name === '天梁');
+      const hasChang = stars.some(s => s.name === '文昌');
+      const hasLu = stars.some(s => s.huaType === 'lu');
 
       return hasSun && hasLiang && hasChang && hasLu;
     },
     effect: '科甲名声格，适合学术教育公职',
   },
   {
+    scope: 'chart',
     name: '三奇嘉会',
     category: '大吉',
     type: 'natal',
-    description: '化禄、化权、化科在不同宫位',
+    description: '化禄、化权、化科汇聚于命宫三方四正',
     check: (chart) => {
-      // 检查化禄、化权、化科是否在不同宫位
-      const huaBranches: Record<string, Branch[]> = { lu: [], quan: [], ke: [] };
+      // 使用生年四化（chart.birthHua），检查三方四正是否齐全
+      const mingBranch = chart.mingPalace;
+      const oppositeBranch = getOppositeBranch(mingBranch);
+      const [triad1, triad2] = getTriadBranches(mingBranch);
 
-      for (const branch of Object.keys(chart.palaces) as Branch[]) {
+      // 命宫三方四正的地支集合
+      const keyBranches = new Set([mingBranch, oppositeBranch, triad1, triad2]);
+
+      let hasLu = false;
+      let hasQuan = false;
+      let hasKe = false;
+
+      for (const branch of keyBranches) {
         const palace = chart.palaces[branch];
-        const hua = getHuaByStem(palace.stem || '甲');
-        if (hua.lu) huaBranches.lu.push(branch);
-        if (hua.quan) huaBranches.quan.push(branch);
-        if (hua.ke) huaBranches.ke.push(branch);
+        for (const star of palace.stars) {
+          if (star.huaType === 'lu') hasLu = true;
+          if (star.huaType === 'quan') hasQuan = true;
+          if (star.huaType === 'ke') hasKe = true;
+        }
       }
 
-      // 检查是否三种化星都存在且在不同宫位
-      return huaBranches.lu.length > 0 &&
-             huaBranches.quan.length > 0 &&
-             huaBranches.ke.length > 0;
+      return hasLu && hasQuan && hasKe;
     },
     effect: '主富贵双全，才华出众，名利兼收',
   },
@@ -219,6 +248,7 @@ const MAJOR_LUCKY_PATTERNS: Pattern[] = [
  */
 const MEDIUM_LUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'palace',
     name: '左辅右弼同宫',
     category: '中吉',
     type: 'natal',
@@ -231,6 +261,7 @@ const MEDIUM_LUCKY_PATTERNS: Pattern[] = [
     effect: '助力强大，处事稳重，多贵人相助',
   },
   {
+    scope: 'palace',
     name: '昌曲同宫',
     category: '中吉',
     type: 'natal',
@@ -243,6 +274,7 @@ const MEDIUM_LUCKY_PATTERNS: Pattern[] = [
     effect: '才华横溢，文艺气质，利于考试成名',
   },
   {
+    scope: 'palace',
     name: '魁钺同宫',
     category: '中吉',
     type: 'natal',
@@ -255,6 +287,7 @@ const MEDIUM_LUCKY_PATTERNS: Pattern[] = [
     effect: '贵人运强，遇事有助，利于社交发展',
   },
   {
+    scope: 'chart',
     name: '月朗天门',
     category: '中吉',
     type: 'natal',
@@ -266,46 +299,29 @@ const MEDIUM_LUCKY_PATTERNS: Pattern[] = [
     effect: '清贵之格，主名声、财气，女性尤佳',
   },
   {
+    scope: 'chart',
     name: '明珠出海',
     category: '中吉',
     type: 'natal',
-    description: '太阴在卯宫',
+    description: '太阴在亥宫守命，三合有太阳在卯宫',
     check: (chart) => {
+      const haiPalace = chart.palaces['亥'];
       const maoPalace = chart.palaces['卯'];
-      return maoPalace.stars.some(s => s.name === '太阴');
+      const hasTaiyinInHai = haiPalace.stars.some(s => s.name === '太阴');
+      const hasTaiyangInMao = maoPalace.stars.some(s => s.name === '太阳');
+      // 太阴在亥宫，太阳在卯宫，且命宫在亥
+      return hasTaiyinInHai && hasTaiyangInMao && chart.mingPalace === '亥';
     },
     effect: '才华出众，清秀明亮，利于文艺',
   },
 ];
 
 /**
- * 辅助函数：检查煞星是否在宫位中
- */
-function hasShaStarInPalace(palace: Palace, starName: StarName): boolean {
-  return palace.stars.some(s => s.name === starName);
-}
-
-/**
  * 辅助函数：检查煞星是否在指定地支的宫位中
  */
 function hasShaStarInBranch(chart: Chart, starName: StarName, branch: Branch): boolean {
   const palace = chart.palaces[branch];
-  return hasShaStarInPalace(palace, starName);
-}
-
-/**
- * 辅助函数：检查化忌星是否在宫位中
- */
-function hasHuaJiInPalace(palace: Palace): boolean {
-  return palace.stars.some(s => s.name === '化忌');
-}
-
-/**
- * 辅助函数：检查化忌星是否在指定地支的宫位中
- */
-function hasHuaJiInBranch(chart: Chart, branch: Branch): boolean {
-  const palace = chart.palaces[branch];
-  return hasHuaJiInPalace(palace);
+  return palace.stars.some(s => s.name === starName);
 }
 
 /**
@@ -313,6 +329,7 @@ function hasHuaJiInBranch(chart: Chart, branch: Branch): boolean {
  */
 const MINOR_LUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'chart',
     name: '文桂文华',
     category: '小吉',
     type: 'natal',
@@ -328,6 +345,7 @@ const MINOR_LUCKY_PATTERNS: Pattern[] = [
     effect: '主文采斐然，利于考试',
   },
   {
+    scope: 'chart',
     name: '天乙贵人',
     category: '小吉',
     type: 'natal',
@@ -345,6 +363,7 @@ const MINOR_LUCKY_PATTERNS: Pattern[] = [
  */
 const MAJOR_UNLUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'palace',
     name: '羊陀夹忌',
     category: '大凶',
     type: 'natal',
@@ -366,6 +385,7 @@ const MAJOR_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '致命凶格，被夹者必受重创，刑伤灾祸',
   },
   {
+    scope: 'palace',
     name: '刑囚夹印',
     category: '大凶',
     type: 'natal',
@@ -387,6 +407,7 @@ const MAJOR_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '官非口舌，刑伤纠纷，仕途不利',
   },
   {
+    scope: 'chart',
     name: '马头带剑',
     category: '大凶',
     type: 'natal',
@@ -406,6 +427,7 @@ const MAJOR_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '奔波劳碌，血光之灾，异地不利',
   },
   {
+    scope: 'palace',
     name: '刑忌夹印',
     category: '大凶',
     type: 'natal',
@@ -437,6 +459,7 @@ const MAJOR_UNLUCKY_PATTERNS: Pattern[] = [
  */
 const MEDIUM_UNLUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'chart',
     name: '空劫夹',
     category: '中凶',
     type: 'natal',
@@ -455,6 +478,7 @@ const MEDIUM_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '虚华不实，财来财去，须防破财',
   },
   {
+    scope: 'chart',
     name: '火铃夹',
     category: '中凶',
     type: 'natal',
@@ -470,6 +494,7 @@ const MEDIUM_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '脾气暴躁，易冲动，须防突发灾害',
   },
   {
+    scope: 'chart',
     name: '交禄空亡',
     category: '中凶',
     type: 'natal',
@@ -498,6 +523,7 @@ const MEDIUM_UNLUCKY_PATTERNS: Pattern[] = [
  */
 const MINOR_UNLUCKY_PATTERNS: Pattern[] = [
   {
+    scope: 'chart',
     name: '借对宫',
     category: '小凶',
     type: 'natal',
@@ -509,6 +535,7 @@ const MINOR_UNLUCKY_PATTERNS: Pattern[] = [
     effect: '吉象减半，凶象更凶，依赖外部环境',
   },
   {
+    scope: 'chart',
     name: '孤立无援',
     category: '小凶',
     type: 'natal',

@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-navicause_root_2024}
-      MYSQL_DATABASE: navicauseffect
+      MYSQL_DATABASE: navicauseffect_v2
       MYSQL_USER: navicause
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-navicause_pass_2024}
     ports:

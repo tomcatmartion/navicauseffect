@@ -131,6 +131,7 @@ export interface Star {
   type: StarType;
   brightness: number;     // 亮度等级（庙旺得利陷，1-5）
   palace: PalaceName;     // 所在宫位
+  huaType?: HuaType;      // 生年四化标记（化禄/化权/化科/化忌）
 }
 
 /**
@@ -267,11 +268,11 @@ export interface MinorLimit {
 export type SpatialRelation = 'self' | 'opposite' | 'triad' | 'flank';
 
 /**
- * 获取星曜分值
+ * 获取星曜基础分值（不含四化）
  */
 export function getStarScore(starName: StarName): number {
-  const luckyStars: StarName[] = ['化禄', '左辅', '右弼', '文昌', '文曲', '天魁', '天钺'];
-  const unluckyStars: StarName[] = ['火星', '铃星', '地空', '地劫', '化忌', '擎羊', '陀罗'];
+  const luckyStars: StarName[] = ['左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存'];
+  const unluckyStars: StarName[] = ['火星', '铃星', '地空', '地劫', '擎羊', '陀罗'];
 
   if (luckyStars.includes(starName)) return 0.5;
   if (unluckyStars.includes(starName)) return -0.5;
@@ -279,17 +280,17 @@ export function getStarScore(starName: StarName): number {
 }
 
 /**
- * 判断是否为吉星
+ * 判断是否为吉星（不含四化，四化通过 star.huaType 判断）
  */
 export function isLuckyStar(starName: StarName): boolean {
-  const luckyStars: StarName[] = ['化禄', '左辅', '右弼', '文昌', '文曲', '天魁', '天钺'];
+  const luckyStars: StarName[] = ['左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存'];
   return luckyStars.includes(starName);
 }
 
 /**
- * 判断是否为煞星
+ * 判断是否为煞星（不含四化，四化通过 star.huaType 判断）
  */
 export function isUnluckyStar(starName: StarName): boolean {
-  const unluckyStars: StarName[] = ['火星', '铃星', '地空', '地劫', '化忌', '擎羊', '陀罗'];
+  const unluckyStars: StarName[] = ['火星', '铃星', '地空', '地劫', '擎羊', '陀罗'];
   return unluckyStars.includes(starName);
 }

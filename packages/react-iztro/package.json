@@ -67,7 +67,7 @@
   },
   "dependencies": {
     "classnames": "^2.3.2",
-    "iztro": "2.5.3",
+    "iztro": "file:../iztro",
     "iztro-hook": "1.3.3",
     "lunar-lite": "^0.2.7"
   },

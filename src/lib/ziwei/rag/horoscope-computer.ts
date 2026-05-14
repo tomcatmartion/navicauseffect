@@ -29,7 +29,7 @@ interface BirthInfo {
 }
 
 /** 统一的运限数据结构 */
-interface ScopeData {
+export interface ScopeData {
   heavenlyStem: string
   earthlyBranch: string
   /** 该运限命宫名 */
@@ -220,4 +220,23 @@ export async function computeHoroscopeSummary(
   }
 
   return formatHoroscopeSummary(horoscopeData, targetYear)
+}
+
+/**
+ * 计算指定年份的运限结构化数据（供 Skill Pipeline 构建 Prompt 使用）
+ *
+ * @param chartData 命盘数据（须包含 birthInfo）
+ * @param targetYear 目标年份
+ * @returns 运限结构化对象，如果无法计算则返回 null
+ */
+export async function computeHoroscopeData(
+  chartData: Record<string, unknown>,
+  targetYear: number,
+): Promise<{ decadal: ScopeData; yearly: ScopeData; age: ScopeData } | null> {
+  const birthInfo = extractBirthInfo(chartData)
+  if (!birthInfo) {
+    console.warn('[HoroscopeComputer] chartData 缺少 birthInfo，无法计算运限')
+    return null
+  }
+  return computeHoroscope(birthInfo, targetYear)
 }

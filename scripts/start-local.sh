@@ -23,7 +23,7 @@ warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 err()  { echo -e "${RED}[✗]${NC} $*"; }
 info() { echo -e "${CYAN}[i]${NC} $*"; }
 
-DB_NAME="navicauseffect"
+DB_NAME="navicauseffect_v2"
 DB_USER="navicause"
 DB_PASS="navicause_pass_2024"
 
@@ -112,9 +112,9 @@ setup_database() {
   else
     err "数据库用户创建失败，请手动执行："
     echo "  $MYSQL_ROOT_CMD"
-    echo "  CREATE DATABASE IF NOT EXISTS navicauseffect CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    echo "  CREATE DATABASE IF NOT EXISTS navicauseffect_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
     echo "  CREATE USER 'navicause'@'localhost' IDENTIFIED BY 'navicause_pass_2024';"
-    echo "  GRANT ALL PRIVILEGES ON navicauseffect.* TO 'navicause'@'localhost';"
+    echo "  GRANT ALL PRIVILEGES ON navicauseffect_v2.* TO 'navicause'@'localhost';"
     echo "  FLUSH PRIVILEGES;"
     exit 1
   fi
@@ -179,18 +179,10 @@ ensure_env() {
     cat > .env << ENVEOF
 DATABASE_URL="mysql://${DB_USER}:${DB_PASS}@localhost:3306/${DB_NAME}"
 REDIS_URL="redis://localhost:6379"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3333"
 NEXTAUTH_SECRET="dev-secret-change-in-production-abc123xyz"
-DEEPSEEK_API_KEY=""
-DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"
-ZHIPU_API_KEY=""
-ZHIPU_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
-QWEN_API_KEY=""
-QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-CLAUDE_API_KEY=""
-CLAUDE_BASE_URL="https://api.anthropic.com"
 ENVEOF
-    warn "已创建 .env，AI 功能需要填入 API Key（不填也能启动，只是 AI 分析不可用）"
+    warn "已创建 .env；大模型请在管理后台「AI 模型」配置（仅存数据库）"
   fi
   log ".env 就绪"
 }
@@ -212,14 +204,7 @@ const prisma = new PrismaClient();
 async function main() {
   const modelCount = await prisma.aIModelConfig.count();
   if (modelCount === 0) {
-    const models = [
-      { name: 'DeepSeek Chat', provider: 'deepseek', modelId: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', apiKeyEncrypted: process.env.DEEPSEEK_API_KEY || '', isActive: true, isDefault: true },
-      { name: '智谱 GLM-4', provider: 'zhipu', modelId: 'glm-4-flash', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKeyEncrypted: process.env.ZHIPU_API_KEY || '', isActive: false, isDefault: false },
-      { name: '通义千问', provider: 'qwen', modelId: 'qwen-plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKeyEncrypted: process.env.QWEN_API_KEY || '', isActive: false, isDefault: false },
-      { name: 'Claude', provider: 'claude', modelId: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com', apiKeyEncrypted: process.env.CLAUDE_API_KEY || '', isActive: false, isDefault: false },
-    ];
-    for (const m of models) await prisma.aIModelConfig.create({ data: m });
-    console.log('  已创建 4 个 AI 模型配置');
+    console.log('  无 AI 模型记录：请在管理后台 /admin/models 添加并填写密钥');
   } else {
     console.log('  AI 模型配置已存在，跳过');
   }
@@ -258,12 +243,12 @@ main().catch(e => console.error(e)).finally(() => prisma.\$disconnect());
 stop_all() {
   info "停止 Next.js 开发服务器..."
   local pids
-  pids=$(lsof -ti:3000 2>/dev/null || true)
+  pids=$(DB_NAME="navicauseffect_v2" 2>/dev/null || true)
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -9 2>/dev/null || true
     log "已停止"
   else
-    info "端口 3000 上没有运行中的进程"
+    info "端口 3333 上没有运行中的进程"
   fi
   log "完成（MySQL 和 Redis 保持运行，不影响其他程序）"
 }
@@ -283,7 +268,7 @@ reset_all() {
   if command -v mysql &>/dev/null; then
     mysql -u root -e "DROP DATABASE IF EXISTS \`$DB_NAME\`;" 2>/dev/null || \
     mysql -u root -p -e "DROP DATABASE IF EXISTS \`$DB_NAME\`;" 2>/dev/null || \
-    warn "无法自动删除数据库，请手动: mysql -u root -e 'DROP DATABASE navicauseffect;'"
+    warn "无法自动删除数据库，请手动: mysql -u root -e 'DROP DATABASE navicauseffect_v2;'"
   fi
 
   rm -rf node_modules .next
@@ -313,10 +298,10 @@ start_dev() {
   echo -e "${GREEN}  一切就绪！启动开发服务器...${NC}"
   echo -e "${GREEN}═══════════════════════════════════════════${NC}"
   echo ""
-  echo -e "  首页:      ${CYAN}http://localhost:3000${NC}"
-  echo -e "  排盘:      ${CYAN}http://localhost:3000/chart${NC}"
-  echo -e "  管理后台:  ${CYAN}http://localhost:3000/admin${NC}"
-  echo -e "  登录:      ${CYAN}http://localhost:3000/auth/login${NC}"
+  echo -e "  首页:      ${CYAN}http://localhost:3333${NC}"
+  echo -e "  排盘:      ${CYAN}http://localhost:3333/chart${NC}"
+  echo -e "  管理后台:  ${CYAN}http://localhost:3333/admin${NC}"
+  echo -e "  登录:      ${CYAN}http://localhost:3333/auth/login${NC}"
   echo ""
   echo -e "  管理员:    ${YELLOW}admin@navicause.com${NC} / ${YELLOW}admin123${NC}"
   echo ""

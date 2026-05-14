@@ -12,6 +12,7 @@ export function getEmbeddingFamilyForProvider(provider: string): EmbeddingDimens
   const dim1024 = new Set([
     "zhipu",
     "deepseek",
+    "deepseek-anthropic",
     "qwen",
     "doubao",
     "volcengine",

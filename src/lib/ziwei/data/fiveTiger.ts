@@ -1,7 +1,6 @@
 /**
- * 五虎遁表
- * 用途：查询任意生年干对应各宫位地支的天干
- * 父母太岁宫遁干 = 以生年干查五虎遁，找到太岁宫地支所在行，即得遁干
+ * 五虎遁表（年上起月法）：由生年干定寅宫天干，顺布十二宫宫干。
+ * 太岁宫宫干 = 以生年干查本表、取太岁宫地支所在列之天干（与 SKILL_宫位原生能级评估「父母太岁宫遁干」算法一致）。
  */
 
 import type { Stem, Branch } from '../types';
@@ -66,7 +65,7 @@ export function getYearStemBranch(year: number): { stem: Stem; branch: Branch } 
 }
 
 /**
- * 根据生年干和地支获取遁干（宫干）
+ * 根据生年干和宫位地支取该宫宫干（五虎遁）
  */
 export function getDunGan(birthStem: Stem, palaceBranch: Branch): Stem {
   const dunTable = FIVE_TIGER[birthStem];

@@ -94,37 +94,49 @@ const SYSTEM_PROMPT = `你是一位精通紫微斗数的专业命理师，思考
  * 获取强推理模型配置（用于最终生成）
  */
 async function getGeneratorModelConfig(): Promise<AIModelConfig | null> {
-  // 优先用 Claude（最强推理）
-  const claude = await prisma.aIModelConfig.findFirst({
-    where: { isActive: true, provider: 'claude' },
+  // 与全站一致：优先后台标记的默认模型
+  const defaultModel = await prisma.aIModelConfig.findFirst({
+    where: { isActive: true, isDefault: true },
   })
-  if (claude) {
+  if (defaultModel) {
     return {
-      id: claude.id,
-      name: claude.name,
-      provider: claude.provider,
-      apiKey: claude.apiKeyEncrypted,
-      baseUrl: claude.baseUrl,
-      modelId: claude.modelId,
+      id: defaultModel.id,
+      name: defaultModel.name,
+      provider: defaultModel.provider,
+      apiKey: defaultModel.apiKeyEncrypted,
+      baseUrl: defaultModel.baseUrl,
+      modelId: defaultModel.modelId,
     }
   }
 
-  // 降级到默认模型
-  const defaultModel = await prisma.aIModelConfig.findFirst({
-    where: { isActive: true, isDefault: true },
-  }) ?? await prisma.aIModelConfig.findFirst({
+  // 其次 Anthropic 系（含 DeepSeek Anthropic 兼容端点）
+  const claudeLike = await prisma.aIModelConfig.findFirst({
+    where: { isActive: true, provider: { in: ["claude", "deepseek-anthropic"] } },
+  })
+  if (claudeLike) {
+    return {
+      id: claudeLike.id,
+      name: claudeLike.name,
+      provider: claudeLike.provider,
+      apiKey: claudeLike.apiKeyEncrypted,
+      baseUrl: claudeLike.baseUrl,
+      modelId: claudeLike.modelId,
+    }
+  }
+
+  const fallback = await prisma.aIModelConfig.findFirst({
     where: { isActive: true },
   })
 
-  if (!defaultModel) return null
+  if (!fallback) return null
 
   return {
-    id: defaultModel.id,
-    name: defaultModel.name,
-    provider: defaultModel.provider,
-    apiKey: defaultModel.apiKeyEncrypted,
-    baseUrl: defaultModel.baseUrl,
-    modelId: defaultModel.modelId,
+    id: fallback.id,
+    name: fallback.name,
+    provider: fallback.provider,
+    apiKey: fallback.apiKeyEncrypted,
+    baseUrl: fallback.baseUrl,
+    modelId: fallback.modelId,
   }
 }
 

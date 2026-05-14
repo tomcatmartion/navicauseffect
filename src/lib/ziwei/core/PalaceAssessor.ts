@@ -23,7 +23,7 @@ import {
 } from '../utils/spatial';
 import { getStarScore, isLuckyStar, isUnluckyStar } from '../types';
 import { getCeiling, getPalaceStrength } from '../data/skeletonMapping';
-import { checkPalacePatterns, getPatternEffect } from '../data/patterns';
+import { checkPalacePatterns, getPatternEffect, type Pattern } from '../data/patterns';
 import {
   getBaseScoreByStrength,
   getCeilingByStrength,
@@ -135,31 +135,53 @@ export class PalaceAssessor {
     const hasLucun = starData.selfStars.includes('禄存');
     const lucunBonus = calculateLucunBonus(hasLucun, strength);
 
-    // 第五步：计算小计
-    const subtotal = baseScore + luckyResult.total + unluckyResult.total + lucunBonus;
+    // 第4.5步：四化评分因子
+    const huaBonus = this.calculateHuaBonus(palace);
 
-    // 第六步：应用天花板约束
-    const { finalScore, isConstrained } = applyCeiling(subtotal, ceiling);
+    // 第五步：计算小计
+    const subtotal = baseScore + luckyResult.total + unluckyResult.total + lucunBonus + huaBonus;
+
+    // 第六步：应用天花板约束（化禄可突破天花板0.5）
+    const canExceed = palace.stars.some(s => s.huaType === 'lu');
+    const effectiveCeiling = canExceed ? ceiling + 0.5 : ceiling;
+    const { finalScore, isConstrained } = applyCeiling(subtotal, effectiveCeiling);
 
     // 判断是否制煞/逞凶
     const hasUnlucky = starData.allStars.some(s => isUnluckyStar(s.star));
     const isControlled = isControlSha(strength, hasUnlucky);
     const isAggressiveResult = isAggressive(strength, hasUnlucky);
 
-    // 更新宫位状态
-    palace.isControlled = isControlled;
-    palace.isAggressive = isAggressiveResult;
-
     return {
       strength,
       baseScore,
-      ceiling,
+      ceiling: effectiveCeiling,
       finalScore,
       isConstrained,
       isControlled,
-      isAggressive,
+      isAggressive: isAggressiveResult,
+      luckyBonus: luckyResult.total,
+      unluckyPenalty: unluckyResult.total,
+      lucunBonus,
+      huaBonus,
       starScores: [...luckyResult.details, ...unluckyResult.details],
     };
+  }
+
+  /**
+   * 四化评分因子
+   * 化禄+0.8，化权+0.5，化科+0.3，化忌-0.8
+   */
+  private static calculateHuaBonus(palace: Palace): number {
+    let bonus = 0;
+    for (const star of palace.stars) {
+      switch (star.huaType) {
+        case 'lu': bonus += 0.8; break;
+        case 'quan': bonus += 0.5; break;
+        case 'ke': bonus += 0.3; break;
+        case 'ji': bonus -= 0.8; break;
+      }
+    }
+    return bonus;
   }
 
   /**
@@ -214,10 +236,15 @@ export class PalaceAssessor {
         relation: 'triad' as SpatialRelation,
         sourceStrength: triad2Palace.baseScore,
       })),
-      ...flankStars.map(star => ({
-        star,
+      ...flank1Palace.stars.map(s => ({
+        star: s.name,
         relation: 'flank' as SpatialRelation,
         sourceStrength: flank1Palace.baseScore,
+      })),
+      ...flank2Palace.stars.map(s => ({
+        star: s.name,
+        relation: 'flank' as SpatialRelation,
+        sourceStrength: flank2Palace.baseScore,
       })),
     ];
 
@@ -231,18 +258,21 @@ export class PalaceAssessor {
   }
 
   /**
-   * 检查成格格局
+   * 检查成格格局（仅返回宫位级格局）
    */
   private static checkPatterns(chart: Chart, palace: Palace): PatternMatch[] {
-    const patterns = checkPalacePatterns(chart, palace);
+    const allPatterns = checkPalacePatterns(chart, palace);
 
-    return patterns.map(p => ({
-      name: p.name,
-      category: p.category,
-      source: p.type,
-      description: p.description,
-      effect: getPatternEffect(p.category),
-    }));
+    // 只保留宫位级格局（scope === 'palace'）
+    return allPatterns
+      .filter(p => p.scope === 'palace')
+      .map(p => ({
+        name: p.name,
+        category: p.category,
+        source: p.type,
+        description: p.description,
+        effect: getPatternEffect(p.category),
+      }));
   }
 
   /**
@@ -250,7 +280,7 @@ export class PalaceAssessor {
    */
   private static generateInterpretation(
     palace: Palace,
-    calculation: any,
+    calculation: { luckyBonus: number; unluckyPenalty: number; isControlled: boolean; isAggressive: boolean; isConstrained: boolean; huaBonus: number; finalScore: number; strength: PalaceStrength },
     patterns: PatternMatch[]
   ) {
     const grade = getScoreGrade(calculation.finalScore);
@@ -279,7 +309,7 @@ export class PalaceAssessor {
   /**
    * 生成特质描述
    */
-  private static generateTraits(palace: Palace, calculation: any): string[] {
+  private static generateTraits(palace: Palace, calculation: { finalScore: number; strength: PalaceStrength }): string[] {
     const traits: string[] = [];
     const strength = palace.strength;
 
@@ -318,7 +348,7 @@ export class PalaceAssessor {
    */
   private static generateAdvantages(
     palace: Palace,
-    calculation: any,
+    calculation: { luckyBonus: number; unluckyPenalty: number; isControlled: boolean; isAggressive: boolean; isConstrained: boolean; huaBonus: number; finalScore: number },
     patterns: PatternMatch[]
   ): string[] {
     const advantages: string[] = [];
@@ -341,6 +371,20 @@ export class PalaceAssessor {
       advantages.push('旺宫制煞，煞星呈正面发挥');
     }
 
+    // 从四化中获取优势
+    const huaLuStar = palace.stars.find(s => s.huaType === 'lu');
+    if (huaLuStar) {
+      advantages.push(`${huaLuStar.name}化禄，能量顺畅`);
+    }
+    const huaQuanStar = palace.stars.find(s => s.huaType === 'quan');
+    if (huaQuanStar) {
+      advantages.push(`${huaQuanStar.name}化权，掌控力强`);
+    }
+    const huaKeStar = palace.stars.find(s => s.huaType === 'ke');
+    if (huaKeStar) {
+      advantages.push(`${huaKeStar.name}化科，声名助力`);
+    }
+
     return advantages;
   }
 
@@ -349,7 +393,7 @@ export class PalaceAssessor {
    */
   private static generateDisadvantages(
     palace: Palace,
-    calculation: any,
+    calculation: { luckyBonus: number; unluckyPenalty: number; isControlled: boolean; isAggressive: boolean; isConstrained: boolean; huaBonus: number; finalScore: number },
     patterns: PatternMatch[]
   ): string[] {
     const disadvantages: string[] = [];
@@ -372,6 +416,12 @@ export class PalaceAssessor {
       disadvantages.push('陷宫逞凶，煞星负面影响放大');
     }
 
+    // 从化忌中获取劣势
+    const huaJiStar = palace.stars.find(s => s.huaType === 'ji');
+    if (huaJiStar) {
+      disadvantages.push(`${huaJiStar.name}化忌，能量阻滞`);
+    }
+
     // 从天花板约束中获取劣势
     if (calculation.isConstrained) {
       disadvantages.push('受天花板约束，无法突破上限');
@@ -390,7 +440,7 @@ export class PalaceAssessor {
    */
   private static generateAdvice(
     palace: Palace,
-    calculation: any,
+    calculation: { finalScore: number; isControlled: boolean; isAggressive: boolean },
     patterns: PatternMatch[]
   ): string {
     const advices: string[] = [];

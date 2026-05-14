@@ -9,7 +9,7 @@
 #   - MySQL 8.0 可达（通过 .env 中 DATABASE_URL）
 #
 # 用法：
-#   cd navicauseffect && bash scripts/install.sh
+#   cd navicauseffect_v2 && bash scripts/install.sh
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -149,8 +149,8 @@ const prisma = new PrismaClient();
 })();
 " 2>&1 || warn "管理员创建失败（可稍后手动创建）"
 
-# 4d. 初始化 AI 模型配置（从 .env 读取 API Key）
-echo "  初始化 AI 模型配置..."
+# 4d. AI 模型（仅存数据库；提示见 seed-ai-models.js）
+echo "  检查 AI 模型配置说明..."
 node "$APP_DIR/scripts/seed-ai-models.js" 2>&1 || warn "AI 模型初始化失败（可在管理后台手动配置）"
 
 # ─── 5. 验证 ────────────────────────────────────────────────
@@ -196,6 +196,6 @@ echo -e "    ${CYAN}bash scripts/start-prod.sh${NC}          # 前台运行"
 echo -e "    ${CYAN}bash scripts/start-prod.sh daemon${NC}    # PM2 后台运行"
 echo ""
 echo "  管理后台："
-echo -e "    ${CYAN}http://<服务器IP>:3000/admin${NC}"
+echo -e "    ${CYAN}http://<服务器IP>:3333/admin${NC}"
 echo "  默认账号：admin / ffffff"
 echo ""

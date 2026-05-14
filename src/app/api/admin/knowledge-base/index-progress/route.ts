@@ -8,8 +8,9 @@ async function requireAdmin() {
   return session;
 }
 
-/** 向量化任务超时阈值（毫秒），超过此时间仍为 running 视为卡死 */
-const STALE_RUNNING_MS = 30 * 60 * 1000; // 30 分钟
+/** 向量化任务超时阈值（毫秒），超过此时间仍为 running 视为卡死。
+ * 向量化任务耗时长，默认 2 小时。生产环境知识库规模大时，可调大此值。 */
+const STALE_RUNNING_MS = Number(process.env.INDEX_STALE_TIMEOUT_MS ?? 2 * 60 * 60 * 1000); // 默认 2 小时
 
 /** GET: 查询向量化进度 */
 export async function GET() {

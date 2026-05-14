@@ -181,9 +181,9 @@ export class InteractionAnalyzer {
     if (targetHua.ke) earlyParts.push(`${targetHua.ke}化科：注重形象`);
     if (targetHua.ji) earlyParts.push(`${targetHua.ji}化忌：进入关系有执念`);
 
-    // 深层/晚期（遁干四化）
+    // 深层/晚期（太岁宫宫干四化，太岁入卦层）
     const deepParts: string[] = [];
-    // 这里需要更复杂的逻辑来获取遁干四化
+    // 这里需要更复杂的逻辑来获取太岁宫宫干四化（太岁入卦）
     // 简化处理
     if (deepParts.length === 0) {
       deepParts.push('深层影响需结合大限流年分析');

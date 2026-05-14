@@ -20,9 +20,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = String(rawPassword).trim();
 
         const user = await prisma.user.findUnique({ where: { username } });
-        if (!user?.password) return null;
+        if (!user?.password) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[auth] credentials: 用户不存在或无密码:", username);
+          }
+          return null;
+        }
         const valid = await bcrypt.compare(password, user.password);
-        if (!valid) return null;
+        if (!valid) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[auth] credentials: 密码不匹配:", username);
+          }
+          return null;
+        }
         return { id: user.id, name: user.nickname, email: user.email };
       },
     }),

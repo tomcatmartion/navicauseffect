@@ -14,6 +14,7 @@ import type {
   Stem,
   PalaceName,
   Hua,
+  HuaType,
 } from '../types';
 import {
   Gender,
@@ -208,8 +209,8 @@ export class ChartEngine {
       // 获取宫干
       const stem = getDunGan(birthStem, branch);
 
-      // 转换星曜
-      const stars = this.convertStars(iztroPalace, palaceName);
+      // 转换星曜（含四化标记）
+      const stars = this.convertStars(iztroPalace, palaceName, birthStem);
 
       palaces[branch] = {
         name: palaceName,
@@ -232,13 +233,24 @@ export class ChartEngine {
   }
 
   /**
-   * 转换星曜数据
+   * 转换星曜数据（含四化标记）
    */
   private static convertStars(
     iztroPalace: any,
-    palaceName: PalaceName
+    palaceName: PalaceName,
+    birthStem: Stem
   ): Star[] {
     const stars: Star[] = [];
+
+    // 辅助函数：检查星曜是否有生年四化
+    const getHuaType = (starName: string): HuaType | undefined => {
+      const hua = getHuaByStem(birthStem);
+      if (hua.lu === starName) return 'lu';
+      if (hua.quan === starName) return 'quan';
+      if (hua.ke === starName) return 'ke';
+      if (hua.ji === starName) return 'ji';
+      return undefined;
+    };
 
     // 主星
     for (const star of iztroPalace?.majorStars || []) {
@@ -247,6 +259,7 @@ export class ChartEngine {
         type: StarType.Major,
         brightness: star.brightness || 3,
         palace: palaceName,
+        huaType: getHuaType(star.name),
       });
     }
 
@@ -257,6 +270,7 @@ export class ChartEngine {
         type: getStarType(star.name),
         brightness: star.brightness || 3,
         palace: palaceName,
+        huaType: getHuaType(star.name),
       });
     }
 
@@ -267,6 +281,7 @@ export class ChartEngine {
         type: getStarType(star.name),
         brightness: star.brightness || 3,
         palace: palaceName,
+        huaType: getHuaType(star.name),
       });
     }
 

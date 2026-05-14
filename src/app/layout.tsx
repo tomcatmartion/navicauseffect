@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -47,10 +48,12 @@ export default function RootLayout({
       <body
         className={`${notoSerif.variable} ${notoSans.variable} font-[var(--font-sans-sc)] antialiased`}
       >
-        <AuthSessionProvider>
-          {children}
-        </AuthSessionProvider>
-        <Toaster />
+        <ThemeProvider>
+          <AuthSessionProvider>
+            {children}
+          </AuthSessionProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

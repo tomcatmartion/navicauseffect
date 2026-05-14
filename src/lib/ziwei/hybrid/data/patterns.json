@@ -1,0 +1,129 @@
+[
+  {
+    "id": "ziwei_qisha",
+    "name": "紫微七杀格",
+    "level": "中吉",
+    "category": "主星组合",
+    "when": {
+      "any": [
+        { "palace": 0, "hasMajor": "紫微" },
+        { "palace": 0, "hasMajor": "七杀" }
+      ]
+    }
+  },
+  {
+    "id": "jiyue_tongliang",
+    "name": "机月同梁格",
+    "level": "中吉",
+    "category": "星系",
+    "when": {
+      "all": [
+        {
+          "any": [
+            { "palace": 0, "hasMajor": "天机" },
+            { "palace": 1, "hasMajor": "天机" },
+            { "palace": 2, "hasMajor": "天机" }
+          ]
+        },
+        {
+          "any": [
+            { "palace": 0, "hasMajor": "天梁" },
+            { "palace": 1, "hasMajor": "天梁" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "zifu_tonggong",
+    "name": "紫府同宫",
+    "level": "大吉",
+    "category": "主星组合",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "紫微" },
+        { "palace": 0, "hasMajor": "天府" }
+      ]
+    }
+  },
+  {
+    "id": "riyue_tongming",
+    "name": "日月同临命宫",
+    "level": "中吉",
+    "category": "主星组合",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "太阳" },
+        { "palace": 0, "hasMajor": "太阴" }
+      ]
+    }
+  },
+  {
+    "id": "lian_tan_tonggong",
+    "name": "廉贞贪狼同宫",
+    "level": "小吉",
+    "category": "主星组合",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "廉贞" },
+        { "palace": 0, "hasMajor": "贪狼" }
+      ]
+    }
+  },
+  {
+    "id": "wu_xiang_tonggong",
+    "name": "武曲天相同宫",
+    "level": "中吉",
+    "category": "主星组合",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "武曲" },
+        { "palace": 0, "hasMajor": "天相" }
+      ]
+    }
+  },
+  {
+    "id": "fu_xiang_chaoyuan",
+    "name": "府相朝垣",
+    "level": "中吉",
+    "category": "朝垣",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "天府" },
+        { "palace": 6, "hasMajor": "天相" }
+      ]
+    }
+  },
+  {
+    "id": "tong_liang_tonggong",
+    "name": "天同天梁同宫",
+    "level": "中吉",
+    "category": "主星组合",
+    "when": {
+      "all": [
+        { "palace": 0, "hasMajor": "天同" },
+        { "palace": 0, "hasMajor": "天梁" }
+      ]
+    }
+  },
+  {
+    "id": "ju_men_ming",
+    "name": "巨门坐命",
+    "level": "小吉",
+    "category": "单星",
+    "when": {
+      "palace": 0,
+      "hasMajor": "巨门"
+    }
+  },
+  {
+    "id": "tian_ji_ming",
+    "name": "天机坐命",
+    "level": "小吉",
+    "category": "单星",
+    "when": {
+      "palace": 0,
+      "hasMajor": "天机"
+    }
+  }
+]

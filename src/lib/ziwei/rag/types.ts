@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod'
+import type { HybridPersisted } from '@/lib/ziwei/hybrid/types'
 
 // ── 四化事件 ────────────────────────────────────────────
 
@@ -73,6 +74,13 @@ export interface ZiweiSessionData {
   turnCount: number
   createdAt: number
   expiresAt: number
+  /** 阶段计算缓存（确定性结果，避免重复计算） */
+  stageCache?: {
+    stage1?: string  // JSON: Stage1Output（四化+评分+格局）
+    stage2?: string  // JSON: Stage2Output（性格定性+全息底色）
+  }
+  /** Hybrid 程序混合：状态机 + stage 序列化 + 多轮对话（与 DB `hybrid_state` 同步） */
+  hybridPersisted?: HybridPersisted
 }
 
 // ── 意图类型（Step 0）────────────────────────────────────────

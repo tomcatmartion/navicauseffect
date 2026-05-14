@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -12,6 +13,14 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  /** 避免 Sonner 在 SSR/水合阶段往 body 挂 Portal，引发 removeChild 与 DOM 不一致 */
+  if (!mounted) {
+    return null
+  }
 
   return (
     <Sonner

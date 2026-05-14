@@ -64,17 +64,23 @@ function LoginForm() {
     setError("");
 
     const result = await signIn("credentials", {
-      username,
-      password,
+      username: username.trim(),
+      password: password.trim(),
+      callbackUrl,
       redirect: false,
     });
 
     setLoading(false);
-    if (result?.error) {
-      setError("用户名或密码错误");
-    } else {
+    // Auth.js：须用 ok 判断成功；仅看 error 可能在部分失败形态下误判
+    if (result?.ok) {
       window.location.href = callbackUrl;
+      return;
     }
+    setError(
+      result?.error === "CredentialsSignin"
+        ? "用户名或密码错误"
+        : (result?.error ? String(result.error) : "登录失败，请稍后重试"),
+    );
   };
 
   const handlePhoneLogin = async (e: React.FormEvent) => {
@@ -129,14 +135,17 @@ function LoginForm() {
       }
 
       const result = await signIn("credentials", {
-        username: regUsername,
-        password: regPassword,
+        username: regUsername.trim(),
+        password: regPassword.trim(),
+        callbackUrl,
         redirect: false,
       });
 
       setLoading(false);
-      if (!result?.error) {
+      if (result?.ok) {
         window.location.href = callbackUrl;
+      } else {
+        setError(result?.error ? String(result.error) : "自动登录失败，请手动登录");
       }
     } catch {
       setError("注册失败，请稍后重试");

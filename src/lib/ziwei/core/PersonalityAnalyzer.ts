@@ -17,7 +17,6 @@ import {
   getFlankBranches,
   getPalaceNameByBranch,
 } from '../utils/spatial';
-import { getHuaByStem } from '../data/fiveTiger';
 import { isLuckyStar, isUnluckyStar } from '../types';
 import { PalaceAssessor } from './PalaceAssessor';
 import { getMingPalace, getShenPalace, getTaiSuiPalace } from './ChartEngine';
@@ -117,15 +116,27 @@ export class PersonalityAnalyzer {
   }
 
   /**
-   * 从宫位提取特质
+   * 从宫位提取特质（主星+辅星+四化+旺弱）
    */
   private static extractPalaceTraits(palace: any): string[] {
     const traits: string[] = [];
 
-    // 根据主星提取特质
+    // 根据所有星曜提取特质
     for (const star of palace.stars) {
-      if (star.type === 'major') {
-        traits.push(...this.getStarTraits(star.name));
+      const starTraits = this.getStarTraits(star.name);
+      if (starTraits.length > 0) {
+        traits.push(...starTraits);
+      }
+
+      // 四化对性格的修饰
+      if (star.huaType === 'lu') {
+        traits.push(`${star.name}化禄：圆融顺畅`);
+      } else if (star.huaType === 'quan') {
+        traits.push(`${star.name}化权：强势主导`);
+      } else if (star.huaType === 'ke') {
+        traits.push(`${star.name}化科：理性清晰`);
+      } else if (star.huaType === 'ji') {
+        traits.push(`${star.name}化忌：执着纠结`);
       }
     }
 
@@ -135,16 +146,19 @@ export class PersonalityAnalyzer {
       traits.push('积极主动', '自信坚定');
     } else if (strength === PalaceStrength.Weak || strength === PalaceStrength.ExtremelyWeak) {
       traits.push('谨慎保守', '易受影响');
+    } else if (strength === PalaceStrength.Empty) {
+      traits.push('多变适应', '借力行事');
     }
 
     return traits;
   }
 
   /**
-   * 获取星曜特质
+   * 获取星曜特质（含主星和辅星）
    */
   private static getStarTraits(starName: string): string[] {
     const traitsMap: Record<string, string[]> = {
+      // 十四主星
       '紫微': ['领导欲强', '权威感', '自尊心重', '喜欢掌控'],
       '天机': ['善思虑', '反应快', '变通性强', '喜策划'],
       '太阳': ['热情开朗', '慷慨大方', '注重名声', '发散性强'],
@@ -159,6 +173,22 @@ export class PersonalityAnalyzer {
       '天梁': ['庇荫他人', '医药缘分', '督导能力', '老成持重'],
       '七杀': ['权谋决断', '奋斗精神', '肃杀之气', '开创能力'],
       '破军': ['突破创新', '消耗力强', '冲锋陷阵', '改革精神'],
+      // 六吉星
+      '左辅': ['善于辅佐', '人缘佳', '乐于助人'],
+      '右弼': ['善于协调', '包容力强', '柔顺配合'],
+      '文昌': ['文思敏捷', '重学识', '条理分明'],
+      '文曲': ['才艺出众', '口才伶俐', '灵感丰富'],
+      '天魁': ['贵人运强', '遇难呈祥', '品味不凡'],
+      '天钺': ['贵人相助', '机缘巧合', '温文尔雅'],
+      // 六煞星（性格面）
+      '擎羊': ['刚烈果断', '争强好胜', '刑伤冲动'],
+      '陀罗': ['固执拖延', '纠缠不放', '暗耗精力'],
+      '火星': ['急躁冲动', '爆发力强', '暴起暴落'],
+      '铃星': ['阴柔暗忍', '持续施压', '暗火燃烧'],
+      '地空': ['精神追求', '想法超脱', '空想不实'],
+      '地劫': ['破坏重建', '波动大', '得失无常'],
+      // 禄存
+      '禄存': ['珍惜资源', '稳重保守', '善于积累'],
     };
 
     return traitsMap[starName] || [];
@@ -234,10 +264,13 @@ export class PersonalityAnalyzer {
     // 旺弱状态
     parts.push(`[${assessment.strength}]`);
 
-    // 主星
+    // 主星（含四化标记）
     const majorStars = palace.stars
       .filter((s: any) => s.type === 'major')
-      .map((s: any) => s.name);
+      .map((s: any) => {
+        const huaLabel = s.huaType === 'lu' ? '禄' : s.huaType === 'quan' ? '权' : s.huaType === 'ke' ? '科' : s.huaType === 'ji' ? '忌' : '';
+        return huaLabel ? `${s.name}${huaLabel}` : s.name;
+      });
     if (majorStars.length > 0) {
       parts.push(`主星：${majorStars.join('、')}`);
     }
@@ -245,11 +278,13 @@ export class PersonalityAnalyzer {
     // 评分
     parts.push(`评分：${assessment.finalScore.toFixed(1)}`);
 
-    // 制煞/逞凶
-    if (assessment.interpretation.disadvantages.includes('制煞')) {
+    // 制煞/逞凶 — 在 advantages 中搜索"制煞"
+    const hasControlSha = assessment.interpretation.advantages.some(a => a.includes('制煞'));
+    const hasAggressive = assessment.interpretation.disadvantages.some(d => d.includes('逞凶'));
+    if (hasControlSha) {
       parts.push('制煞有力');
     }
-    if (assessment.interpretation.disadvantages.includes('逞凶')) {
+    if (hasAggressive) {
       parts.push('逞凶负面');
     }
 
@@ -309,14 +344,19 @@ export class PersonalityAnalyzer {
   }
 
   /**
-   * 命宫全息底色分析
+   * 命宫全息底色分析（使用生年四化）
    */
   private static mingHolographicAnalysis(chart: Chart) {
     const mingPalace = getMingPalace(chart);
-    const stem = mingPalace.stem;
 
-    // 四化影响
-    const hua = stem ? getHuaByStem(stem) : { lu: null, quan: null, ke: null, ji: null };
+    // 使用生年四化（chart.birthHua），而非宫干飞化
+    const birthHua = chart.birthHua;
+
+    // 检查命宫各星曜的四化状态
+    const huaLuStar = mingPalace.stars.find(s => s.huaType === 'lu');
+    const huaQuanStar = mingPalace.stars.find(s => s.huaType === 'quan');
+    const huaKeStar = mingPalace.stars.find(s => s.huaType === 'ke');
+    const huaJiStar = mingPalace.stars.find(s => s.huaType === 'ji');
 
     // 吉星影响
     const luckyStars = mingPalace.stars
@@ -330,10 +370,10 @@ export class PersonalityAnalyzer {
 
     return {
       hua: {
-        lu: hua.lu ? `${hua.lu}化禄：顺畅圆融` : undefined,
-        quan: hua.quan ? `${hua.quan}化权：强势主导` : undefined,
-        ke: hua.ke ? `${hua.ke}化科：理性清晰` : undefined,
-        ji: hua.ji ? `${hua.ji}化忌：执念阻滞` : undefined,
+        lu: huaLuStar ? `${huaLuStar.name}化禄：顺畅圆融` : undefined,
+        quan: huaQuanStar ? `${huaQuanStar.name}化权：强势主导` : undefined,
+        ke: huaKeStar ? `${huaKeStar.name}化科：理性清晰` : undefined,
+        ji: huaJiStar ? `${huaJiStar.name}化忌：执念阻滞` : undefined,
       },
       luckyStars,
       unluckyStars,
@@ -369,8 +409,8 @@ export class PersonalityAnalyzer {
       reactive.push('抗压能力强', '能应对挑战');
     }
 
-    // 压力下行为
-    if (mingAssessment.interpretation.disadvantages.includes('逞凶')) {
+    // 压力下行为 — 在 disadvantages 中搜索"逞凶"
+    if (mingAssessment.interpretation.disadvantages.some(d => d.includes('逞凶'))) {
       stress.push('压力下易冲动', '情绪化反应', '需要疏导');
     } else if (mingAssessment.finalScore >= 6.0) {
       stress.push('压力下更冷静', '能理性应对', '抗压性强');
@@ -382,22 +422,65 @@ export class PersonalityAnalyzer {
   }
 
   /**
-   * 优势与劣势分析
+   * 优势与劣势分析（基于三宫合参，不只是复制宫位评估）
    */
   private static analyzeStrengthsWeaknesses(
     chart: Chart,
     assessments: Record<Branch, PalaceAssessment>
   ) {
     const mingPalace = getMingPalace(chart);
-    const mingAssessment = assessments[mingPalace.branch];
+    const shenPalace = getShenPalace(chart);
+    const taiSuiPalace = getTaiSuiPalace(chart);
 
-    // 优势
-    const strengths = [...mingAssessment.interpretation.advantages];
+    const strengths: string[] = [];
+    const weaknesses: string[] = [];
 
-    // 劣势
-    const weaknesses = [...mingAssessment.interpretation.disadvantages];
+    // 从三宫主星收集优势/劣势
+    const keyPalaces = [
+      { name: '命宫', palace: mingPalace, assessment: assessments[mingPalace.branch] },
+      { name: '身宫', palace: shenPalace, assessment: shenPalace ? assessments[shenPalace.branch] : undefined },
+      { name: '太岁宫', palace: taiSuiPalace, assessment: assessments[taiSuiPalace.branch] },
+    ];
 
-    return { strengths, weaknesses };
+    for (const { name, palace, assessment } of keyPalaces) {
+      if (!palace || !assessment) continue;
+
+      // 四化带来的优势
+      for (const star of palace.stars) {
+        if (star.huaType === 'lu') {
+          strengths.push(`${name}${star.name}化禄，行事顺畅`);
+        } else if (star.huaType === 'quan') {
+          strengths.push(`${name}${star.name}化权，掌控力强`);
+        } else if (star.huaType === 'ke') {
+          strengths.push(`${name}${star.name}化科，声名助力`);
+        } else if (star.huaType === 'ji') {
+          weaknesses.push(`${name}${star.name}化忌，执着纠结`);
+        }
+      }
+
+      // 旺弱带来的特质
+      if (assessment.finalScore >= 7.0) {
+        strengths.push(`${name}旺强，根基稳固`);
+      } else if (assessment.finalScore < 4.0) {
+        weaknesses.push(`${name}偏弱，需外力辅助`);
+      }
+
+      // 制煞/逞凶
+      const hasControlSha = assessment.interpretation.advantages.some(a => a.includes('制煞'));
+      const hasAggressive = assessment.interpretation.disadvantages.some(d => d.includes('逞凶'));
+      if (hasControlSha) {
+        strengths.push(`${name}制煞有力，能化解煞星负面影响`);
+      }
+      if (hasAggressive) {
+        weaknesses.push(`${name}逞凶，煞星负面影响放大`);
+      }
+    }
+
+    // 去重
+    return {
+      strengths: [...new Set(strengths)],
+      weaknesses: [...new Set(weaknesses)],
+    };
   }
 
   /**
@@ -425,7 +508,7 @@ export class PersonalityAnalyzer {
   }
 
   /**
-   * 生成发展建议
+   * 生成发展建议（基于命宫主星和四化组合）
    */
   private static generateAdvice(
     chart: Chart,
@@ -433,25 +516,60 @@ export class PersonalityAnalyzer {
   ) {
     const mingPalace = getMingPalace(chart);
     const mingAssessment = assessments[mingPalace.branch];
+    const majorStars = mingPalace.stars.filter(s => s.type === 'major').map(s => s.name);
+    const hasHuaJi = mingPalace.stars.some(s => s.huaType === 'ji');
+    const hasHuaLu = mingPalace.stars.some(s => s.huaType === 'lu');
 
-    const advice = {
-      overall: mingAssessment.interpretation.advice,
-      career: '',
-      relationship: '',
-      health: '',
-    };
+    // 总体建议继承自宫位评估
+    const overall = mingAssessment.interpretation.advice;
 
-    // 根据命宫状态给出建议
-    if (mingAssessment.finalScore >= 6.0) {
-      advice.career = '命宫旺强，适合主导型工作，可承担管理职责';
-      advice.relationship = '自信心强，在感情中宜多倾听对方';
-      advice.health = '精力充沛，注意劳逸结合';
+    // 根据主星组合给出事业建议
+    let career = '';
+    if (majorStars.includes('紫微') || majorStars.includes('天府')) {
+      career = '具有领导天赋，适合管理岗位或自主创业';
+    } else if (majorStars.includes('天机') || majorStars.includes('太阴')) {
+      career = '思维细腻，适合策划、研究、技术咨询类工作';
+    } else if (majorStars.includes('太阳') || majorStars.includes('天梁')) {
+      career = '热忱正直，适合教育、公益、公共服务领域';
+    } else if (majorStars.includes('武曲') || majorStars.includes('七杀')) {
+      career = '行动力强，适合金融、开拓型或竞争性工作';
+    } else if (majorStars.includes('贪狼') || majorStars.includes('廉贞')) {
+      career = '多才多艺，适合创意、销售、人际密集型工作';
+    } else if (majorStars.includes('天同') || majorStars.includes('天相')) {
+      career = '协调力佳，适合行政、人事、服务支持类工作';
+    } else if (majorStars.includes('巨门') || majorStars.includes('破军')) {
+      career = '口才或突破力强，适合法律、传媒或创新型工作';
     } else {
-      advice.career = '命宫偏弱，宜选择稳定环境，逐步发展';
-      advice.relationship = '性格内敛，适合循序渐进的感情发展';
-      advice.health = '抵抗力较弱，注意保养身体';
+      career = mingAssessment.finalScore >= 6.0
+        ? '命宫旺强，可承担主导型工作'
+        : '命宫偏弱，宜选择稳定环境逐步发展';
     }
 
-    return advice;
+    // 感情建议
+    let relationship = '';
+    if (hasHuaJi) {
+      const jiStar = mingPalace.stars.find(s => s.huaType === 'ji');
+      relationship = `${jiStar?.name ?? '某星'}化忌影响情感表达，宜学会放下执念，多沟通`;
+    } else if (majorStars.includes('贪狼') || majorStars.includes('廉贞')) {
+      relationship = '桃花缘旺，感情丰富，需注意专一与边界';
+    } else if (majorStars.includes('七杀') || majorStars.includes('破军')) {
+      relationship = '个性强势，感情中宜多包容和退让';
+    } else {
+      relationship = hasHuaLu
+        ? '化禄入命，人缘好，感情发展顺畅'
+        : '感情发展顺其自然，注意相互理解';
+    }
+
+    // 健康建议
+    let health = '';
+    if (mingAssessment.finalScore < 4.0) {
+      health = '命宫偏弱，抵抗力较差，注意规律作息和定期体检';
+    } else if (hasHuaJi) {
+      health = '化忌入命，需注意情绪健康，避免压力积攒';
+    } else {
+      health = '精力充沛，注意劳逸结合';
+    }
+
+    return { overall, career, relationship, health };
   }
 }

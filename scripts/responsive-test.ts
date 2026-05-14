@@ -21,7 +21,7 @@ const testCases: TestCase[] = [
   // 移动端 - iPhone 14
   {
     name: '首页 - 移动端 (iPhone 14)',
-    url: 'http://localhost:3000/',
+    url: 'http://localhost:3333/',
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
     isMobile: true,
@@ -29,7 +29,7 @@ const testCases: TestCase[] = [
   },
   {
     name: '排盘页面 - 移动端 (iPhone 14)',
-    url: 'http://localhost:3000/chart',
+    url: 'http://localhost:3333/chart',
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
     isMobile: true,
@@ -38,13 +38,13 @@ const testCases: TestCase[] = [
   // 桌面端
   {
     name: '首页 - 桌面端 (1440x900)',
-    url: 'http://localhost:3000/',
+    url: 'http://localhost:3333/',
     viewport: { width: 1440, height: 900 },
     screenshotName: 'desktop-home.png',
   },
   {
     name: '排盘页面 - 桌面端 (1440x900)',
-    url: 'http://localhost:3000/chart',
+    url: 'http://localhost:3333/chart',
     viewport: { width: 1440, height: 900 },
     screenshotName: 'desktop-chart.png',
   },
@@ -205,7 +205,7 @@ async function runTests() {
       }
 
       // 5. 检查 Hero 区域（仅首页）
-      if (tc.url === 'http://localhost:3000/') {
+      if (tc.url === 'http://localhost:3333/') {
         const heroInfo = await page.evaluate(() => {
           // 尝试多种方式找到 Hero 区域
           const selectors = [
@@ -246,7 +246,7 @@ async function runTests() {
       }
 
       // 6. 检查功能卡片（仅首页）
-      if (tc.url === 'http://localhost:3000/') {
+      if (tc.url === 'http://localhost:3333/') {
         const cardInfo = await page.evaluate(() => {
           const cards = document.querySelectorAll(
             '[class*="card"], [class*="Card"], [class*="feature"], [class*="Feature"]'

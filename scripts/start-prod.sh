@@ -40,9 +40,9 @@ echo "✓ 数据库迁移完成"
 # 4. 启动服务
 if [ "$1" = "daemon" ]; then
   echo "[2/2] PM2 后台启动..."
-  HOSTNAME=0.0.0.0 pm2 start server.js --name navicauseffect
+  HOSTNAME=0.0.0.0 pm2 start server.js --name navicauseffect_v2
   pm2 save
-  echo "✓ 已启动，使用 pm2 logs navicauseffect 查看日志"
+  echo "✓ 已启动，使用 pm2 logs navicauseffect_v2 查看日志"
 else
   echo "[2/2] 启动服务..."
   echo "按 Ctrl+C 停止"

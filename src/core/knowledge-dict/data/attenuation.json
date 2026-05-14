@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "_comment": "夹宫衰减：本宫×夹宫旺弱分档。旺档=极旺/旺；平档=平；弱档=陷/极弱/空。与 SKILL 宫位能级「夹宫动态衰减」一致，可由 sysalldoc 脚本覆盖。对宫/三合固定系数见 fixed。",
+  "flankingDecay": {
+    "旺": { "旺": 0.9, "平": 0.5, "弱": 0.2 },
+    "平": { "旺": 0.6, "平": 0.4, "弱": 0.2 },
+    "弱": { "旺": 0.3, "平": 0.1, "弱": 0 }
+  },
+  "fixed": {
+    "opposite": 0.8,
+    "trine": 0.7
+  },
+  "_future": "若需「极旺×陷」等 6×6 全矩阵，可扩展 flankingDecayFull: Record<PalaceBrightness, Record<PalaceBrightness, number>> 并由 getFlankingDecay 优先读取。"
+}

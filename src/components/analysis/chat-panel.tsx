@@ -7,7 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Send, Loader2, MessageCircle, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PipelineDebugInfo } from "@/lib/ziwei/rag/types";
+import { SkillDebugInfo } from "@/lib/ziwei/rag/pipeline";
+import type { HybridDebugInfo } from "@/lib/ziwei/rag/pipeline.hybrid";
 import { ReadingDebugPanel } from "./reading-debug-panel";
+import { SkillDebugPanel } from "./skill-debug-panel";
+import { HybridDebugPanel } from "./hybrid-debug-panel";
+import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -30,6 +35,19 @@ interface ChatPanelProps {
   } | null;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeAstrolabe(astrolabe: any, birthDataParam?: ChatPanelProps["birthData"]): Record<string, unknown> {
+  if (!birthDataParam) return serializeAstrolabeForReading(astrolabe);
+  return serializeAstrolabeForReading(astrolabe, {
+    year: birthDataParam.year,
+    month: birthDataParam.month,
+    day: birthDataParam.day,
+    hour: birthDataParam.hour,
+    gender: birthDataParam.gender,
+    solar: birthDataParam.solar ?? true,
+  });
+}
+
 export function ChatPanel({
   astrolabeData,
   birthData,
@@ -41,8 +59,10 @@ export function ChatPanel({
   const [streamContent, setStreamContent] = useState("");
   const [skeletonText, setSkeletonText] = useState(""); // 骨架屏文本（立即显示）
   const [readingSessionId, setReadingSessionId] = useState<string | null>(null);
-  const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | null>(null);
+  const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | SkillDebugInfo | HybridDebugInfo | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
+  /** 架构模式：固定使用程序混合架构 */
+  const architectureMode = "hybrid" as const;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -110,6 +130,7 @@ export function ChatPanel({
       const requestBody: Record<string, unknown> = {
         question: text,
         stream: true,
+        architecture: architectureMode,  // 传递给API选择架构
       };
 
       if (readingSessionId) {
@@ -259,10 +280,12 @@ export function ChatPanel({
     <>
     <Card className="flex h-full flex-col border-primary/15">
       <CardHeader className="pb-0 shrink-0">
-        <CardTitle className="flex items-center gap-2 text-base text-primary">
-          <MessageCircle className="h-4 w-4" />
-          AI 精准解盘
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base text-primary">
+            <MessageCircle className="h-4 w-4" />
+            AI 精准解盘
+          </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-2 p-4 pt-3 overflow-hidden">
         {/* 流式输出状态提示 */}
@@ -386,69 +409,28 @@ export function ChatPanel({
 
       {/* 调试面板 */}
       {activeDebug && (
-        <ReadingDebugPanel
-          open={!!activeDebug}
-          onClose={() => setActiveDebug(null)}
-          debugInfo={activeDebug}
-        />
+        activeDebug && "architecture" in activeDebug && activeDebug.architecture === "hybrid" ? (
+          <HybridDebugPanel
+            open={!!activeDebug}
+            onClose={() => setActiveDebug(null)}
+            debugInfo={activeDebug as HybridDebugInfo}
+          />
+        ) : activeDebug && "step1" in activeDebug ? (
+          <ReadingDebugPanel
+            open={!!activeDebug}
+            onClose={() => setActiveDebug(null)}
+            debugInfo={activeDebug as PipelineDebugInfo}
+          />
+        ) : (
+          <SkillDebugPanel
+            open={!!activeDebug}
+            onClose={() => setActiveDebug(null)}
+            debugInfo={activeDebug as SkillDebugInfo}
+          />
+        )
       )}
     </>
   );
-}
-
-/**
- * 将 iztro FunctionalAstrolabe 对象序列化为可传输的 JSON
- * 提取命盘核心字段：基本信息 + 各宫星曜 + 出生数据（供服务端计算运限）
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializeAstrolabe(astrolabe: any, birthDataParam?: ChatPanelProps['birthData']): Record<string, unknown> {
-  if (!astrolabe) return {};
-
-  // iztro FunctionalAstrolabe 的核心字段
-  const result: Record<string, unknown> = {
-    name: astrolabe.name ?? "命主",
-    gender: astrolabe.gender ?? "male",
-    soul: astrolabe.soul ?? "",
-    body: astrolabe.body ?? "",
-    fiveElementsClass: astrolabe.fiveElementsClass ?? "",
-    // 十二宫数据（含主星、辅星、四化）
-    palaces: (astrolabe.palaces ?? []).map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (p: any) => ({
-        name: p.name ?? "",
-        majorStars: (p.majorStars ?? []).map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (s: any) => ({
-            name: s.name ?? "",
-            type: s.type ?? "",
-            mutagen: s.mutagen ?? "",
-          })
-        ),
-        minorStars: (p.minorStars ?? []).map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (s: any) => ({
-            name: s.name ?? "",
-            type: s.type ?? "",
-            mutagen: s.mutagen ?? "",
-          })
-        ),
-      })
-    ),
-  };
-
-  // 出生数据（供服务端 iztro 重建命盘计算运限）
-  if (birthDataParam) {
-    result.birthInfo = {
-      year: birthDataParam.year,
-      month: birthDataParam.month,
-      day: birthDataParam.day,
-      hour: birthDataParam.hour,
-      gender: birthDataParam.gender === "MALE" ? "男" : birthDataParam.gender,
-      solar: birthDataParam.solar ?? true,
-    };
-  }
-
-  return result;
 }
 
 /** 简易 Markdown 渲染：加粗 + 换行 */

@@ -1,0 +1,4 @@
+{
+  "_comment": "夹宫与固定衰减已迁至 src/core/knowledge-dict/data/attenuation.json（评分引擎唯一数据源）。本文件保留占位避免旧脚本路径报错。",
+  "canonicalPath": "src/core/knowledge-dict/data/attenuation.json"
+}

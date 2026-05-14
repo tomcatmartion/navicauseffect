@@ -160,34 +160,54 @@ export class AffairAnalyzer {
   }
 
   /**
-   * 检测事项类型
+   * 检测事项类型（优先匹配长词组，避免单字误判）
    */
   private static detectAffairType(affair: string): AffairType {
-    const keywords: Record<string, AffairType> = {
+    // 优先匹配长词组（2字以上），避免单字误判
+    const phraseKeywords: [string, AffairType][] = [
+      // 求学（优先级高，避免"出国"等被"出"匹配到求名）
+      ['留学', '求学'], ['考试', '求学'], ['升学', '求学'],
+      ['学业', '求学'], ['读书', '求学'], ['学习', '求学'],
+      ['考研', '求学'], ['考公', '求学'], ['高考', '求学'],
+      // 求爱
+      ['感情', '求爱'], ['恋爱', '求爱'], ['结婚', '求爱'],
+      ['对象', '求爱'], ['婚姻', '求爱'], ['姻缘', '求爱'],
+      ['桃花', '求爱'], ['复合', '求爱'], ['分手', '求爱'],
+      // 求财
+      ['投资', '求财'], ['赚钱', '求财'], ['理财', '求财'],
+      ['财运', '求财'], ['创业', '求财'], ['合伙', '求财'],
+      ['股票', '求财'], ['基金', '求财'],
+      // 求职
+      ['工作', '求职'], ['跳槽', '求职'], ['求职', '求职'],
+      ['升职', '求职'], ['面试', '求职'], ['事业', '求职'],
+      ['转行', '求职'], ['就业', '求职'],
+      // 求健康
+      ['健康', '求健康'], ['身体', '求健康'], ['体质', '求健康'],
+      ['疾病', '求健康'],
+      // 求名
+      ['名声', '求名'], ['名誉', '求名'], ['出名', '求名'],
+      ['直播', '求名'], ['演艺', '求名'], ['网红', '求名'],
+    ];
+
+    // 先匹配词组
+    for (const [keyword, type] of phraseKeywords) {
+      if (affair.includes(keyword)) {
+        return type;
+      }
+    }
+
+    // 单字匹配（作为兜底，排除容易误判的单字）
+    const singleCharMap: Record<string, AffairType> = {
       '学': '求学',
-      '考试': '求学',
-      '升学': '求学',
       '爱': '求爱',
-      '感情': '求爱',
-      '恋爱': '求爱',
-      '结婚': '求爱',
-      '对象': '求爱',
       '财': '求财',
       '钱': '求财',
-      '赚钱': '求财',
-      '投资': '求财',
-      '工作': '求职',
       '职': '求职',
-      '业': '求职',
-      '健康': '求健康',
       '病': '求健康',
-      '身体': '求健康',
       '名': '求名',
-      '名声': '求名',
-      '出': '求名',
     };
 
-    for (const [keyword, type] of Object.entries(keywords)) {
+    for (const [keyword, type] of Object.entries(singleCharMap)) {
       if (affair.includes(keyword)) {
         return type;
       }
@@ -346,7 +366,7 @@ export class AffairAnalyzer {
   }
 
   /**
-   * 计算原局评分
+   * 计算原局评分（0-100）
    */
   private static calculateNatalScore(
     primaryAssessment: PalaceAssessment,
@@ -361,8 +381,8 @@ export class AffairAnalyzer {
       ? secondaryScores.reduce((a, b) => a + b, 0) / secondaryScores.length
       : 5;
 
-    // 主宫权重60%，兼看宫权重40%
-    return Math.round(primaryScore * 0.6 + avgSecondary * 0.4 * 10);
+    // 主宫权重60%，兼看宫权重40%（统一 0-10 评分后乘10）
+    return Math.round((primaryScore * 0.6 + avgSecondary * 0.4) * 10);
   }
 
   /**
@@ -414,16 +434,29 @@ export class AffairAnalyzer {
   }
 
   /**
-   * 评估大限激活方向
+   * 评估大限激活方向（结合宫位关系）
    */
   private static assessDecennialActivation(decennial: any, palaceFocus: any): string {
-    if (decennial.hua.lu || decennial.hua.ke) {
-      return '吉化激活，这十年该事项方向顺畅';
+    const parts: string[] = [];
+
+    // 大限四化对事项的影响
+    if (decennial.hua.lu) {
+      parts.push(`${decennial.hua.lu}化禄激活，这十年该事项方向顺畅`);
+    }
+    if (decennial.hua.ke) {
+      parts.push(`${decennial.hua.ke}化科激活，有贵人助力`);
     }
     if (decennial.hua.ji) {
-      return '化忌激活，这十年该事项需谨慎处理';
+      parts.push(`${decennial.hua.ji}化忌激活，这十年该事项需谨慎`);
     }
-    return '平稳期，按部就班发展';
+    if (decennial.hua.quan) {
+      parts.push(`${decennial.hua.quan}化权激活，掌控力增强`);
+    }
+
+    if (parts.length === 0) {
+      return '平稳期，按部就班发展';
+    }
+    return parts.join('；');
   }
 
   /**
@@ -433,16 +466,23 @@ export class AffairAnalyzer {
     const trends: string[] = [];
 
     if (decennial.hua.lu) {
-      trends.push(`化禄${decennial.hua.lu}：机遇期，把握机会`);
+      trends.push(`${decennial.hua.lu}化禄：机遇期，把握机会`);
     }
     if (decennial.hua.quan) {
-      trends.push(`化权${decennial.hua.quan}：强势期，主动进取`);
+      trends.push(`${decennial.hua.quan}化权：强势期，主动进取`);
     }
     if (decennial.hua.ke) {
-      trends.push(`化科${decennial.hua.ke}：名声期，注重形象`);
+      trends.push(`${decennial.hua.ke}化科：名声期，注重形象`);
     }
     if (decennial.hua.ji) {
-      trends.push(`化忌${decennial.hua.ji}：阻滞期，防范风险`);
+      trends.push(`${decennial.hua.ji}化忌：阻滞期，防范风险`);
+    }
+
+    // 大限宫位评分
+    if (decennial.score >= 70) {
+      trends.push('大限整体能量强旺，利于推进事项');
+    } else if (decennial.score <= 40) {
+      trends.push('大限整体能量偏弱，宜保守行事');
     }
 
     return trends;
@@ -494,27 +534,42 @@ export class AffairAnalyzer {
   }
 
   /**
-   * 评估流年触发点
+   * 评估流年触发点（结合四化与宫位关系）
    */
   private static assessAnnualTrigger(annual: any, palaceFocus: any): string {
+    const parts: string[] = [];
+
     if (annual.hua.lu) {
-      return `流年化禄${annual.hua.lu}，今年是推进该事项的良机`;
+      parts.push(`流年${annual.hua.lu}化禄，今年是推进该事项的良机`);
+    }
+    if (annual.hua.quan) {
+      parts.push(`流年${annual.hua.quan}化权，今年在该事项上掌控力增强`);
+    }
+    if (annual.hua.ke) {
+      parts.push(`流年${annual.hua.ke}化科，今年有贵人助力`);
     }
     if (annual.hua.ji) {
-      return `流年化忌${annual.hua.ji}，今年在该事项上需谨慎`;
+      parts.push(`流年${annual.hua.ji}化忌，今年在该事项上需谨慎`);
     }
-    return '平稳推进，无明显触发点';
+
+    if (parts.length === 0) {
+      return '平稳推进，无明显触发点';
+    }
+    return parts.join('；');
   }
 
   /**
    * 评估年度展望
    */
   private static assessAnnualOutlook(annual: any, palaceFocus: any): string {
-    if (annual.hua.lu) {
+    if (annual.hua.lu && !annual.hua.ji) {
       return '机遇年，可以积极行动';
     }
-    if (annual.hua.ji) {
+    if (annual.hua.ji && !annual.hua.lu) {
       return '谨慎年，宜保守观望';
+    }
+    if (annual.hua.lu && annual.hua.ji) {
+      return '吉凶参半年，有机会也有挑战';
     }
     return '平稳年，按计划推进';
   }
@@ -682,27 +737,63 @@ export class AffairAnalyzer {
   }
 
   /**
-   * 生成调整建议
+   * 生成调整建议（根据实际分析结果动态生成）
    */
   private static generateAdvice(natal: any, decennial: any, annual: any, conclusion: any) {
-    return {
-      strategy: [
-        natal.score >= 60 ? '发挥原局优势，积极进取' : '补强先天不足，稳扎稳打',
-        decennial.hua.ji ? '大限化忌期间宜保守，等待时机' : '把握大限机遇，乘势而上',
-        annual.hua.lu ? '今年是行动良机，把握机会' : '今年平稳推进，不急于求成',
-      ],
-      timing: [
-        ...natal.protection.map((p: any) => `${p.name}护佑，凶限时能守住底线`),
-        decennial.hua.lu ? '当前大限吉化，适合推进事项' : '当前大限平稳，按部就班',
-        annual.hua.lu ? '今年是最佳时机' : '今年谨慎行事',
-      ],
-      action: [
-        '制定清晰的目标和计划',
-        '关注时机窗口，把握吉化期',
-        '防范化忌期的风险',
-        '保持耐心，不急于求成',
-      ],
-    };
+    const strategy: string[] = [];
+    const timing: string[] = [];
+    const action: string[] = [];
+
+    // 策略建议
+    strategy.push(natal.score >= 60 ? '原局基础好，可以积极进取' : '原局基础偏弱，稳扎稳打更稳妥');
+
+    if (decennial.hua.ji) {
+      strategy.push(`大限${decennial.hua.ji}化忌期间宜保守，等待时机`);
+    } else if (decennial.hua.lu) {
+      strategy.push(`大限${decennial.hua.lu}化禄，把握机遇期乘势而上`);
+    }
+
+    if (annual.hua.lu) {
+      strategy.push(`今年${annual.hua.lu}化禄，是行动良机`);
+    } else if (annual.hua.ji) {
+      strategy.push(`今年${annual.hua.ji}化忌，谨慎行事`);
+    }
+
+    // 时机建议
+    if (natal.protection.length > 0) {
+      timing.push(`${natal.protection.map((p: any) => p.name).join('、')}护佑，凶限时能守住底线`);
+    }
+
+    if (decennial.hua.lu || decennial.hua.ke) {
+      timing.push('当前大限有吉化，适合推进事项');
+    } else {
+      timing.push('当前大限平稳，按部就班');
+    }
+
+    if (annual.hua.lu) {
+      timing.push('今年有化禄，是最佳行动时机');
+    }
+
+    // 行动建议
+    if (conclusion.probability.includes('较高')) {
+      action.push('条件有利，可以主动出击');
+    } else if (conclusion.probability.includes('较低')) {
+      action.push('建议暂缓或调整方向，避免硬冲');
+    } else {
+      action.push('把握机会的同时保持审慎');
+    }
+
+    if (conclusion.obstacles.length > 0) {
+      action.push('重点关注潜在障碍，提前做好应对准备');
+    }
+
+    if (conclusion.opportunities.length > 0) {
+      action.push('善用机会点，尤其是护佑格局和吉化期');
+    }
+
+    action.push('保持耐心，关注时机窗口');
+
+    return { strategy, timing, action };
   }
 
   /**

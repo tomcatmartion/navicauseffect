@@ -1,22 +1,30 @@
 /**
- * POST /api/ziwei/reading — 四步精准召回流水线入口
+ * POST /api/ziwei/reading — 紫微斗数解盘入口
  *
- * 请求体：{ sessionId?, question, chartData? }
+ * 支持两种架构：
+ * - Skill 架构（混合架构，推荐）：知识直灌 + 5%兜底工具调用
+ * - RAG 架构：向量检索，保留旧版架构（pipeline.rag.ts）
+ *
+ * 请求体：{ sessionId?, question, chartData?, stream?, architecture? }
+ *   - architecture: "skill" | "rag" (可选，默认从环境变量读取)
  * 响应：
  *   - stream=false: { reply, sessionId, elements }
  *   - stream=true: SSE 流式输出
- *
- * SSE 时序：Step 1-3 同步完成后，仅 Step 4 做流式
  */
+import 'server-only'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
-import { runReadingPipeline } from '@/lib/ziwei/rag/pipeline'
+import { runReadingPipeline } from '@/lib/ziwei/rag/pipeline'   // 混合架构（默认）
+import { runReadingPipeline as runRAGPipeline } from '@/lib/ziwei/rag/pipeline.rag' // RAG 架构
+import { runHybridPipeline, appendAssistantReply } from '@/lib/ziwei/rag/pipeline.hybrid' // 程序模型混合架构
+import type { SkillDebugInfo } from '@/lib/ziwei/rag/pipeline'
+import type { HybridDebugInfo } from '@/lib/ziwei/rag/pipeline.hybrid'
 import { SessionManager } from '@/lib/ziwei/rag/session-manager'
 import { ReadingRequestSchema } from '@/lib/ziwei/rag/types'
 import { parseOpenAiSseEventBlock } from '@/lib/ai/openai-sse'
-import { prisma } from '@/lib/db'
+import { getArchitectureMode, ARCHITECTURE_MODE } from '@/lib/ziwei/architecture-mode'
 
 const sessionManager = new SessionManager()
 
@@ -35,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '今日使用次数已达上限' }, { status: 429 })
   }
 
-  // ── 请求体解析 ──────────────────────────────────────
+  // ── 请求体解析 ─────────────────────────────────────
   let body: unknown
   try {
     body = await request.json()
@@ -54,6 +62,14 @@ export async function POST(request: NextRequest) {
   const { sessionId, question, chartData } = parsed.data
   const useStream = Boolean((body as Record<string, unknown>)?.stream)
 
+  // 优先使用请求参数中的架构选择，否则使用环境变量
+  const requestArchitecture = (body as Record<string, unknown>)?.architecture as string | undefined
+  const currentMode = getArchitectureMode()
+  const useSkillArchitecture = requestArchitecture === 'skill' || (!requestArchitecture && currentMode === ARCHITECTURE_MODE.SKILL)
+  const useHybridArchitecture = requestArchitecture === 'hybrid' || (!requestArchitecture && currentMode === ARCHITECTURE_MODE.HYBRID)
+
+  console.log(`[ZiWei Reading] 使用架构: ${useHybridArchitecture ? 'Hybrid' : useSkillArchitecture ? 'Skill混合' : 'RAG'} (请求:${requestArchitecture ?? '无'} | 环境:${currentMode})`)
+
   // 首次解盘（无 sessionId）必须提供命盘数据
   if (!sessionId && !chartData) {
     return NextResponse.json(
@@ -63,168 +79,279 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await runReadingPipeline({
-      sessionId: sessionId ?? crypto.randomUUID(),
-      userId: session.user.id,
-      question,
-      chartData,
-      stream: useStream,
-    })
+    // ── 根据架构模式选择 Pipeline ─────────────────────
+    if (useHybridArchitecture) {
+      // ── 程序模型混合架构 ─────────────────────────────
+      const { stream, sessionId: newSessionId, debugInfo } = await runHybridPipeline({
+        sessionId: sessionId ?? crypto.randomUUID(),
+        userId: session.user.id,
+        question,
+        chartData,
+      })
 
-    // ── 更新使用量 ──────────────────────────────────────
-    await incrementDailyUsage(session.user.id, ip)
+      // 更新使用量
+      await incrementDailyUsage(session.user.id, ip)
 
-    // ── 流式响应 ────────────────────────────────────────
-    if (useStream && result.stream) {
-      // 闭包捕获：流式模式需要 domain 和 session 来保存会话
-      const streamDomain = result.domain
-      const streamSession = result.session
+      // 流式响应
+      if (useStream) {
+        const transformedStream = createSseStream(stream, newSessionId, debugInfo, (fullReply) => {
+          void appendAssistantReply(newSessionId, fullReply).catch(err =>
+            console.error('[Hybrid] appendAssistantReply 失败:', err),
+          )
+        })
+        return new Response(transformedStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Architecture': 'hybrid',
+          },
+        })
+      }
 
-      // 将 AI 的 SSE 流转换为前端可读的 SSE 流
-      const transformedStream = new ReadableStream({
-        async start(controller) {
-          const encoder = new TextEncoder()
-          const reader = result.stream!.getReader()
-          const decoder = new TextDecoder()
-          let buffer = ''
-          let fullReply = ''
-          let sessionIdSent = false
-          let debugSent = false
+      // 同步响应
+      return NextResponse.json({
+        reply: '(请使用 stream=true 获取流式响应)',
+        sessionId: newSessionId,
+      })
+    } else if (useSkillArchitecture) {
+      // ── Skill 混合架构 ───────────────────────────────
+      const { stream, sessionId: newSessionId, debugInfo } = await runReadingPipeline({
+        sessionId: sessionId ?? crypto.randomUUID(),
+        userId: session.user.id,
+        question,
+        chartData,
+      })
 
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
+      // 更新使用量
+      await incrementDailyUsage(session.user.id, ip)
 
-              buffer += decoder.decode(value, { stream: true })
+      // 流式响应
+      if (useStream) {
+        const transformedStream = createSseStream(stream, newSessionId, debugInfo)
+        return new Response(transformedStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Architecture': 'skill',
+          },
+        })
+      }
 
-              // 解析 SSE 事件块
-              const lines = buffer.split('\n')
-              buffer = lines.pop() ?? ''
+      // 同步响应
+      return NextResponse.json({
+        reply: '(请使用 stream=true 获取流式响应)',
+        sessionId: newSessionId,
+      })
+    } else {
+      // ── RAG 向量架构 ─────────────────────────────────
+      const result = await runRAGPipeline({
+        sessionId: sessionId ?? crypto.randomUUID(),
+        userId: session.user.id,
+        question,
+        chartData,
+        stream: useStream,
+      })
 
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = line.slice(6).trim()
-                  if (data === '[DONE]') continue
+      // 更新使用量
+      await incrementDailyUsage(session.user.id, ip)
 
-                  const chunk = parseOpenAiSseEventBlock(line)
-                  if (chunk?.deltaText) {
-                    fullReply += chunk.deltaText
+      // 流式响应
+      if (useStream && result.stream) {
+        const streamDomain = result.domain
+        const streamSession = result.session
 
-                    // 首个事件携带 sessionId
-                    if (!sessionIdSent) {
-                      sessionIdSent = true
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText, sessionId: result.sessionId })}\n\n`))
-                    } else {
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText })}\n\n`))
-                    }
+        const transformedStream = new ReadableStream({
+          async start(controller) {
+            const encoder = new TextEncoder()
+            const reader = result.stream!.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+            let fullReply = ''
+            let sessionIdSent = false
+            let debugSent = false
 
-                    // 首个文本事件之后立即发送调试数据
-                    if (!debugSent && result.debugInfo) {
-                      debugSent = true
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo: result.debugInfo })}\n\n`))
+            try {
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+
+                const lines = buffer.split('\n')
+                buffer = lines.pop() ?? ''
+
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const data = line.slice(6).trim()
+                    if (data === '[DONE]') continue
+
+                    const chunk = parseOpenAiSseEventBlock(line)
+                    if (chunk?.deltaText) {
+                      fullReply += chunk.deltaText
+
+                      if (!sessionIdSent) {
+                        sessionIdSent = true
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText, sessionId: result.sessionId })}\n\n`))
+                      } else {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText })}\n\n`))
+                      }
+
+                      if (!debugSent && result.debugInfo) {
+                        debugSent = true
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo: result.debugInfo })}\n\n`))
+                      }
                     }
                   }
                 }
               }
+
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+
+              if (streamDomain && streamSession) {
+                sessionManager.addTurn(streamSession, {
+                  userQuestion: question,
+                  domain: streamDomain,
+                  elements: result.elements,
+                  assistantReply: fullReply || '[流式回复]',
+                  timestamp: Date.now(),
+                }).catch(err => console.error('[Reading SSE] 会话保存失败:', err))
+              }
+            } catch (err) {
+              console.error('[Reading SSE] 流处理错误:', err)
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: '生成中断' })}\n\n`))
+            } finally {
+              controller.close()
             }
+          },
+        })
 
-            // 发送结束标记
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        return new Response(transformedStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Architecture': 'rag',
+          },
+        })
+      }
 
-            // 流结束后保存会话（异步，不阻塞响应）
-            if (streamDomain && streamSession) {
-              sessionManager.addTurn(streamSession, {
-                userQuestion: question,
-                domain: streamDomain,
-                elements: result.elements,
-                assistantReply: fullReply || '[流式回复]',
-                timestamp: Date.now(),
-              }).catch(err => console.error('[Reading SSE] 会话保存失败:', err))
-            }
-
-            // ── 写入用户问答记录 ──────────────────────────
-            const step2Ms = result.timing?.['Step2 要素提取'] ?? null
-            const step3Ms = result.timing?.['Step3 知识召回'] ?? null
-            const step4Ms = result.timing?.['Step4 流式生成'] ?? result.timing?.['Step4 同步生成'] ?? null
-            const totalMs = result.timing?.['Pipeline 完成'] ?? null
-            prisma.userQuestionLog.create({
-              data: {
-                userId: session.user.id,
-                sessionId: result.sessionId,
-                question,
-                domain: streamDomain?.domains?.[0] ?? null,
-                intentType: result.intent?.intent ?? null,
-                answer: fullReply || '[流式回复]',
-                answerModel: 'deepseek', // TODO: 从 pipeline 获取实际模型
-                latencyMs: totalMs ? Math.round(totalMs) : null,
-                step2Ms: step2Ms ? Math.round(step2Ms) : null,
-                step3Ms: step3Ms ? Math.round(step3Ms) : null,
-                step4Ms: step4Ms ? Math.round(step4Ms) : null,
-                chartFingerprint: streamSession?.chartSummary ? undefined : null,
-              },
-            }).catch(err => console.error('[Reading] UserQuestionLog 写入失败:', err))
-          } catch (err) {
-            console.error('[Reading SSE] 流处理错误:', err)
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: '生成中断' })}\n\n`))
-          } finally {
-            controller.close()
-          }
-        },
-      })
-
-      return new Response(transformedStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
+      // 同步响应
+      return NextResponse.json({
+        reply: result.reply,
+        sessionId: result.sessionId,
+        elements: result.elements,
+        debugInfo: result.debugInfo,
       })
     }
 
-    // ── 同步响应 ────────────────────────────────────────
-    // 同步模式也需要记录问答
-    const step2Ms = result.timing?.['Step2 要素提取'] ?? null
-    const step3Ms = result.timing?.['Step3 知识召回'] ?? null
-    const step4Ms = result.timing?.['Step4 同步生成'] ?? null
-    const totalMs = result.timing?.['Pipeline 完成'] ?? null
-    prisma.userQuestionLog.create({
-      data: {
-        userId: session.user.id,
-        sessionId: result.sessionId,
-        question,
-        domain: result.domain?.domains?.[0] ?? null,
-        intentType: result.intent?.intent ?? null,
-        answer: result.reply ?? '',
-        answerModel: 'deepseek',
-        latencyMs: totalMs ? Math.round(totalMs) : null,
-        step2Ms: step2Ms ? Math.round(step2Ms) : null,
-        step3Ms: step3Ms ? Math.round(step3Ms) : null,
-        step4Ms: step4Ms ? Math.round(step4Ms) : null,
-      },
-    }).catch(err => console.error('[Reading] UserQuestionLog 同步写入失败:', err))
-
-    return NextResponse.json({
-      reply: result.reply,
-      sessionId: result.sessionId,
-      elements: result.elements,
-      debugInfo: result.debugInfo,
-    })
 
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const isTimeout = errMsg.includes("超时") || errMsg.includes("aborted");
-    if (isTimeout) {
-      console.warn('[ZiWei Reading] AI 超时:', errMsg);
-      return NextResponse.json(
-        { error: "AI 解盘超时，请稍后重试或切换其他模型" },
-        { status: 504 }
-      );
-    }
     console.error('[ZiWei Reading Error]', err)
+
+    // 提取有意义的错误信息
+    const errMsg = err instanceof Error ? err.message : String(err)
+    let userMessage = '解盘失败，请稍后重试'
+
+    if (errMsg.includes('未配置任何 AI 模型')) {
+      userMessage = 'AI 模型未配置，请联系管理员'
+    } else if (errMsg.includes('API error') || errMsg.includes('请求失败')) {
+      userMessage = 'AI 服务暂时不可用，请稍后重试'
+    } else if (errMsg.includes('token plan not support')) {
+      userMessage = 'AI 模型套餐不支持，请联系管理员更换模型'
+    }
+
+    // 开发环境：Prisma 等错误往往在长 invocation 片段之后才有根因，勿只截前 800 字
+    const devDebug =
+      process.env.NODE_ENV === 'development'
+        ? errMsg.length > 12000
+          ? `${errMsg.slice(0, 6000)}\n…(省略中间)…\n${errMsg.slice(-5500)}`
+          : errMsg
+        : undefined
+
     return NextResponse.json(
-      { error: '解盘失败，请稍后重试' },
+      {
+        error: userMessage,
+        ...(devDebug ? { _debug: devDebug } : {}),
+      },
       { status: 500 }
     )
   }
+}
+
+/**
+ * 创建 SSE 流的通用函数（支持 Skill 调试信息）
+ */
+function createSseStream(
+  stream: ReadableStream,
+  sessionId: string,
+  debugInfo?: SkillDebugInfo | HybridDebugInfo,
+  onComplete?: (fullReply: string) => void,
+): ReadableStream {
+  return new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const reader = stream.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let sessionIdSent = false
+      let debugSent = false
+      let fullReply = ''
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim()
+              if (data === '[DONE]') continue
+
+              const chunk = parseOpenAiSseEventBlock(line)
+              if (chunk?.deltaText) {
+                fullReply += chunk.deltaText
+
+                if (!sessionIdSent) {
+                  sessionIdSent = true
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText, sessionId })}\n\n`))
+                } else {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText })}\n\n`))
+                }
+
+                // 在首个文本块之后立即发送调试信息
+                if (!debugSent && debugInfo) {
+                  debugSent = true
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
+                }
+              }
+            }
+          }
+        }
+
+        // 如果没有发送过调试信息（在首个文本之前发送）
+        if (!debugSent && debugInfo) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
+        }
+
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+
+        // 流结束后回调，传递完整回复（用于对话历史）
+        if (onComplete && fullReply.length > 0) {
+          onComplete(fullReply)
+        }
+      } catch (err) {
+        console.error('[SSE] 流处理错误:', err)
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: '生成中断' })}\n\n`))
+      } finally {
+        controller.close()
+      }
+    },
+  })
 }
