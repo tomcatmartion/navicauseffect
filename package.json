@@ -50,6 +50,7 @@
     "ioredis": "^5.10.0",
     "iztro": "file:./packages/iztro",
     "lucide-react": "^0.577.0",
+    "lunar-lite": "^0.2.8",
     "mammoth": "^1.12.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",

@@ -53,6 +53,9 @@ importers:
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.3)
+      lunar-lite:
+        specifier: ^0.2.8
+        version: 0.2.8
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0
