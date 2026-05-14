@@ -146,7 +146,7 @@ interface KnowledgeSnippet {
 
 interface PersonalityVm {
   overview?: string;
-  traits?: { surface: string[]; middle: string[]; core: string[] };
+  traits?: { surface: string[]; middle?: string[]; core: string[] };
   fourDimensions?: {
     self: string;
     opposite: string;
@@ -368,7 +368,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
     }
   };
 
-  const displayResult = pipelineSnapshot || legacyResult;
+  const displayResult: unknown = pipelineSnapshot || legacyResult;
 
   const legacyPatterns = (): PatternListItem[] =>
     Array.isArray(legacyResult) ? (legacyResult as PatternListItem[]) : [];
@@ -498,7 +498,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                   </div>
                 </div>
               )}
-              {profile.traits.middle?.length > 0 && (
+              {profile.traits.middle && profile.traits.middle.length > 0 && (
                 <div className="bg-purple-50 dark:bg-purple-950/20 rounded p-2">
                   <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mb-1">中层 · 大限后渐显</div>
                   <div className="flex flex-wrap gap-1">
@@ -728,21 +728,21 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
           </div>
         )}
 
-        {conclusion?.opportunities?.length > 0 && (
+        {conclusion?.opportunities && conclusion.opportunities.length > 0 && (
           <div>
             <span className="text-xs text-muted-foreground">机会点</span>
             <p className="mt-0.5 text-muted-foreground">{conclusion.opportunities.join("；")}</p>
           </div>
         )}
 
-        {conclusion?.obstacles?.length > 0 && (
+        {conclusion?.obstacles && conclusion.obstacles.length > 0 && (
           <div>
             <span className="text-xs text-muted-foreground">潜在障碍</span>
             <p className="mt-0.5 text-muted-foreground">{conclusion.obstacles.join("；")}</p>
           </div>
         )}
 
-        {advice?.strategy?.length > 0 && (
+        {advice?.strategy && advice.strategy.length > 0 && (
           <div>
             <span className="text-xs text-muted-foreground">建议</span>
             <p className="mt-0.5 text-muted-foreground">{advice.strategy.join("；")}</p>
@@ -959,7 +959,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                 {renderAffair(pipelineSnapshot.affair)}
               </div>
             )}
-            {!usePipeline && legacyResult && !loading && (
+            {!usePipeline && !!legacyResult && !loading && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
                 {renderAffair(legacyAffair())}
               </div>
@@ -984,7 +984,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
       )}
 
       {/* 结果：格局 / 宫位 / 性格 / 各调试子项 共用卡片；事项单独卡片 */}
-      {displayResult && !loading && activeType !== "affair" && (
+      {!!displayResult && !loading && activeType !== "affair" && (
         <div className="rounded-lg border border-primary/10 bg-card p-3">
           {pipelineSnapshot && activeType && !isDebugTab(activeType) && (
             <Badge variant="outline" className="mb-2 text-[10px]">

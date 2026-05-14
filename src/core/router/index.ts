@@ -5,9 +5,8 @@
 export {
   routeMatter,
   detectMatterIntent,
-  MATTER_QUESTIONS,
-  MATTER_FIRST_QUESTION,
-  MATTER_RESOLVERS,
+  getMatterQuestions,
+  getMatterFirstQuestion,
   type RouteQuestion,
   type RouteOption,
   type RouteResult,

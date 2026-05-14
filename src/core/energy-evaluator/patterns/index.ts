@@ -43,15 +43,18 @@ export const allPatterns = [
 
 /** 获取格局倍率（从 JSON 加载） */
 export function getPatternMultiplier(level: string): number {
-  return getPatternConfig().multipliers[level] ?? 1.0
+  const config = getPatternConfig() as { multipliers?: Record<string, number> }
+  return config.multipliers?.[level] ?? 1.0
 }
 
 /** 获取格局分类（从 JSON 加载） */
 export function getPatternCategories(): Record<string, string[]> {
-  return getPatternConfig().categories
+  const config = getPatternConfig() as { categories?: Record<string, string[]> }
+  return config.categories ?? {}
 }
 
 /** 获取格局定义（从 JSON 加载） */
 export function getPatternDefinition(name: string): Record<string, unknown> | null {
-  return getPatternConfig().definitions[name] ?? null
+  const config = getPatternConfig() as { definitions?: Record<string, Record<string, unknown>> }
+  return config.definitions?.[name] ?? null
 }

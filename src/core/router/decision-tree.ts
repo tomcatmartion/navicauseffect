@@ -33,6 +33,28 @@ export interface RouteResult {
   needInteraction: boolean
 }
 
+interface BranchResolver {
+  primaryPalace?: string
+  primaryRules?: Array<{ condition: string; palace: string }>
+  defaultPrimary?: string
+  secondaryRules?: Array<{ condition: string; palace: string }>
+  secondaryPalaces?: string[]
+  specialConditions?: Array<string | { condition: string; text: string }>
+  needInteraction?: boolean
+  needInteractionRules?: string[]
+}
+
+interface BranchData {
+  resolver: BranchResolver
+  questions: Record<string, RouteQuestion>
+  firstQuestion: string
+}
+
+interface RouterTreeData {
+  branches: Record<string, BranchData>
+  intentDetection: Array<{ keywords: string[]; type: string }>
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 路由解析
 // ═══════════════════════════════════════════════════════════════════
@@ -48,7 +70,7 @@ function evaluateCondition(condition: string, answers: Record<string, string>): 
 }
 
 function resolveBranch(matterType: MatterType, answers: Record<string, string>): RouteResult {
-  const tree = getRouterTree()
+  const tree = getRouterTree() as unknown as RouterTreeData
   const branch = tree.branches[matterType]
   if (!branch) {
     return { primaryPalace: '命宫', secondaryPalaces: [], specialConditions: [], needInteraction: false }
@@ -119,7 +141,7 @@ function resolveBranch(matterType: MatterType, answers: Record<string, string>):
 
 /** 获取各事项的问题集合 */
 export function getMatterQuestions(): Record<MatterType, Record<string, RouteQuestion>> {
-  const tree = getRouterTree()
+  const tree = getRouterTree() as unknown as RouterTreeData
   const result: Record<string, Record<string, RouteQuestion>> = {}
   for (const [matterType, branch] of Object.entries(tree.branches)) {
     result[matterType] = branch.questions
@@ -129,7 +151,7 @@ export function getMatterQuestions(): Record<MatterType, Record<string, RouteQue
 
 /** 获取各事项的首问题ID */
 export function getMatterFirstQuestion(): Record<MatterType, string> {
-  const tree = getRouterTree()
+  const tree = getRouterTree() as unknown as RouterTreeData
   const result: Record<string, string> = {}
   for (const [matterType, branch] of Object.entries(tree.branches)) {
     result[matterType] = branch.firstQuestion
@@ -156,7 +178,7 @@ export function routeMatter(matterType: MatterType, answers: Record<string, stri
  * 意图识别 — 从用户文本识别事项类型
  */
 export function detectMatterIntent(text: string): MatterType | '互动关系' | '综合' | null {
-  const tree = getRouterTree()
+  const tree = getRouterTree() as unknown as RouterTreeData
 
   for (const rule of tree.intentDetection) {
     if (rule.keywords.some((kw: string) => text.includes(kw))) {
