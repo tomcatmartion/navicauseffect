@@ -312,6 +312,17 @@ function createSseStream(
       let sessionIdSent = false
       let debugSent = false
       let fullReply = ''
+      let jsonBlockStarted = false   // 检测到尾部 JSON 开始
+      let jsonCandidate = ''          // 收集可能的 JSON 块
+
+      // 检查文本是否包含尾部 JSON 块标记
+      const isJsonStart = (text: string): boolean => {
+        const trimmed = text.trim()
+        if (!trimmed) return false
+        // 换行后以 { 开头，且内容含 intent 或 memory_update
+        if (trimmed.startsWith('{')) return true
+        return false
+      }
 
       try {
         while (true) {
@@ -330,13 +341,50 @@ function createSseStream(
 
               const chunk = parseOpenAiSseEventBlock(line)
               if (chunk?.deltaText) {
-                fullReply += chunk.deltaText
+                const deltaText = chunk.deltaText
+
+                // 如果已进入 JSON 块收集模式
+                if (jsonBlockStarted) {
+                  jsonCandidate += deltaText
+                  fullReply += deltaText
+                  continue
+                }
+
+                // 检测 JSON 块开始：换行后紧跟 {
+                // 常见模式："\n{" 或 "\n\n{"
+                const lastNewline = deltaText.lastIndexOf('\n')
+                if (lastNewline !== -1) {
+                  const afterNewline = deltaText.slice(lastNewline)
+                  if (isJsonStart(afterNewline)) {
+                    jsonBlockStarted = true
+                    // 发送 JSON 开始之前的内容
+                    const beforeJson = deltaText.slice(0, lastNewline)
+                    fullReply += deltaText
+                    if (beforeJson) {
+                      if (!sessionIdSent) {
+                        sessionIdSent = true
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeJson, sessionId })}\n\n`))
+                      } else {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: beforeJson })}\n\n`))
+                      }
+                      if (!debugSent && debugInfo) {
+                        debugSent = true
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'debug', debugInfo })}\n\n`))
+                      }
+                    }
+                    jsonCandidate = afterNewline
+                    continue
+                  }
+                }
+
+                // 正常文本
+                fullReply += deltaText
 
                 if (!sessionIdSent) {
                   sessionIdSent = true
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText, sessionId })}\n\n`))
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: deltaText, sessionId })}\n\n`))
                 } else {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk.deltaText })}\n\n`))
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: deltaText })}\n\n`))
                 }
 
                 // 在首个文本块之后立即发送调试信息
