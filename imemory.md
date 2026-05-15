@@ -6,6 +6,83 @@
 
 ---
 
+## 2026-05-14/15 腾讯云部署完整教训
+
+### E-56: 部署只传代码和配置，禁止上传 .next 构建产物
+
+- **现象**：`scp -r .next/standalone` 上传 932MB 构建产物到服务器，耗时极长且失败
+- **根因**：standalone 构建产物体积巨大（~1GB）， scp 传输不稳定且浪费带宽
+- **正确做法**：只传源代码（git pull 或 scp 单个文件），在服务器上 `npm install && npm run build`
+- **流程**：`git pull origin main`（或 scp 改动的源文件）→ `npm install` → `npx prisma generate` → `npm run build` → 重启服务
+- **禁止**：`scp -r .next` 或上传整个构建目录
+
+### E-57: 部署后必须检查 data/ 目录和数据库迁移
+
+- **现象**：格局识别/性格分析报 "Cannot convert undefined or null to object"；AI 解读报 "hybrid_state column does not exist"
+- **根因**：服务器上 `data/` 目录缺少 10 个 JSON 知识库文件（patterns.json、scoring_params.json 等）；Prisma 迁移未在服务器数据库执行
+- **教训**：每次部署新功能后必须检查：① `data/*.json` 是否齐全（本地有的服务器也要有）② 数据库 schema 是否需要新迁移
+- **已修复**：scp data/*.json 到服务器；手动执行 ALTER TABLE 迁移
+
+### E-58: AI Provider 超时时间不足导致"生成中断"
+
+- **现象**：智谱 GLM 调用后 SSE 流报 "The operation was aborted due to timeout"，前端显示"生成中断"
+- **根因**：所有 AI Provider 的 `DEFAULT_TIMEOUT_MS = 30_000`（30秒），Hybrid 管道构建长 prompt + 等模型生成详细回复，30 秒不够
+- **已修复**：所有 Provider 的 `DEFAULT_TIMEOUT_MS` 从 30_000 改为 120_000（120秒）
+
+### E-59: Hybrid 管道 AI 回复中泄漏尾部 JSON
+
+- **现象**：AI 回复末尾显示原始 `{"intent":"...","memory_update":{...}}`
+- **根因**：Hybrid 架构 prompt 要求模型在正文后输出结构化 JSON，流式传输时 JSON 作为普通文本逐 chunk 发给前端
+- **已修复**：SSE 流式输出采用"尾部延迟缓冲"方案——缓存最后 300 字符不发，流结束后用 `parseHybridAssistantPayload` 从全文中剥离 JSON，只把干净的 narrative 发往前端
+- **关键**：不能逐 chunk 检测 JSON 起始（`{` 可能被拆在两个 chunk 边界），必须在流结束后对全文做解析
+
+### E-60: pnpm 严格模式下 iztro 子依赖不可见导致构建失败
+
+- **现象**：`Cannot find module 'lunar-lite'` / `Cannot find module 'dayjs'`
+- **根因**：`packages/iztro` 通过 `file:` 协议引入，pnpm 默认不提升子依赖到根 node_modules
+- **已修复**：添加 `.npmrc` 设置 `shamefully-hoist=true`
+
+### E-61: git rebase 冲突解决可能还原之前的构建修复
+
+- **现象**：rebase 后 `claude.ts` 缩进错乱（try 块缺少 catch/finally），导致 22 个 TS 语法错误
+- **根因**：rebase 自动合并冲突时括号/缩进对不齐，特别是含 try/catch/finally 的嵌套结构
+- **教训**：rebase 后必须 `pnpm tsc --noEmit` + `pnpm build` 验证，不能假设冲突解决是正确的
+
+### E-62: 服务器 GitHub 访问受限时的替代部署方案
+
+- **现象**：服务器 `git pull` 报 "Empty reply from server" 或超时
+- **根因**：腾讯云国内服务器访问 GitHub 不稳定
+- **替代方案**：用 `scp` 上传改动的源文件，然后在服务器上 rebuild
+- **示例**：`scp src/app/api/ziwei/reading/route.ts root@IP:/opt/navicauseffect/src/app/api/ziwei/reading/route.ts`
+
+### 部署标准流程（以后每次必遵循）
+
+```
+# 1. 本地提交推送
+git add <files> && git commit && git push origin main
+
+# 2. 服务器拉代码（网络通时）
+ssh root@119.45.168.110 "cd /opt/navicauseffect && git stash && git pull origin main"
+
+# 3. 如果 git pull 失败，scp 单个文件
+scp <changed-file> root@119.45.168.110:/opt/navicauseffect/<path>
+
+# 4. 服务器构建
+ssh root@119.45.168.110 "cd /opt/navicauseffect && npm install && npx prisma generate && npm run build"
+
+# 5. 检查 data/ 目录和数据库迁移
+scp data/*.json root@119.45.168.110:/opt/navicauseffect/data/  # 如有新增
+# 数据库迁移：手动 ALTER TABLE 或 npx prisma db push
+
+# 6. 重启服务
+ssh root@119.45.168.110 "fuser -k 3000/tcp; sleep 1; cd /opt/navicauseffect && nohup npx next start -H 0.0.0.0 -p 3000 > /tmp/next.log 2>&1 &"
+
+# 7. 验证
+curl -sI http://119.45.168.110:3000/
+```
+
+---
+
 ## 2026-05-12 Hybrid 解盘 500 与冒烟超时
 
 ### E-50: 已 `db push`/迁移加列，仍报 `Unknown argument hybridState` / Prisma create 失败
