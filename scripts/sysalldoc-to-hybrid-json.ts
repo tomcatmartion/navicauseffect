@@ -8,7 +8,7 @@ import * as path from 'node:path'
 
 const ROOT = path.resolve(__dirname, '..')
 const KB_MD = path.join(ROOT, 'sysfiles/sysalldoc/KB_太岁入卦星曜直查表.md')
-const OUT = path.join(ROOT, 'src/lib/ziwei/hybrid/data/extra-stars.json')
+const OUT = path.join(ROOT, 'data/extra-stars.json')
 
 /** 极简 MD 表格行解析：| 子 | 咸池 | … | */
 function parseMdTable(md: string): Record<string, Array<{ star: string; label: string }>> {

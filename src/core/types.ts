@@ -128,6 +128,46 @@ export type PalaceName = typeof PALACE_NAMES[number]
 /** 宫位旺弱等级 */
 export type PalaceBrightness = '极旺' | '旺' | '平' | '陷' | '极弱' | '空'
 
+/** 加分阶段子步骤详情（基于 scoring_formula.json v1.3） */
+export interface BonusDetails {
+  /** 2.1 三方四正吉星加分（含空间衰减） */
+  '2.1_三方四正吉星': number
+  /** 2.2 命主生年化禄加分 */
+  '2.2_命主生年化禄': number
+  /** 2.3 命主遁干化禄加分 */
+  '2.3_命主遁干化禄': number
+  /** 2.4 父亲生年化禄加分 */
+  '2.4_父亲生年化禄': number
+  /** 2.5 父亲遁干化禄加分 */
+  '2.5_父亲遁干化禄': number
+  /** 2.6 母亲生年化禄加分 */
+  '2.6_母亲生年化禄': number
+  /** 2.7 母亲遁干化禄加分 */
+  '2.7_母亲遁干化禄': number
+  /** 2.8 吉格倍率 */
+  '2.8_吉格倍率': number
+}
+
+/** 减分阶段子步骤详情（基于 scoring_formula.json v2.3） */
+export interface PenaltyDetails {
+  /** 4.1 三方四正煞星减分（含空间衰减 + intensity_factor） */
+  '4.1_三方四正煞星': number
+  /** 4.2 命主生年化忌减分 */
+  '4.2_命主生年化忌': number
+  /** 4.3 命主遁干化忌减分 */
+  '4.3_命主遁干化忌': number
+  /** 4.4 父亲生年化忌减分（×0.9） */
+  '4.4_父亲生年化忌': number
+  /** 4.5 父亲遁干化忌减分（×0.9） */
+  '4.5_父亲遁干化忌': number
+  /** 4.6 母亲生年化忌减分（×0.9） */
+  '4.6_母亲生年化忌': number
+  /** 4.7 母亲遁干化忌减分（×0.9） */
+  '4.7_母亲遁干化忌': number
+  /** 4.8 凶格倍率 */
+  '4.8_凶格倍率': number
+}
+
 /** 宫位评分结果 */
 export interface PalaceScore {
   /** 宫位名称 */
@@ -136,7 +176,7 @@ export interface PalaceScore {
   diZhi: DiZhi
   /** 主星列表 */
   majorStars: Array<{ star: MajorStar; brightness: PalaceBrightness }>
-  /** 骨架基础分 */
+  /** 骨架基础分（步骤1） */
   skeletonScore: number
   /** 天花板分 */
   ceiling: number
@@ -144,9 +184,9 @@ export interface PalaceScore {
   bonusTotal: number
   /** 减分阶段总分 */
   penaltyTotal: number
-  /** 禄存加减分 */
+  /** 禄存加减分（步骤5） */
   luCunDelta: number
-  /** 最终得分 */
+  /** 最终得分（步骤6） */
   finalScore: number
   /** 原生基调 */
   tone: PalaceTone
@@ -162,6 +202,18 @@ export interface PalaceScore {
   isAbsoluteFail: boolean
   /** 特殊结构标注 */
   specialFlags: string[]
+  /** 加分后得分（步骤2结束） */
+  scoreAfterBonus: number
+  /** 减分后得分（步骤4结束） */
+  scoreAfterPenalty: number
+  /** 禄存处理后得分（步骤5结束） */
+  scoreAfterLuCun: number
+  /** 加分后旺弱定性（步骤3） */
+  warmCoolLabel: '旺' | '旺偏磨炼' | '平' | '虚浮' | '凶危'
+  /** 加分阶段子步骤详情 */
+  bonusDetails: BonusDetails
+  /** 减分阶段子步骤详情 */
+  penaltyDetails: PenaltyDetails
 }
 
 /** 基调 */
@@ -650,12 +702,19 @@ export function getTrineGong(zhi: DiZhi): [DiZhi, DiZhi] {
   return map[zhi]
 }
 
-/** 获取夹宫地支（左右邻宫） */
+/** 获取夹宫地支（左右邻宫）
+ *
+ * 方向约定（scoring_params.json directionConvention）：
+ * - 左 = counterClockwise = 索引 +1
+ * - 右 = clockwise = 索引 -1
+ *
+ * 例如：本宫为丑(1)，则 left = 寅(2)，right = 子(0)
+ */
 export function getFlankingGong(zhi: DiZhi): [DiZhi, DiZhi] {
   const order: DiZhi[] = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
   const idx = order.indexOf(zhi)
-  const left = order[(idx - 1 + 12) % 12]
-  const right = order[(idx + 1) % 12]
+  const left = order[(idx + 1) % 12]
+  const right = order[(idx - 1 + 12) % 12]
   return [left, right]
 }
 

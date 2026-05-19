@@ -1,22 +1,55 @@
 /**
  * 紫微斗数解盘引擎
- * TypeScript 实现方案
  *
- * @module ziwei
- * @description 紫微斗数命盘分析引擎，提供能级评估、性格分析、互动关系、事项解读等功能
+ * 程序混合（Hybrid）：确定性 Stage1–4 + LLM 表达
+ * - 编排：orchestration/hybrid/
+ * - iztro 适配：core/adapters/iztro/
+ * - 知识库：项目根 data/*.json
  */
 
-// 类型定义
-export * from './types';
+export * from './types'
+export * from './data'
+export * from './utils'
 
-// 数据文件
-export * from './data';
+export {
+  runHybridPipeline,
+  appendAssistantReply,
+  cleanupExpiredSessions,
+  type RunHybridPipelineParams,
+  type RunHybridPipelineResult,
+  type PipelineDebugInfo,
+} from '@/orchestration/hybrid'
 
-// 工具函数
-export * from './utils';
+export type {
+  BaseIR,
+  BaseIRPalace,
+  BaseIRExtraStar,
+  FinalIR,
+  PersonalityAnalysis,
+  PatternRuleJson,
+  HybridCollected,
+  HybridPersisted,
+  HybridHistoryMessage,
+  SessionPersisted,
+  ConversationMessage,
+} from '@/core/adapters/iztro/types'
 
-// 核心引擎
-export * from './core';
+export {
+  parseHybridStage1,
+  parseHybridStage2,
+  parseHybridStage3,
+  parseHybridStage4,
+  createEmptyHybridPersisted,
+} from '@/core/adapters/iztro/types'
 
-// 默认导出
-export { ZiweiEngine, createChart, assessPalace, assessAllPalaces, analyzePersonality, analyzeInteraction, analyzeAffair } from './core/ZiweiEngine';
+export type {
+  ConversationTurn,
+  ReadingDomain,
+  ReadingElements,
+  ZiweiSessionData,
+} from './session'
+
+export {
+  ReadingRequestSchema,
+  SessionManager,
+} from './session'

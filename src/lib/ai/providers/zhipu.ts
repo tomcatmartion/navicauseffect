@@ -30,8 +30,6 @@ export class ZhiPuProvider implements AIProvider {
           messages,
           temperature: options?.temperature ?? 0.7,
           max_tokens: options?.maxTokens ?? 4096,
-          // 智谱深度思考模型：思考 token 不计入 max_tokens 限额，避免思考耗尽配额导致正式回答被截断
-          thinking: { type: "enabled", budget_tokens: 32768 },
           stream: true,
         }),
         signal: controller.signal,

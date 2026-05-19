@@ -1,7 +1,7 @@
 # 程序混合架构 — 当前实现流程与逻辑文档
 
 > 生成时间：2026-05-08
-> 基于代码：`src/lib/ziwei/hybrid/` + `src/core/stages/` + `src/core/orchestrator/state-machine.ts` + `src/lib/ziwei/rag/session-manager.ts`
+> 基于代码：`src/orchestration/hybrid/` + `src/core/stages/` + `src/core/orchestrator/state-machine.ts` + `src/lib/ziwei/session/session-manager.ts`
 
 ---
 
@@ -11,7 +11,7 @@
 用户请求 POST /api/ziwei/reading
   │
   ▼
-runHybridPipeline()（`src/lib/ziwei/hybrid/orchestrator.ts`）
+runHybridPipeline()（`src/orchestration/hybrid/orchestrator.ts`）
   │
   ├─ SessionManager.getOrCreate() ── Redis + MySQL（`hybrid_state` JSON）
   ├─ hybridPersisted：状态机 + stage1–4 JSON + 对话历史（≤6 条）+ collected
@@ -36,7 +36,7 @@ runHybridPipeline()（`src/lib/ziwei/hybrid/orchestrator.ts`）
 
 ### 一（附）、流程图（Mermaid）
 
-编排见 `src/lib/ziwei/hybrid/orchestrator.ts`；`pipeline-orchestrator.ts` 仅为兼容 re-export。**`handleSoftInterrupt` 当前恒为放行**（`state-machine.ts`）。
+编排见 `src/orchestration/hybrid/orchestrator.ts`。**`handleSoftInterrupt` 当前恒为放行**（`state-machine.ts`）。
 
 #### 总览：程序阶段 → 唯一流式 LLM（M7）
 
@@ -253,12 +253,12 @@ Stage=2 (自动推进)
 
 - **API 命盘 JSON**：须使用 `serializeAstrolabeForReading`（`src/lib/ziwei/serialize-chart-for-reading.ts`），包含各宫 `adjectiveStars`；否则红鸾、天喜等落在丙丁级的星曜无法进入 `readChartFromData`，与 iztro 真盘不一致。
 - **时辰与 `timeIndex`**：与 `packages/iztro/src/data/constants.ts` 中 `CHINESE_TIME` / `TIME_RANGE` 一致。例：**阳历 1982-09-24 凌晨 4:00** 属寅时（03:00–05:00），对应 **`timeIndex = 2`**。
-- **自动化核对**：`src/lib/ziwei/hybrid/__tests__/hybrid-iztro-parity.test.ts` 对该命例校验：命宫地支与主星、`BaseIR.extraStars` 与 iztro 盘面中禄存/羊陀/魁钺/鸾喜落宫一致。
+- **自动化核对**：`src/lib/ziwei/hybrid/__tests__/hybrid-iztro-parity.test.ts`（引用 `core/adapters/iztro`）对该命例校验：命宫地支与主星、`BaseIR.extraStars` 与 iztro 盘面中禄存/羊陀/魁钺/鸾喜落宫一致。
 
 ## 十、Claude 对 Deepseek 方案补充的落地要点
 
 - **衰减数据**：`src/core/knowledge-dict/data/attenuation.json` 为夹宫/对宫/三合系数的唯一权威源；`query.ts` 启动时加载并与内置默认 merge，便于后续扩展为全亮度矩阵而不改调用方。
-- **iztro 适配层**：`src/lib/ziwei/hybrid/iztro-adapter.ts` 在 `chart-bridge` 入口统一归一性别、宫干地支别名、`horoscope.decadal|yearly` 的 `gan/zhi` → `heavenlyStem/earthlyBranch`，减少上游多处分叉。
+- **iztro 适配层**：`src/core/adapters/iztro/iztro-adapter.ts` 在 `chart-bridge` 入口统一归一性别、宫干地支别名、`horoscope.decadal|yearly` 的 `gan/zhi` → `heavenlyStem/earthlyBranch`，减少上游多处分叉。
 - **M7 Prompt**：`prompt-builder.ts` 的 System 中写明「命盘速览」块顺序与阶段三/四不得臆造干支；阶段一上下文将**命宫评分行置顶**（在按分排序列表中）；阶段三/四用 `primaryAnalysis`、`daXianAnalysis`、`liuNianAnalysis` 拼**结构化摘要**，替代 `JSON.stringify(ir)` 全量注入。
 - **格局 Sprint**：`patterns-dsl.ts` 注释与 `patterns.json` 保持「先少量核心格局、再增量」策略；DSL 新增原子条件须同步扩展求值器与单测。
 - **路由样例**：`router_tree.json` 的 `domainFlows` 与代码内 `decision-tree` 对齐，供产品/后续动态加载对照。

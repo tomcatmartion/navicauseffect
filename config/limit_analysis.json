@@ -1,0 +1,109 @@
+{
+  "version": "1.0",
+  "matterTypeMappings": {
+    "求学": { "primaryPalace": "官禄", "secondaryPalaces": ["迁移", "田宅"], "timeDimensions": ["大限官禄", "流年官禄", "流月官禄"], "routingConditions": { "异地或留学": { "addSecondary": "迁移宫" }, "备考冲刺": { "addSecondary": "田宅宫" } }, "fourDimensionFocus": ["本宫官禄", "对宫夫妻", "合宫命宫+财帛", "临宫迁移+田宅"] },
+    "求爱": { "primaryPalace": "夫妻", "secondaryPalaces": ["福德", "财帛"], "timeDimensions": ["大限夫妻", "流年夫妻", "流月夫妻"], "routingConditions": { "讨论感情走向": { "addSecondary": "福德宫" }, "条件交换型": { "addSecondary": "财帛宫" } }, "fourDimensionFocus": ["本宫夫妻", "对宫官禄", "合宫福德+迁移", "临宫兄弟+子女"] },
+    "求财": { "primaryPalace": "财帛", "secondaryPalaces": ["福德", "迁移", "田宅"], "timeDimensions": ["大限财帛", "流年财帛", "流月财帛"], "routingConditions": { "纯投资无劳力": { "primaryPalace": "福德", "secondaryPalaces": ["迁移", "田宅"] }, "有劳力有场地大规模": { "addSecondary": "田宅宫" }, "合伙当头": { "primaryPalace": "迁移", "secondaryPalaces": ["官禄", "财帛", "田宅", "仆役"] }, "合伙出资不参与": { "primaryPalace": "福德", "secondaryPalaces": ["迁移", "田宅"] }, "异地外贸": { "addSecondary": "迁移宫" }, "口才业务中介": { "primaryPalace": "迁移", "secondaryPalaces": ["财帛", "官禄"] }, "置产收租": { "primaryPalace": "田宅", "secondaryPalaces": ["财帛", "福德"] }, "服务业空间大": { "primaryPalace": "田宅", "secondaryPalaces": ["迁移", "财帛"] } }, "fourDimensionFocus": ["本宫财帛", "对宫福德", "合宫命宫+官禄", "临宫田宅+迁移"] },
+    "求职": { "primaryPalace": "迁移", "secondaryPalaces": ["官禄", "仆役"], "timeDimensions": ["大限迁移", "流年迁移", "流月迁移"], "routingConditions": { "初次有门槛求职": { "addSecondary": "官禄宫" }, "跳槽换工作": { "addSecondary": "官禄宫" }, "升职需管理下属": { "addSecondary": "仆役宫" }, "异地就职": { "addSecondary": "迁移宫" } }, "fourDimensionFocus": ["本宫迁移", "对宫命宫", "合宫仆役+父母", "临官财帛+疾厄"] },
+    "求健康": { "primaryPalace": "疾厄", "secondaryPalaces": ["命宫", "父母"], "timeDimensions": ["大限疾厄", "流年疾厄", "流月疾厄"], "routingConditions": { "整体体质评估": { "addSecondary": "命宫" }, "具体症状疾病": { "addSecondary": "父母宫" }, "有遗传倾向": { "addSecondary": "父母宫" } }, "fourDimensionFocus": ["本宫疾厄", "对宫父母", "合宫田宅+兄弟", "临官财帛+迁移"] },
+    "求名": { "primaryPalace": "官禄", "secondaryPalaces": ["迁移"], "timeDimensions": ["大限官禄", "流年官禄", "流月官禄"], "routingConditions": { "技艺专业能力成名": { "primaryPalace": "官禄", "secondaryPalaces": ["迁移", "科星落位宫"] }, "人缘流量成名": { "primaryPalace": "迁移", "secondaryPalaces": ["科星落位宫", "太阳落位宫"] }, "网络传播直播演艺": { "primaryPalace": "迁移", "secondaryPalaces": ["科星落位宫", "太阳落位宫"] } }, "fourDimensionFocus": ["本宫官禄", "对宫夫妻", "合宫命宫+财帛", "临宫迁移+田宅"] }
+  },
+  "timeAnalysis": {
+    "weights": { "daXian": 0.5, "liuNian": 0.3, "liuYue": 0.2 },
+    "directionJudgment": {
+      "matrix": {
+        "吉◇吉": { "strength": "⬆️⬆️", "judgment": "最佳推进窗口", "suggestion": "主动出击", "description": "双重叠加，两个层级都在推助，是最好的推进时机" },
+        "吉◇凶": { "strength": "⬆️↔️", "judgment": "部分化解", "suggestion": "谨慎推进", "description": "流年有好象在一定程度上化解大限的凶象，但凶象仍在，需要谨慎" },
+        "凶◇吉": { "strength": "↔️⬇️", "judgment": "有波折干扰", "suggestion": "维持为主", "description": "大限底盘仍然稳定，今年有波折但不会彻底崩盘" },
+        "凶◇凶": { "strength": "⬇️⬇️", "judgment": "风险最高", "suggestion": "预警+规避", "description": "两个层级都在压制，风险最高，需要提前预警和防范" }
+      }
+    }
+  },
+  "directionMatrix": {
+    "windowSize": 3,
+    "scoreThresholds": {
+      "excellent": { "min": 7.5, "label": "最佳推进窗口", "action": "主动出击" },
+      "good": { "min": 6.0, "label": "顺畅推进", "action": "积极推进" },
+      "average": { "min": 4.5, "label": "维持观望", "action": "谨慎维持" },
+      "poor": { "min": 3.0, "label": "风险预警", "action": "退守规避" },
+      "critical": { "min": 0, "label": "危机期", "action": "全面防范" }
+    },
+    "palaceWeights": {
+      "求学": { "官禄宫": 0.5, "迁移宫": 0.25, "田宅宫": 0.15, "命宫": 0.1 },
+      "求爱": { "夫妻宫": 0.5, "福德宫": 0.25, "财帛宫": 0.15, "命宫": 0.1 },
+      "求财": { "财帛宫": 0.35, "福德宫": 0.2, "迁移宫": 0.2, "田宅宫": 0.15, "官禄宫": 0.1 },
+      "求职": { "迁移宫": 0.4, "官禄宫": 0.35, "仆役宫": 0.15, "命宫": 0.1 },
+      "求健康": { "疾厄宫": 0.5, "命宫": 0.25, "父母宫": 0.15, "兄弟宫": 0.1 },
+      "求名": { "官禄宫": 0.4, "迁移宫": 0.35, "科星落位宫": 0.15, "命宫": 0.1 }
+    }
+  },
+  "sihuaWeights": {
+    "daXianSihua": { "weight": 0.5, "rules": { "吉化引动原局吉格": { "effect": "这十年原局吉象充分显现，趋势向好", "scoreAdjustment": 1.5 }, "忌化引动原局煞宫": { "effect": "这十年原局凶象被激发放大，需要谨慎", "scoreAdjustment": -1.5 }, "原局有护佑格局": { "effect": "凶限虽艰仍有底线，全身而退有可能", "scoreAdjustment": 0.5 }, "原局无护佑格局": { "effect": "凶限直接穿透，须提前预警和防范", "scoreAdjustment": -0.5 } } },
+    "liuNianSihua": { "weight": 0.3, "rules": { "吉化多+吉化入好宫": { "effect": "推进窗口", "scoreAdjustment": 1.0 }, "吉化多+吉化入坏宫": { "effect": "蛰伏期", "scoreAdjustment": 0.3 }, "忌化多+忌化入坏宫": { "effect": "风险期", "scoreAdjustment": -1.0 }, "忌化多+有好的大限支持": { "effect": "挑战期", "scoreAdjustment": -0.3 } } },
+    "liuYueSihua": { "weight": 0.2, "rules": { "吉化引动事项宫": { "effect": "当月有利推进", "scoreAdjustment": 0.5 }, "忌化引动事项宫": { "effect": "当月需谨慎", "scoreAdjustment": -0.5 } } }
+  },
+  "daXianQualitative": {
+    "levels": {
+      "顺畅期": { "scoreRange": [7.0, 10.0], "features": "四化吉多，原局吉象充分激活", "protectionNeeded": false, "effect": "事项有利，推进顺利", "color": "🟢" },
+      "转机期": { "scoreRange": [5.5, 7.0], "features": "从凶象向吉象转变的中间阶段", "protectionNeeded": "有最好", "effect": "变化期，把握窗口很重要", "color": "🟡" },
+      "艰辛期": { "scoreRange": [3.5, 5.5], "features": "四化凶多，但有护佑格局", "protectionNeeded": true, "effect": "有挑战，需谨慎，但有底线", "color": "🟠" },
+      "危机期": { "scoreRange": [0, 3.5], "features": "四化凶多，护佑格局破损", "protectionNeeded": true, "effect": "高风险，需预警，需防范", "color": "🔴" }
+    }
+  },
+  "liuNianTimeWindow": {
+    "windows": {
+      "推进窗口": { "condition": "流年吉+大限吉，或流年吉化充分激活事项宫", "action": "主动出击，把握时机", "duration": "全年或特定月份（流月吉化集中时）" },
+      "蛰伏期": { "condition": "吉化多但入坏宫，或大限吉但流年平", "action": "维持现状，积累能量", "duration": "数月至半年" },
+      "挑战期": { "condition": "忌化多但有大限护佑支持", "action": "谨慎应对，化解风险", "duration": "特定月份（流月忌化引动时）" },
+      "风险期": { "condition": "流年凶+大限凶，或忌化入事项宫且原局无护佑", "action": "全面防范，退守规避", "duration": "全年或特定月份" }
+    }
+  },
+  "innateLevelMap": {
+    "levels": {
+      "实旺": { "scoreRange": [7.5, 8.5], "description": "原局底盘强旺，先天条件优越", "carryingCapacity": "极强", "sihuaEffect": "能承载事项宫的煞，凶象能被驾驭", "advice": "可主动进取，把握大限吉化窗口" },
+      "磨炼": { "scoreRange": [6.0, 7.4], "description": "原局有基础，需后天努力", "carryingCapacity": "强", "sihuaEffect": "能承载一般煞象，大限忌化时需谨慎", "advice": "稳步积累，吉化时进取，忌化时守成" },
+      "平": { "scoreRange": [4.5, 5.9], "description": "原局中等，需把握时机", "carryingCapacity": "中等", "sihuaEffect": "吉凶混杂，需看大限流年方向", "advice": "顺势而为，吉化窗口期积极行动" },
+      "虚浮": { "scoreRange": [3.0, 4.4], "description": "原局不稳，需谨慎行事", "carryingCapacity": "弱", "sihuaEffect": "煞象容易穿透，忌化时风险高", "advice": "保守为主，避免激进，重视护佑格局" },
+      "凶危": { "scoreRange": [0, 2.9], "description": "原局有险，需化解调整", "carryingCapacity": "极弱", "sihuaEffect": "煞象直接穿透，凶限易出问题", "advice": "全面防范，寻求化解，避免重大决策" }
+    }
+  },
+  "protectionMechanism": {
+    "mechanisms": {
+      "双禄夹目标宫": { "priority": 5, "description": "目标宫位左右各有一颗禄星", "effect": "护佑机制——即使大限凶化，该宫有保底，不易彻底崩盘", "scoreBonus": 1.0 },
+      "禄存在目标宫": { "priority": 4, "description": "禄存落在目标宫位", "effect": "基本盘保底——被羊陀夹但委屈求全中有守", "scoreBonus": 0.8 },
+      "天府守财库": { "priority": 4, "description": "天府在财库宫位", "effect": "财库有制煞能力——空劫入宫须特别注意", "scoreBonus": 0.8 },
+      "护佑格局完整": { "priority": 5, "description": "整体看盘所有的保护机制", "effect": "凶限虽艰，仍能全身而退；护佑格局破损→可能彻底崩盘", "scoreBonus": 1.0 }
+    }
+  },
+  "palaceProjection": {
+    "coefficients": {
+      "本宫": { "factor": 1.0, "description": "本宫能量无衰减" },
+      "对宫": { "factor": 0.8, "description": "对宫投射到本宫，能量衰减20%" },
+      "三合宫": { "factor": 0.7, "description": "三合宫各自独立投射，能量衰减30%" },
+      "夹宫": {
+        "description": "夹宫动态系数——本宫旺弱×夹宫旺弱",
+        "matrix": {
+          "本宫旺×夹宫旺": 0.9,
+          "本宫旺×夹宫平": 0.5,
+          "本宫旺×夹宫弱": 0.2,
+          "本宫平×夹宫旺": 0.6,
+          "本宫平×夹宫平": 0.4,
+          "本宫平×夹宫弱": 0.2,
+          "本宫弱×夹宫旺": 0.3,
+          "本宫弱×夹宫平": 0.1,
+          "本宫弱×夹宫弱": 0.0
+        }
+      }
+    }
+  },
+  "compositeScoring": {
+    "formula": {
+      "步骤1_原局底盘分": "事项宫位加权得分 × 命宫调节系数",
+      "步骤2_大限激活分": "大限事项宫得分 × 大限四化调整 × 0.5",
+      "步骤3_流年引动分": "流年事项宫得分 × 流年四化调整 × 0.3",
+      "步骤4_流月触发分": "流月事项宫得分 × 流月四化调整 × 0.2",
+      "最终得分": "原局底盘分 × 0.3 + 大限激活分 + 流年引动分 + 流月触发分",
+      "命宫调节系数": { "命宫实旺": 1.2, "命宫磨炼": 1.1, "命宫平": 1.0, "命宫虚浮": 0.8, "命宫凶危": 0.6 }
+    }
+  }
+}

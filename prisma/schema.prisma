@@ -306,7 +306,7 @@ model ZiweiSession {
   @@map("ziwei_sessions")
 }
 
-// ── 用户问答记录：问题收录与舆情分析 ──────────────────────
+// ── 用户问答记录 ──────────────────────────────────────────
 model UserQuestionLog {
   id           String   @id @default(cuid())
   userId       String?  @map("user_id")
@@ -337,20 +337,4 @@ model UserQuestionLog {
   @@index([createdAt])
   @@index([chartFingerprint])
   @@map("user_question_logs")
-}
-
-// ── 舆情分析报告 ──────────────────────────────────────────
-model SentimentReport {
-  id          String   @id @default(cuid())
-  reportDate  DateTime @db.Date @map("report_date")  // 报告日期（天）
-  keyword     String                             // 统计关键词
-  summary     String   @db.Text                 // AI 分析摘要
-  trendCount  Int      @default(0) @map("trend_count")      // 本期问题总数
-  topDomains  Json     @default("[]") @map("top_domains")    // [{domain, count}]
-  topKeywords Json     @default("[]") @map("top_keywords")    // [{question, count}]
-  sqlQuery    String?  @map("sql_query") @db.Text             // 生成的 SQL
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@unique([reportDate, keyword])
-  @@map("sentiment_reports")
 }

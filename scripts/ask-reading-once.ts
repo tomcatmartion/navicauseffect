@@ -87,18 +87,12 @@ function consumeSseLines(
 
 async function main() {
   const question = process.env.READING_QUESTION || "我明年的财运怎么样？";
-  const arch =
-    (process.env.READING_ARCHITECTURE as "hybrid" | "skill" | "rag" | undefined) ??
-    "hybrid";
-
   console.error(
     "BASE_URL=",
     BASE,
     "TIMEOUT_MS=",
     TIMEOUT_MS,
-    "architecture=",
-    arch,
-    "（与浏览器 body 一致：stream + architecture + chartData）",
+    "（与浏览器 body 一致：stream + chartData）",
   );
   const cookie = await login();
   console.error("登录 ok，请求解盘…");
@@ -112,7 +106,6 @@ async function main() {
     body: JSON.stringify({
       question,
       stream: true,
-      architecture: arch,
       chartData: CHART_FIXTURE as Record<string, unknown>,
     }),
     dispatcher: readingAgent,

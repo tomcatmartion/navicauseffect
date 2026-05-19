@@ -1,5 +1,5 @@
 /**
- * 将 iztro FunctionalAstrolabe 序列化为 Hybrid / RAG 可读 JSON。
+ * 将 iztro FunctionalAstrolabe 序列化为 Hybrid 管线可读 JSON。
  * 须包含 adjectiveStars（红鸾、天喜等多在丙丁级），否则与 iztro 真盘不一致。
  */
 

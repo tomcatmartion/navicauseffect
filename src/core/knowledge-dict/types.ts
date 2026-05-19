@@ -2,6 +2,28 @@
  * M6: 知识字典 — 类型定义
  */
 
+// ═══════════════════════════════════════════════════════════════════
+// 骨架映射类型（palace_innate_skeleton.json）
+// ═══════════════════════════════════════════════════════════════════
+
+/** 骨架中单个宫位的数据 */
+export interface SkeletonPalaceEntry {
+  /** 主星（空字符串表示无主星/空宫） */
+  major: string
+  /** 旺弱等级 */
+  brightness: string
+}
+
+/**
+ * 宫位骨架映射表（palace_innate_skeleton.json）
+ *
+ * 键：P01_紫微在子 ~ P12_紫杀在亥
+ * 值：12地支 → { major, brightness }
+ */
+export type PalaceInnateSkeleton = Record<string, Record<string, SkeletonPalaceEntry>>
+
+// ═══════════════════════════════════════════════════════════════════
+
 export interface StarAttribute {
   element: string
   coreTrait: string
@@ -63,24 +85,6 @@ export interface TaiSuiTables {
   wuHuDunGan: Record<string, string[]>
 }
 
-export interface AstroRules {
-  auspiciousStars: string[]
-  inauspiciousStars: string[]
-  subdueLevels: {
-    strong: string[]
-    medium: string[]
-    weak: string[]
-  }
-  flankingDecay: Record<string, Record<string, number>>
-  fixedDecay: {
-    opposite: number
-    trine: number
-  }
-  luCunDelta: Record<string, number>
-  auspiciousScore: number
-  inauspiciousScore: number
-}
-
 export interface BrightnessConfig {
   base: number
   ceiling: number
@@ -113,19 +117,72 @@ export interface ParentPenalty {
   motherDunGanJi: number
 }
 
+/** 格局倍率条目（V3.1：从数字升级为对象） */
+export interface PatternMultiplierEntry {
+  multiplier: number
+  scope: string
+}
+
+/** 夹宫有效组合 */
+export interface JiagongValidPair {
+  name: string
+  left: string
+  right: string
+  type: string
+}
+
+/** 四化来源条目 */
+export interface SihuaSourceEntry {
+  name: string
+  weight: number
+  note: string
+  mustCalculate: boolean
+  conditional?: string
+}
+
 export interface ScoringParams {
   brightnessMap: Record<string, BrightnessConfig>
+  initialBaseByBrightness: Record<string, number>
+  ceilingByBrightness: Record<string, number>
+  subdueLevel: {
+    strong: string[]
+    medium: string[]
+    weak: string[]
+  }
+  parentSihuaDiscount: number
   jiStarScore: number
   shaStarScore: number
   recordOnlySihua: string[]
   jiStarNames: string[]
   shaStarNames: string[]
-  patternMultiplierMap: Record<string, number>
+  /** V3.1: 值为 { multiplier, scope } 对象 */
+  patternMultiplierMap: Record<string, PatternMultiplierEntry>
+  patternScopeDescription: Record<string, string>
+  dunGanLuBonus: number
+  dunGanJiPenalty: number
+  dunGanDecay: number
   warmCoolThresholds: Record<string, number>
   toneThresholds: Record<string, number>
   criticalThresholds: Record<string, CriticalThreshold>
   absoluteFailRules: Record<string, AbsoluteFailCondition>
   parentPenalty: ParentPenalty
-  dunGanLuBonus: number
-  dunGanLuDecay: number
+  sihuaSourcesPriority: {
+    description: string
+    sources: SihuaSourceEntry[]
+    rule: string
+  }
+  jiagongValidPairs: {
+    description: string
+    pairs: JiagongValidPair[]
+  }
+  jiagongInvalidConditions: {
+    description: string
+    conditions: string[]
+  }
+  jiagongDecayMatrix: Record<string, Record<string, number>>
+  fixedDecay: {
+    opposite: number
+    trine: number
+  }
+  luCunDelta: Record<string, number>
 }

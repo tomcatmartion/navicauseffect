@@ -10,14 +10,12 @@ export {
   getPalaceMeanings,
   getEventStarAttributes,
   getTaiSuiTables,
-  getAstroRules,
   reloadAll,
 } from './loader'
 export {
   getStarAttr,
   getStarTraitByBrightness,
   getPalaceMeaning,
-  getEventStarTrait,
   isAuspicious,
   isInauspicious,
   getAuspiciousScore,

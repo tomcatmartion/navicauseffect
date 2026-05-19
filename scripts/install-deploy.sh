@@ -288,70 +288,15 @@ do_logs() {
   tail -50 /tmp/navicause-server.log
 }
 
-# ─── 舆情报告定时任务设置 ─────────────────────────────────────────────
-# 每天凌晨 2:00 自动生成昨日舆情报告并写入数据库
-# 触发方式：curl 调用内部 API，配合系统 cron 或腾讯云定时触发器
-do_cron_setup() {
-  info "设置舆情报告定时任务..."
-
-  # 检查是否已有 CRON_SECRET
-  if grep -q "^CRON_SECRET=" .env 2>/dev/null; then
-    local existing_secret
-    existing_secret=$(grep "^CRON_SECRET=" .env | cut -d= -f2 | tr -d '"')
-    info "CRON_SECRET 已存在: ${existing_secret}"
+# ─── 清理已下线的舆情定时任务（兼容旧部署）──────────────────────────
+do_cron_cleanup() {
+  info "舆情功能已移除，清理旧 crontab 中的 sentiment-report 条目..."
+  if crontab -l 2>/dev/null | grep -q "sentiment-report"; then
+    (crontab -l 2>/dev/null | grep -v "sentiment-report") | crontab -
+    log "已从系统 crontab 移除 sentiment-report"
   else
-    local new_secret
-    new_secret="navicause-cron-$(date +%s)"
-    echo "CRON_SECRET=${new_secret}" >> .env
-    info "已生成 CRON_SECRET: ${new_secret}"
+    info "未发现 sentiment-report 定时任务，无需清理"
   fi
-
-  local cron_secret
-  cron_secret=$(grep "^CRON_SECRET=" .env | cut -d= -f2 | tr -d '"')
-
-  # 获取服务器 IP
-  local server_ip
-  server_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
-
-  # 检测是否使用 Docker 部署
-  if command -v docker &>/dev/null && docker ps 2>/dev/null | grep -q navicause; then
-    info "检测到 Docker 部署，使用容器内 curl..."
-    # Docker 部署：通过 docker exec 调用
-    local curl_cmd="docker exec navicause_app sh -c"
-    local base_url="http://localhost:${PORT:-3000}"
-    ${curl_cmd} "curl -s -X POST -H 'Content-Type: application/json' -H 'X-Cron-Secret: ${cron_secret}' ${base_url}/api/cron/sentiment-report" &
-    info "Docker cron 触发命令已配置（需在宿主机设置系统 cron）"
-  else
-    # 非 Docker 部署：直接使用 curl
-    local full_url="http://${server_ip}:${PORT:-3000}/api/cron/sentiment-report"
-    info "舆情报告 API URL: ${full_url}"
-    info "触发命令: curl -X POST -H 'X-Cron-Secret: ${cron_secret}' ${full_url}"
-    info ""
-    info "腾讯云定时触发器配置示例："
-    echo "  触发方式: HTTP 请求"
-    echo "  URL: ${full_url}"
-    echo "  方法: POST"
-    echo "  头部: X-Cron-Secret: ${cron_secret}"
-    echo "  定时: cron(0 0 2 * * *)  每天凌晨 2:00"
-  fi
-
-  # 写入系统 crontab（备用方案）
-  local cron_entry="0 2 * * * curl -s -X POST -H 'X-Cron-Secret: ${cron_secret}' http://localhost:${PORT:-3000}/api/cron/sentiment-report >> /tmp/sentiment-cron.log 2>&1"
-  (crontab -l 2>/dev/null | grep -v "sentiment-report"; echo "$cron_entry") | crontab -
-  info "系统 crontab 已更新（每天凌晨 2:00）"
-  log "舆情定时任务设置完成"
-}
-
-do_cron_test() {
-  info "测试舆情报告 API..."
-  source .env 2>/dev/null || true
-  local cron_secret="${CRON_SECRET:-navicauseffect-cron-secret}"
-  local server_ip
-  server_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
-  local full_url="http://${server_ip}:${PORT:-3000}/api/cron/sentiment-report"
-  curl -s -X POST \
-    -H "X-Cron-Secret: ${cron_secret}" \
-    "${full_url}" | head -5
 }
 
 # ─── 完整安装流程 ───
@@ -387,8 +332,6 @@ do_install_all() {
   echo -e "  常用命令:  ${CYAN}./scripts/install-deploy.sh logs${NC}"
   echo -e "  停止服务:  ${CYAN}./scripts/install-deploy.sh stop${NC}"
   echo -e "  重启服务:  ${CYAN}./scripts/install-deploy.sh restart${NC}"
-  echo -e "  舆情定时:  ${CYAN}./scripts/install-deploy.sh cron${NC}"
-  echo -e "  测试舆情:  ${CYAN}./scripts/install-deploy.sh cron-test${NC}"
   echo ""
 }
 
@@ -401,10 +344,9 @@ case "${1:-install}" in
   logs)       do_logs ;;
   dbinit)     do_db_init ;;
   build)      do_build ;;
-  cron)       do_cron_setup ;;
-  cron-test)  do_cron_test ;;
+  cron|cron-test) do_cron_cleanup ;;
   *)
-    echo "用法: $0 [install|start|stop|restart|logs|dbinit|build|cron|cron-test]"
+    echo "用法: $0 [install|start|stop|restart|logs|dbinit|build|cron]"
     echo ""
     echo "  install  完整安装并启动（默认）"
     echo "  start   仅启动服务"
@@ -413,8 +355,7 @@ case "${1:-install}" in
     echo "  logs    查看实时日志"
     echo "  dbinit  仅初始化数据库"
     echo "  build   仅重新构建"
-    echo "  cron    设置舆情定时任务"
-    echo "  cron-test 测试舆情报告 API"
+    echo "  cron    清理已下线的舆情定时任务（兼容旧部署）"
     exit 1
     ;;
 esac

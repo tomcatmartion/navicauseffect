@@ -11,9 +11,9 @@ import type {
   StarAttribute,
   PalaceMeaning,
   TaiSuiTables,
-  AstroRules,
   EventStarAttributes,
   ScoringParams,
+  PalaceInnateSkeleton,
 } from './types'
 
 // ═══════════════════════════════════════════════════════════════════
@@ -26,12 +26,12 @@ const STAR_ATTR_PATH = path.join(DATA_DIR, 'star_attributes.json')
 const PALACE_MEANING_PATH = path.join(DATA_DIR, 'palace_meanings.json')
 const EVENT_STAR_ATTR_PATH = path.join(DATA_DIR, 'event_star_attributes.json')
 const TAI_SUI_TABLES_PATH = path.join(DATA_DIR, 'tai_sui_rua_gua_tables.json')
-const ASTRO_RULES_PATH = path.join(DATA_DIR, 'astro_rules.json')
 const SCORING_PARAMS_PATH = path.join(DATA_DIR, 'scoring_params.json')
 const ROUTER_TREE_PATH = path.join(DATA_DIR, 'router_tree.json')
 const PATTERNS_PATH = path.join(DATA_DIR, 'patterns.json')
 const INTERACTION_QU_XIANG_PATH = path.join(DATA_DIR, 'interaction_qu_xiang.json')
 const LIMIT_DIRECTION_PATH = path.join(DATA_DIR, 'limit_direction.json')
+const PALACE_SKELETON_PATH = path.join(DATA_DIR, 'palace_innate_skeleton.json')
 
 // ═══════════════════════════════════════════════════════════════════
 // 缓存与修改时间追踪
@@ -46,12 +46,12 @@ const starAttrCache: CacheEntry<Record<string, StarAttribute>> = { data: null, m
 const palaceMeaningCache: CacheEntry<Record<string, PalaceMeaning>> = { data: null, mtime: 0 }
 const eventStarAttrCache: CacheEntry<EventStarAttributes> = { data: null, mtime: 0 }
 const taiSuiTablesCache: CacheEntry<TaiSuiTables> = { data: null, mtime: 0 }
-const astroRulesCache: CacheEntry<AstroRules> = { data: null, mtime: 0 }
 const scoringParamsCache: CacheEntry<ScoringParams> = { data: null, mtime: 0 }
 const routerTreeCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const patternsCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const interactionQuXiangCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const limitDirectionCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
+const palaceSkeletonCache: CacheEntry<PalaceInnateSkeleton> = { data: null, mtime: 0 }
 
 // ═══════════════════════════════════════════════════════════════════
 // 核心加载函数
@@ -100,12 +100,7 @@ export function getEventStarAttributes(): EventStarAttributes {
   return loadJsonFile(EVENT_STAR_ATTR_PATH, eventStarAttrCache)
 }
 
-/** 获取天文规则数据（自动热加载） */
-export function getAstroRules(): AstroRules {
-  return loadJsonFile(ASTRO_RULES_PATH, astroRulesCache)
-}
-
-/** 获取评分参数数据（自动热加载） */
+/** 获取评分参数数据（自动热加载） — 唯一评分配置源 */
 export function getScoringParams(): ScoringParams {
   return loadJsonFile(SCORING_PARAMS_PATH, scoringParamsCache)
 }
@@ -130,26 +125,31 @@ export function getLimitDirection(): Record<string, unknown> {
   return loadJsonFile(LIMIT_DIRECTION_PATH, limitDirectionCache)
 }
 
+/** 获取宫位骨架映射表（自动热加载） */
+export function getPalaceInnateSkeleton(): PalaceInnateSkeleton {
+  return loadJsonFile(PALACE_SKELETON_PATH, palaceSkeletonCache)
+}
+
 /** 手动重新加载所有知识库 */
 export function reloadAll() {
   starAttrCache.mtime = 0
   palaceMeaningCache.mtime = 0
   eventStarAttrCache.mtime = 0
   taiSuiTablesCache.mtime = 0
-  astroRulesCache.mtime = 0
   scoringParamsCache.mtime = 0
   routerTreeCache.mtime = 0
   patternsCache.mtime = 0
   interactionQuXiangCache.mtime = 0
   limitDirectionCache.mtime = 0
+  palaceSkeletonCache.mtime = 0
   getStarAttributes()
   getPalaceMeanings()
   getEventStarAttributes()
   getTaiSuiTables()
-  getAstroRules()
   getScoringParams()
   getRouterTree()
   getPatternConfig()
   getInteractionQuXiang()
   getLimitDirection()
+  getPalaceInnateSkeleton()
 }

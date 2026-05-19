@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack -p 3333",
-    "build": "next build --webpack && bash scripts/postbuild-copy-zvec-bindings.sh",
+    "build": "next build --webpack",
     "start": "next start",
     "prod": "npm run build && npm run start",
     "lint": "eslint",
@@ -25,13 +25,9 @@
     "browser:dual-chat": "npx tsx --tsconfig tsconfig.json scripts/browser-dual-chat-preset.ts",
     "test:embedding-config": "npx tsx scripts/test-embedding-config-persist.ts",
     "test:embedding-pipeline": "npx tsx scripts/test-embedding-pipeline.ts",
-    "test:rag-categories": "npx tsx scripts/test-rag-all-categories.ts",
     "logicdoc:index-zvec": "node scripts/logicdoc-index-zvec.cjs 2>/dev/null || npx tsx scripts/logicdoc-index-zvec.ts",
     "sysknowledge:index-zvec": "node scripts/logicdoc-index-zvec.cjs 2>/dev/null || npx tsx scripts/logicdoc-index-zvec.ts",
-    "ziwei:index": "node scripts/index-ziwei-knowledge.cjs 2>/dev/null || npx tsx scripts/index-ziwei-knowledge.ts",
     "release": "bash scripts/build-release.sh",
-    "ziwei:wash": "npx tsx scripts/wash-knowledge.ts",
-    "ziwei:check": "npx tsx scripts/check-knowledge-coverage.ts",
     "test": "vitest run",
     "ziwei:hybrid-json": "npx tsx scripts/sysalldoc-to-hybrid-json.ts"
   },

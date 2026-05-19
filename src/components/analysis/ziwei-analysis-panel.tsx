@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 
 type AnalysisType =
   | "palace"
@@ -87,9 +87,97 @@ interface PipelineSnapshot {
     effect: string;
     source: string;
     description: string;
+    level?: string;
+    /** 调试：格局判定详情 */
+    debug?: {
+      requiredStars: string[];
+      starPalaces: Record<string, string>;
+      judgmentBasis: string;
+      multiplierSource: string;
+      multiplierValue: number;
+      triggerCondition: string;
+    };
   }>;
   dslPatternHits: Array<{ id: string; name: string }>;
-  allPalaces: Record<string, { palace: string; diZhi: string; level: string; finalScore: number }>;
+  allPalaces: Record<string, {
+    palace: string;
+    diZhi: string;
+    level: string;
+    finalScore: number;
+    /** 调试：宫位计算详情 */
+    debug?: {
+      skeletonScore: number;
+      skeletonSource: string;
+      ceiling: number;
+      bonusTotal: number;
+      bonusBreakdown: Array<{ source: string; value: number; detail: string }>;
+      penaltyTotal: number;
+      penaltyBreakdown: Array<{ source: string; value: number; detail: string }>;
+      luCunDelta: number;
+      patternMultiplier: number;
+      patternMultiplierSource: string;
+      isAbsoluteFail: boolean;
+      criticalStatus: string;
+      subdueLevel: string;
+      majorStars: Array<{ star: string; brightness: string }>;
+      allStars: Array<{ name: string; sihua?: string; sihuaSource?: string }>;
+      formula: string;
+      relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>;
+      /** 六步评分流程（基于 scoring_formula.json v2.3） */
+      sixSteps?: {
+        step0_emptyBorrow?: {
+          isEmpty: boolean;
+          borrowedFrom?: string;
+          borrowDepth?: number;
+          borrowFactor?: number;
+        };
+        step1_skeleton: {
+          baseScore: number;
+          ceiling: number;
+          brightness: string;
+        };
+        step2_bonus: {
+          scoreAfterBonus: number;
+          details: {
+            '2.1_三方四正吉星': number;
+            '2.2_命主生年化禄': number;
+            '2.3_命主遁干化禄': number;
+            '2.4_父亲生年化禄': number;
+            '2.5_父亲遁干化禄': number;
+            '2.6_母亲生年化禄': number;
+            '2.7_母亲遁干化禄': number;
+            '2.8_吉格倍率': number;
+          };
+        };
+        step3_warmCool: {
+          label: string;
+        };
+        step4_penalty: {
+          scoreAfterPenalty: number;
+          details: {
+            '4.1_三方四正煞星': number;
+            '4.2_命主生年化忌': number;
+            '4.3_命主遁干化忌': number;
+            '4.4_父亲生年化忌': number;
+            '4.5_父亲遁干化忌': number;
+            '4.6_母亲生年化忌': number;
+            '4.7_母亲遁干化忌': number;
+            '4.8_凶格倍率': number;
+          };
+          intensityFactor: number;
+        };
+        step5_luCun: {
+          scoreAfterLuCun: number;
+          delta: number;
+        };
+        step6_ceiling: {
+          finalScore: number;
+          isAbsoluteFail: boolean;
+          specialFlags: string[];
+        };
+      };
+    };
+  }>;
   personality: {
     overview: string;
     traits: { surface: string[]; core: string[] };
@@ -193,6 +281,12 @@ const EFFECT_LABELS: Record<string, string> = {
   mixed: "吉凶参半",
 };
 
+/** 调试展开状态管理 */
+interface DebugExpandedState {
+  patterns: Record<string, boolean>;
+  palaces: Record<string, boolean>;
+}
+
 export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAnalysisPanelProps) {
   const [activeType, setActiveType] = useState<AnalysisType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -203,6 +297,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
   const [affairInput, setAffairInput] = useState("投资赚钱");
   const [targetYear, setTargetYear] = useState(() => new Date().getFullYear());
   const [partnerDebugYear, setPartnerDebugYear] = useState("");
+  const [debugExpanded, setDebugExpanded] = useState<DebugExpandedState>({
+    patterns: {},
+    palaces: {},
+  });
 
   const usePipeline = Boolean(chartData?.palaces);
 
@@ -368,7 +466,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
     }
   };
 
-  const displayResult: unknown = pipelineSnapshot || legacyResult;
+  const displayResult = Boolean(pipelineSnapshot || legacyResult);
 
   const legacyPatterns = (): PatternListItem[] =>
     Array.isArray(legacyResult) ? (legacyResult as PatternListItem[]) : [];
@@ -385,8 +483,8 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
       ? (legacyResult as AffairVm)
       : {}) as AffairVm;
 
-  // ─── 格局识别：紧凑列表 ───
-  const renderPatterns = (patterns: PatternListItem[], dslHits?: Array<{ id: string; name: string }>) => {
+  // ─── 格局识别：紧凑列表（含调试详情） ───
+  const renderPatterns = (patterns: PatternListItem[], dslHits?: Array<{ id: string; name: string }>, fromPipeline?: boolean) => {
     if (!patterns || patterns.length === 0) {
       return <p className="py-2 text-sm text-muted-foreground">未识别到特殊格局</p>;
     }
@@ -401,6 +499,13 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
       {} as Record<string, PatternListItem[]>,
     );
 
+    const togglePatternDebug = (name: string) => {
+      setDebugExpanded(prev => ({
+        ...prev,
+        patterns: { ...prev.patterns, [name]: !prev.patterns[name] },
+      }));
+    };
+
     return (
       <div className="space-y-3">
         {dslHits && dslHits.length > 0 && (
@@ -414,21 +519,73 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
             <div className="space-y-1">
               {items.map((p, i: number) => {
                 const effect = p.effect;
+                const isExpanded = debugExpanded.patterns[p.name];
+                // 从 pipeline snapshot 获取原始数据以读取 debug 字段
+                const rawPattern = fromPipeline
+                  ? pipelineSnapshot?.patterns.find(pp => pp.name === p.name)
+                  : null;
+                const debug = rawPattern?.debug;
+
                 return (
-                  <div key={i} className="flex items-center gap-2 rounded py-1.5 pl-2 pr-1 text-sm border-l-[3px] border-l-current"
+                  <div key={i} className="rounded border-l-[3px] border-l-current overflow-hidden"
                     style={{ borderLeftColor: effect === "positive" ? "#10b981" : effect === "negative" ? "#f43f5e" : "#f59e0b" }}
                   >
-                    <span className="shrink-0 font-medium">{p.name}</span>
-                    <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">
-                      {p.source === "natal" ? "原局" : p.source === "decennial" ? "大限" : p.source === "annual" ? "流年" : p.source}
-                    </Badge>
-                    <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">
-                      {EFFECT_LABELS[effect] || effect}
-                    </Badge>
-                    {p.description && (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {p.description}
-                      </span>
+                    <div className="flex items-center gap-2 py-1.5 pl-2 pr-1 text-sm cursor-pointer hover:bg-muted/30"
+                      onClick={() => fromPipeline && togglePatternDebug(p.name)}
+                    >
+                      <span className="shrink-0 font-medium">{p.name}</span>
+                      <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">
+                        {p.source === "natal" ? "原局" : p.source === "decennial" ? "大限" : p.source === "annual" ? "流年" : p.source}
+                      </Badge>
+                      <Badge variant="outline" className="shrink-0 text-[10px] px-1 py-0">
+                        {EFFECT_LABELS[effect] || effect}
+                      </Badge>
+                      {p.description && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {p.description}
+                        </span>
+                      )}
+                      {fromPipeline && (
+                        <span className="ml-auto shrink-0">
+                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 调试详情展开区 */}
+                    {fromPipeline && isExpanded && debug && (
+                      <div className="px-2 pb-2 pt-1 bg-muted/20 text-[11px] space-y-1.5 border-t border-dashed border-primary/10">
+                        {/* 星曜组合与宫位 */}
+                        <div>
+                          <span className="font-medium text-primary/80">成格星曜：</span>
+                          <span className="text-muted-foreground">
+                            {debug.requiredStars.join('、')}
+                          </span>
+                        </div>
+                        {Object.keys(debug.starPalaces).length > 0 && (
+                          <div>
+                            <span className="font-medium text-primary/80">星曜落宫：</span>
+                            <span className="text-muted-foreground">
+                              {Object.entries(debug.starPalaces).map(([star, zhi]) => `${star}在${zhi}宫`).join('；')}
+                            </span>
+                          </div>
+                        )}
+                        {/* 吉凶依据 */}
+                        <div>
+                          <span className="font-medium text-primary/80">吉凶依据：</span>
+                          <span className="text-muted-foreground">{debug.judgmentBasis}</span>
+                        </div>
+                        {/* 倍率来源 */}
+                        <div>
+                          <span className="font-medium text-primary/80">倍率来源：</span>
+                          <span className="text-muted-foreground">{debug.multiplierSource}</span>
+                        </div>
+                        {/* 引动条件 */}
+                        <div>
+                          <span className="font-medium text-primary/80">引动条件：</span>
+                          <span className="text-muted-foreground">{debug.triggerCondition}</span>
+                        </div>
+                      </div>
                     )}
                   </div>
                 );
@@ -440,33 +597,248 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
     );
   };
 
-  // ─── 宫位能级：紧凑网格 ───
-  const renderPalaces = (assessments: Record<string, PalaceCell>) => {
+  // ─── 宫位能级：紧凑网格（含点击展开调试详情） ───
+  const renderPalaces = (assessments: Record<string, PalaceCell>, fromPipeline?: boolean) => {
     const entries = Object.entries(assessments);
+
+    const togglePalaceDebug = (diZhi: string) => {
+      setDebugExpanded(prev => ({
+        ...prev,
+        palaces: { ...prev.palaces, [diZhi]: !prev.palaces[diZhi] },
+      }));
+    };
+
     return (
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-primary/10 bg-primary/5">
         {entries.map(([branch, data]) => {
           const score = data.finalScore;
+          const isExpanded = debugExpanded.palaces[branch];
+          // 从 pipeline snapshot 获取原始数据以读取 debug 字段
+          const rawPalace = fromPipeline
+            ? pipelineSnapshot?.allPalaces[branch]
+            : null;
+          const debug = rawPalace?.debug;
+
           return (
             <div
               key={branch}
-              className="flex items-center justify-between bg-card px-2.5 py-2"
+              className={`bg-card px-2.5 py-2 ${fromPipeline ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+              onClick={() => fromPipeline && togglePalaceDebug(branch)}
             >
-              <div className="min-w-0">
-                <span className="text-sm font-medium">{data.palace}</span>
-                <span className="ml-1 text-xs text-muted-foreground">{branch}</span>
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{data.palace}</span>
+                  <span className="ml-1 text-xs text-muted-foreground">{branch}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">{data.level}</span>
+                  <Badge
+                    variant={score >= 6 ? "default" : "secondary"}
+                    className={`text-[10px] px-1.5 py-0 ${
+                      score >= 8 ? "bg-emerald-600" : score >= 6 ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    {score.toFixed(1)}
+                  </Badge>
+                  {fromPipeline && (
+                    <span className="shrink-0">
+                      {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">{data.level}</span>
-                <Badge
-                  variant={score >= 6 ? "default" : "secondary"}
-                  className={`text-[10px] px-1.5 py-0 ${
-                    score >= 8 ? "bg-emerald-600" : score >= 6 ? "bg-blue-600" : ""
-                  }`}
-                >
-                  {score.toFixed(1)}
-                </Badge>
-              </div>
+
+              {/* 调试详情展开区 */}
+              {fromPipeline && isExpanded && debug && (
+                <div className="mt-2 pt-2 border-t border-dashed border-primary/10 text-[11px] space-y-1.5">
+                  {/* 六步评分流程（基于 scoring_formula.json v1.3） */}
+                  {debug.sixSteps && (
+                    <div className="space-y-1">
+                      <div className="font-medium text-primary/80 text-[10px] mb-1">六步评分流程</div>
+
+                      {/* 步骤0：空宫借对宫 */}
+                      {debug.sixSteps.step0_emptyBorrow?.isEmpty && (
+                        <div className="bg-orange-50/50 dark:bg-orange-950/10 rounded p-1">
+                          <span className="font-medium text-orange-700">步骤0 空宫借对宫：</span>
+                          <span className="text-muted-foreground">借{debug.sixSteps.step0_emptyBorrow.borrowedFrom} × {debug.sixSteps.step0_emptyBorrow.borrowFactor}</span>
+                        </div>
+                      )}
+
+                      {/* 步骤1：初始基础分 */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-primary/70">步骤1 骨架基础分：</span>
+                        <span>{debug.sixSteps.step1_skeleton.baseScore.toFixed(1)}（天花板 {debug.sixSteps.step1_skeleton.ceiling.toFixed(1)}）</span>
+                      </div>
+
+                      {/* 步骤2：加分阶段 */}
+                      <div className="bg-green-50/30 dark:bg-green-950/10 rounded p-1">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <span className="font-medium text-green-700">步骤2 加分阶段</span>
+                          <span>加分后：{debug.sixSteps.step2_bonus.scoreAfterBonus.toFixed(2)}</span>
+                        </div>
+                        <div className="space-y-0.5 pl-2">
+                          <div className="flex justify-between"><span>2.1 三方四正吉星：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.1_三方四正吉星'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.2 命主生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.2_命主生年化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.3 命主遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.3_命主遁干化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.4 父亲生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.4_父亲生年化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.5 父亲遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.5_父亲遁干化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.6 母亲生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.6_母亲生年化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.7 母亲遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.7_母亲遁干化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.8 吉格倍率：</span><span className="text-green-600">×{debug.sixSteps.step2_bonus.details['2.8_吉格倍率'].toFixed(1)}</span></div>
+                        </div>
+                      </div>
+
+                      {/* 步骤3：重新定性 */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-primary/70">步骤3 旺弱定性：</span>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0">{debug.sixSteps.step3_warmCool.label}</Badge>
+                      </div>
+
+                      {/* 步骤4：减分阶段 */}
+                      <div className="bg-red-50/30 dark:bg-red-950/10 rounded p-1">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <span className="font-medium text-red-700">步骤4 减分阶段</span>
+                          <span>减分后：{debug.sixSteps.step4_penalty.scoreAfterPenalty.toFixed(2)}</span>
+                        </div>
+                        <div className="space-y-0.5 pl-2">
+                          <div className="flex justify-between"><span>4.1 三方四正煞星：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.1_三方四正煞星'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.2 命主生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.2_命主生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.3 命主遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.3_命主遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.4 父亲生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.4_父亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.5 父亲遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.5_父亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.6 母亲生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.6_母亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.7 母亲遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.7_母亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.8 凶格倍率：</span><span className="text-red-600">×{debug.sixSteps.step4_penalty.details['4.8_凶格倍率'].toFixed(1)}</span></div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground"><span>intensity_factor：</span><span>{debug.sixSteps.step4_penalty.intensityFactor}</span></div>
+                        </div>
+                      </div>
+
+                      {/* 步骤5：禄存调整 */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-primary/70">步骤5 禄存调整：</span>
+                        <span>{debug.sixSteps.step5_luCun.delta >= 0 ? '+' : ''}{debug.sixSteps.step5_luCun.delta.toFixed(1)} → {debug.sixSteps.step5_luCun.scoreAfterLuCun.toFixed(2)}</span>
+                      </div>
+
+                      {/* 步骤6：天花板截断 */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-primary/70">步骤6 天花板截断：</span>
+                        <span>{debug.sixSteps.step6_ceiling.finalScore.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 原有调试信息保留 */}
+                  <div className="border-t border-dashed border-primary/10 pt-1.5">
+                    {/* 计算公式 */}
+                    <div className="bg-muted/30 rounded p-1.5 font-mono text-[10px] text-muted-foreground">
+                      {debug.formula}
+                    </div>
+
+                    {/* 骨架分来源 */}
+                    <div className="bg-blue-50/50 dark:bg-blue-950/10 rounded p-1.5">
+                      <span className="font-medium text-primary/80">骨架分来源：</span>
+                      <span className="text-muted-foreground">{debug.skeletonSource}</span>
+                    </div>
+
+                    {/* 计算参数 */}
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <div><span className="text-primary/70">骨架分：</span>{debug.skeletonScore.toFixed(1)}</div>
+                      <div><span className="text-primary/70">天花板：</span>{debug.ceiling.toFixed(1)}</div>
+                      <div><span className="text-primary/70">加分：</span>{debug.bonusTotal.toFixed(2)}</div>
+                      <div><span className="text-primary/70">减分：</span>{debug.penaltyTotal.toFixed(2)}</div>
+                      <div><span className="text-primary/70">禄存：</span>{debug.luCunDelta.toFixed(1)}</div>
+                      <div><span className="text-primary/70">格局倍率：</span>{debug.patternMultiplier.toFixed(1)}</div>
+                    </div>
+
+                    {/* 加分明细 */}
+                    {debug.bonusBreakdown.length > 0 && (
+                      <div>
+                        <span className="font-medium text-primary/80">加分明细（SKILL_V3.0 第二步）：</span>
+                        <div className="mt-0.5 space-y-0.5">
+                          {debug.bonusBreakdown.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px]">
+                              <span className="text-muted-foreground">{item.source}：{item.detail}</span>
+                              <span className="text-green-600 font-medium">+{item.value.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 减分明细 */}
+                    {debug.penaltyBreakdown.length > 0 && (
+                      <div>
+                        <span className="font-medium text-primary/80">减分明细（SKILL_V3.0 第四步）：</span>
+                        <div className="mt-0.5 space-y-0.5">
+                          {debug.penaltyBreakdown.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px]">
+                              <span className="text-muted-foreground">{item.source}：{item.detail}</span>
+                              <span className="text-red-600 font-medium">{item.value.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 格局倍率来源 */}
+                    <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded p-1.5">
+                      <span className="font-medium text-primary/80">格局倍率来源（SKILL_V3.0 第二步⑦）：</span>
+                      <span className="text-muted-foreground">{debug.patternMultiplierSource}</span>
+                    </div>
+
+                    {/* 状态标记 */}
+                    <div className="flex flex-wrap gap-1">
+                      {debug.isAbsoluteFail && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-red-300 text-red-600">绝败</Badge>
+                      )}
+                      {debug.criticalStatus !== '无临界' && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-amber-600">{debug.criticalStatus}</Badge>
+                      )}
+                      <Badge variant="outline" className="text-[9px] px-1 py-0">制煞：{debug.subdueLevel}</Badge>
+                    </div>
+
+                    {/* 主星列表 */}
+                    <div>
+                      <span className="font-medium text-primary/80">主星：</span>
+                      <span className="text-muted-foreground">
+                        {debug.majorStars.map(ms => `${ms.star}(${ms.brightness})`).join('、')}
+                      </span>
+                    </div>
+
+                    {/* 所有星曜（含四化） */}
+                    {debug.allStars.length > 0 && (
+                      <div>
+                        <span className="font-medium text-primary/80">星曜清单：</span>
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {debug.allStars.map((s, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-[9px] px-1 py-0">
+                              {s.name}
+                              {s.sihua && (
+                                <span className={
+                                  s.sihua === '化禄' ? 'text-green-600' :
+                                  s.sihua === '化权' ? 'text-blue-600' :
+                                  s.sihua === '化科' ? 'text-purple-600' :
+                                  'text-red-600'
+                                }>·{s.sihua}</span>
+                              )}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 相关宫位 */}
+                    {debug.relatedPalaces.length > 0 && (
+                      <div>
+                        <span className="font-medium text-primary/80">参与宫位：</span>
+                        <span className="text-muted-foreground">
+                          {debug.relatedPalaces.map(rp => `${rp.palace}${rp.diZhi}(${rp.role})`).join('、')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -984,7 +1356,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
       )}
 
       {/* 结果：格局 / 宫位 / 性格 / 各调试子项 共用卡片；事项单独卡片 */}
-      {!!displayResult && !loading && activeType !== "affair" && (
+      {displayResult && !loading && activeType !== "affair" && (
         <div className="rounded-lg border border-primary/10 bg-card p-3">
           {pipelineSnapshot && activeType && !isDebugTab(activeType) && (
             <Badge variant="outline" className="mb-2 text-[10px]">
@@ -993,10 +1365,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
           )}
           {activeType === "patterns" &&
             (pipelineSnapshot
-              ? renderPatterns(pipelineSnapshot.patterns, pipelineSnapshot.dslPatternHits)
+              ? renderPatterns(pipelineSnapshot.patterns, pipelineSnapshot.dslPatternHits, true)
               : renderPatterns(legacyPatterns()))}
           {activeType === "all-palaces" &&
-            (pipelineSnapshot ? renderPalaces(pipelineSnapshot.allPalaces) : renderPalaces(legacyPalaces()))}
+            (pipelineSnapshot ? renderPalaces(pipelineSnapshot.allPalaces, true) : renderPalaces(legacyPalaces()))}
           {activeType === "personality" &&
             (pipelineSnapshot
               ? renderPersonality(pipelineSnapshot.personality)

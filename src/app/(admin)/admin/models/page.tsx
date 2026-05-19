@@ -21,7 +21,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { getEmbeddingFamilyForProvider } from "@/lib/zvec/embedding-family";
 
 interface ModelConfig {
   id: string;
@@ -234,10 +233,6 @@ export default function ModelsPage() {
       ? "MiniMax：在 https://platform.minimaxi.com/ 创建 API Key。OpenAI 兼容 Base URL 一般为 https://api.minimaxi.com/v1（勿尾斜杠）；模型名如 MiniMax-M2、MiniMax-M2.5 等以控制台为准。"
       : null;
 
-  const ragFamily = form.provider
-    ? getEmbeddingFamilyForProvider(form.provider)
-    : null;
-
   return (
     <div className="space-y-6">
       <p className="max-w-3xl text-sm text-muted-foreground">
@@ -285,13 +280,6 @@ export default function ModelsPage() {
               {providerHint && (
                 <p className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
                   {providerHint}
-                </p>
-              )}
-              {ragFamily && (
-                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  解盘知识库 RAG：当前厂商对应{" "}
-                  <strong className="text-foreground">{ragFamily} 维</strong>{" "}
-                  向量索引与 Embedding；请在「Embedding」页配置同维度模型并完成索引。
                 </p>
               )}
               <div className="space-y-2">

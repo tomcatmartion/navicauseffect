@@ -6,16 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Bug, MessageCircle, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PipelineDebugInfo } from "@/lib/ziwei/rag/types";
-import { SkillDebugInfo } from "@/lib/ziwei/rag/pipeline";
-import type { HybridDebugInfo } from "@/lib/ziwei/rag/pipeline.hybrid";
+import type { HybridDebugInfo } from "@/orchestration/hybrid";
 import { HybridDebugPanel } from "./hybrid-debug-panel";
 import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  debugInfo?: PipelineDebugInfo | SkillDebugInfo | HybridDebugInfo;
+  debugInfo?: HybridDebugInfo;
 }
 
 interface DualChatPanelProps {
@@ -53,7 +51,7 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
   const [streamContent, setStreamContent] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [activeDebug, setActiveDebug] = useState<PipelineDebugInfo | SkillDebugInfo | HybridDebugInfo | null>(null);
+  const [activeDebug, setActiveDebug] = useState<HybridDebugInfo | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -96,7 +94,7 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
 
     const chartPayload = astrolabeData ? serializeAstrolabe(astrolabeData, birthData) : null;
 
-    const body: Record<string, unknown> = { question: text, stream: true, architecture: "hybrid" };
+    const body: Record<string, unknown> = { question: text, stream: true };
     if (sessionId) {
       body.sessionId = sessionId;
     } else if (chartPayload) {

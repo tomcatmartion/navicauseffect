@@ -110,7 +110,6 @@ async function smokeHybridReadingStream(cookie: string): Promise<void> {
       body: JSON.stringify({
         question: "我的事业运如何？",
         stream: true,
-        architecture: "hybrid",
         chartData: CHART_FIXTURE as Record<string, unknown>,
       }),
       dispatcher: readingAgent,

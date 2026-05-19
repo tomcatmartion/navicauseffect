@@ -92,11 +92,11 @@ function buildChartAccessor(ctx: ScoringContext): ChartAccessor {
       return [(idx + 4) % 12, (idx + 8) % 12]
     },
     getFlankingIndices(idx: number): [number, number] {
-      return [(idx - 1 + 12) % 12, (idx + 1) % 12]
+      return [(idx + 1) % 12, (idx - 1 + 12) % 12]
     },
     hasFlanking(idx: number) {
-      const left = palaces[(idx - 1 + 12) % 12]
-      const right = palaces[(idx + 1) % 12]
+      const left = palaces[(idx + 1) % 12]
+      const right = palaces[(idx - 1 + 12) % 12]
       return (left?.stars.length ?? 0) > 0 && (right?.stars.length ?? 0) > 0
     },
     countAuspiciousInPalaces(indices: number[]) {

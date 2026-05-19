@@ -1,0 +1,5 @@
+{
+  "version": "1.0",
+  "branches": { ... },   // 原内容完全保留
+  "intentDetection": [ ... ]
+}

@@ -56,8 +56,6 @@ function preloadHeavyDeps() {
   import("iztro");
   // react-iztro 命盘 UI（2.6MB 压缩后 ~595KB）
   import("react-iztro");
-  // AI 分析面板（1.4MB 压缩后 ~356KB）
-  import("@/components/analysis/analysis-panel");
   // 规则分析面板
   import("@/components/analysis/ziwei-analysis-panel");
   // AI 对话面板

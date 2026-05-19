@@ -8,18 +8,11 @@ import { cn } from "@/lib/utils";
 const adminNavItems = [
   { label: "概览", href: "/admin", icon: "📊" },
   { label: "AI 模型", href: "/admin/models", icon: "🤖" },
-  { label: "Embedding", href: "/admin/embedding", icon: "🧬" },
-  { label: "知识库", href: "/admin/knowledge-base", icon: "📚" },
-  { label: "标签管理", href: "/admin/tags", icon: "🏷" },
-  { label: "RAG 测试", href: "/admin/rag-test", icon: "🔍" },
-  { label: "Prompt 配置", href: "/admin/prompts", icon: "📝" },
-  { label: "收费模块", href: "/admin/modules", icon: "📋" },
   { label: "用户管理", href: "/admin/users", icon: "👥" },
   { label: "价格管理", href: "/admin/pricing", icon: "💰" },
   { label: "短信网关", href: "/admin/sms", icon: "📱" },
   { label: "支付配置", href: "/admin/payment", icon: "💳" },
   { label: "数据统计", href: "/admin/stats", icon: "📈" },
-  { label: "舆情统计", href: "/admin/sentiment", icon: "🔎" },
 ];
 
 export default function AdminLayout({

@@ -1,0 +1,176 @@
+{
+  "version": "1.0",
+  "description": "星曜系统配置 - 包含星曜赋性、评分行为、制煞等级、特殊标记",
+  "stars": {
+    "紫微": {
+      "赋性": {
+        "element": "阴土",
+        "coreTrait": "至尊帝座，司官贵爵禄，主事业与地位",
+        "positiveTrait": "领袖群伦，行事决断有魄力，统筹有力；见左辅右弼为君，能驾驭众星",
+        "negativeTrait": "孤君独断，疑心重爱面子，不见左右则孤僻偏激",
+        "specialNote": "入迁移不见吉主疑心重；化权有嘚瑟意味"
+      },
+      "评分行为": {
+        "type": "star",
+        "score": 0,
+        "decay": false,
+        "intensity": false,
+        "subdueLevel": "strong"
+      }
+    },
+    "天府": {
+      "赋性": {
+        "element": "阳土",
+        "coreTrait": "令星财库，司权位财宅，主延寿解厄稳重",
+        "positiveTrait": "综合研判和管理能力强，财经稳健，善积累，有原则底线",
+        "negativeTrait": "过于保守，守成有余进取不足，虚伪狡诈，巧立名目",
+        "specialNote": "极忌空劫——土空则陷，财库漏底"
+      },
+      "评分行为": {
+        "type": "star",
+        "score": 0,
+        "decay": false,
+        "intensity": false,
+        "subdueLevel": "strong"
+      }
+    },
+    "天机": {
+      "赋性": { "element": "阴木", "coreTrait": "益寿智谋，主兄弟智谋，善谋划", "positiveTrait": "灵活变通，思维敏捷，先思后行", "negativeTrait": "多虑焦躁，神经质，反复无常，难定决心，多虚少实，有欺诈倾向", "specialNote": "机梁羊遇化忌主刑克" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "天同": {
+      "赋性": { "element": "阳水", "coreTrait": "福德之主，主享受福泽健康", "positiveTrait": "温和随和，享乐知足，善处人际", "negativeTrait": "懒散被动，逃避现实，缺乏进取心，但态度好", "specialNote": "戌宫逢化权转为坚毅理想主义；意志薄弱陷地会煞易为安逸沦落" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "太阳": {
+      "赋性": { "element": "阳火", "coreTrait": "官禄之主，主事业博爱名声，解决问题灵活应变，积极任事", "positiveTrait": "热情博爱，有公信力，能驱暗化解巨门，解决问题灵活应变，积极任事", "negativeTrait": "落陷逃避担当，意外盲区，虎头蛇尾，抓小放大，虚荣", "specialNote": "陷位煞重则主意外、光线盲区、突发危险" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "太阴": {
+      "赋性": { "element": "阴水", "coreTrait": "田宅之主，司田宅财富，主不动产", "positiveTrait": "细腻敏感，重情义，家宅稳，内省强", "negativeTrait": "多离散，情绪起伏大，易情感受伤，虚荣，外表干净但家里乱，对社会秩序有叛逆倾向", "specialNote": "太阴陷主离散；车祸物象指旧市井环境" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "武曲": {
+      "赋性": { "element": "阴金", "coreTrait": "财帛之司，将星，金性内聚刚直；执行能力及资源资金调度筹措能力", "positiveTrait": "果断执行，务实重财，行动力强，资源和资金的调度能力强", "negativeTrait": "执拗固执，冷漠功利，易生是非，财务管理有问题", "specialNote": "武破见昌曲：动态性强，思维发散，高动能跨界" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "天相": {
+      "赋性": { "element": "阳水", "coreTrait": "官禄主宰，印星，主品位权威承诺；实务运作与策略规划能力", "positiveTrait": "圆融处事，善协调，重情义，有原则，多助力", "negativeTrait": "优柔寡断，依赖他人，难以主导，信誉/印信/征信出现问题，虚伪", "specialNote": "印星主承诺与权威，破印则失信" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "天梁": {
+      "赋性": { "element": "阳土", "coreTrait": "父母之主，庇荫寿星，主提拔关照谋略", "positiveTrait": "正直重义，善庇护有担当，文梁振纪", "negativeTrait": "清高固执，爱论是非，难融世俗，飘荡缺少原则", "specialNote": "天梁主长辈贵人；见昌曲左右多为高阶管理" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "廉贞": {
+      "赋性": { "element": "阴火", "coreTrait": "品秩权令，次桃花，囚宿，主原则法律；权令及典章制度运作能力", "positiveTrait": "桀骜个性，敢于竞争，有魅力，吉则正直，风雅有情调", "negativeTrait": "化忌见煞主血光规则失序，偏激执念情绪化，邪恶倾向", "specialNote": "化忌物象：血光、红色旧载具、秩序混乱" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "贪狼": {
+      "赋性": { "element": "阳木", "coreTrait": "解厄之神祸福桃花，主灵活敏锐欲望", "positiveTrait": "欲望旺盛，多才多艺，善交际，灵活", "negativeTrait": "贪婪放纵，难专一，易被诱惑，以自己为标准自以为是", "specialNote": "见空劫反转为玄哲深度，冲淡物欲" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "巨门": {
+      "赋性": { "element": "阴水", "coreTrait": "是非暗昧，化气曰暗，主是非迟疑", "positiveTrait": "善分析，口才好，思辨强，心思细腻，挖掘力强", "negativeTrait": "口舌是非多，多疑猜忌，沟通易生误解，孤，离祖破荡，人际关系断裂，暗度陈仓", "specialNote": "陷+劫煞指向勾心斗角、压抑倾轧环境" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "weak" }
+    },
+    "七杀": {
+      "赋性": { "element": "阳金", "coreTrait": "上将孤辰，成败斗柄，主肃杀生死成败", "positiveTrait": "勇猛果断，开拓力强，不畏挑战", "negativeTrait": "冲动莽撞，破坏性强，难合作，刚愎自用", "specialNote": "身宫七杀者一生事业必经大起大落" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "破军": {
+      "赋性": { "element": "阴水", "coreTrait": "耗星，主更替破坏，不利六亲", "positiveTrait": "创新革新，突破边界，主物理位移拆建，讲义气，以小博大", "negativeTrait": "破坏稳定，浪费挥霍，难守成，背叛无义，尤其伤六亲，暗度陈仓，借贷", "specialNote": "现代主高动能跨界；武破昌曲为高动能精英" },
+      "评分行为": { "type": "star", "score": 0, "decay": false, "intensity": false, "subdueLevel": "medium" }
+    },
+    "化禄": {
+      "赋性": { "coreTrait": "财利、顺畅、结果；具备制煞能力", "positiveTrait": "欲望明确，追求方向清晰，驱动力强；顺畅喜悦圆融；遇煞可制化", "negativeTrait": "「禄为诱饵」——顺畅时容易不设防，因兴奋导致大意" },
+      "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true, "special": "lu" }
+    },
+    "化权": {
+      "赋性": { "coreTrait": "权柄、信心、企图心", "positiveTrait": "强势主导，控制欲与主导欲强，企图心旺；提供突破现状的硬动能", "negativeTrait": "化权有时有嘚瑟意味；权忌交冲则凡事须经艰辛过程" },
+      "评分行为": { "type": "neutral", "score": 0, "decay": false, "intensity": false, "special": "quan" }
+    },
+    "化科": {
+      "赋性": { "coreTrait": "才智、名声、条理", "positiveTrait": "理性清晰，注重名声与形象管理，条理有序；有利名望积累与贵人认同", "negativeTrait": "化科力量较禄权弱，须有禄或权配合才能充分发挥" },
+      "评分行为": { "type": "neutral", "score": 0, "decay": false, "intensity": false, "special": "ke" }
+    },
+    "化忌": {
+      "赋性": { "coreTrait": "干扰、不顺、力道减弱、衰退、冲动", "positiveTrait": "专注执着（旺宫化忌）；在某一方向形成深度聚焦", "negativeTrait": "执念阻滞，是最重要的底层张力；忌煞交冲才构成真正凶象" },
+      "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true, "special": "ji" }
+    },
+    "左辅": { "赋性": { "coreTrait": "稳定扶持，慎重谨慎，持续耐力，多方面兼容", "positiveTrait": "向下兼容能力强，横向兼容能力强", "negativeTrait": "宫位凶弱时呈现祸事连连" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "右弼": { "赋性": { "coreTrait": "稳定扶持，慎重谨慎，持续耐力，多方面兼容", "positiveTrait": "向下兼容能力强，横向兼容能力强", "negativeTrait": "宫位凶弱时呈现祸事连连" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "文昌": { "赋性": { "coreTrait": "才华与表达能力强，偏文艺或学术气质", "positiveTrait": "才华真实展现", "negativeTrait": "弱陷宫位则有虚浮浪荡、暗通款曲的特性；见煞忌主痣疤" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "文曲": { "赋性": { "coreTrait": "才华与表达能力强，偏文艺或学术气质", "positiveTrait": "才华真实展现", "negativeTrait": "弱陷宫位则有虚浮浪荡、暗通款曲的特性；见煞忌主痣疤" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "天魁": { "赋性": { "coreTrait": "贵气外显，向上兼容能力强", "positiveTrait": "善于获得他人认同与提携", "negativeTrait": "宫位弱陷则有小人、虚浮" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "天钺": { "赋性": { "coreTrait": "贵气外显，向上兼容能力强", "positiveTrait": "善于获得他人认同与提携", "negativeTrait": "宫位弱陷则有小人、虚浮" }, "评分行为": { "type": "ji", "score": 0.5, "decay": true, "intensity": true } },
+    "擎羊": { "赋性": { "coreTrait": "化气为「刑」主明灾", "positiveTrait": "旺宫→魄力果决勇往直前", "negativeTrait": "陷宫→冲动莽撞自我伤害" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "陀罗": { "赋性": { "coreTrait": "化气为「忌」主暗疾纠缠", "positiveTrait": "旺宫→坚持磨砺百折不挠", "negativeTrait": "陷宫→固执内耗钻牛角尖" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "火星": { "赋性": { "coreTrait": "爆发力行动力强", "positiveTrait": "旺宫→应变快", "negativeTrait": "陷宫→暴躁破坏，神经质焦虑" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "铃星": { "赋性": { "coreTrait": "爆发力行动力强", "positiveTrait": "旺宫→应变快", "negativeTrait": "陷宫→暴躁破坏，神经质焦虑" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "地空": { "赋性": { "coreTrait": "对宫位有轻狂虚化淡漠倾向，或有跳脱世俗的特质", "positiveTrait": "见贪狼反转为玄哲深度", "negativeTrait": "因大意忽略风险" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "地劫": { "赋性": { "coreTrait": "对宫位有轻狂虚化淡漠倾向，或有跳脱世俗的特质", "positiveTrait": "见贪狼反转为玄哲深度", "negativeTrait": "因大意忽略风险" }, "评分行为": { "type": "sha", "score": -0.5, "decay": true, "intensity": true } },
+    "禄存": {
+      "赋性": { "coreTrait": "稳定资源，守财", "positiveTrait": "旺宫乘旺真实发挥", "negativeTrait": "陷宫委曲虚弱" },
+      "评分行为": { "type": "special", "special": "lu_cun", "score": 0, "decay": false, "intensity": false }
+    }
+  },
+  "全局评分参数": {
+    "父母四化折扣": 0.9,
+    "吉星基础分": 0.5,
+    "煞星基础分": -0.5,
+    "空间衰减": { "本宫": 1.0, "对宫": 0.8, "三合": 0.7 },
+    "夹宫衰减矩阵": {
+      "本宫旺": { "夹宫旺": 0.9, "夹宫平": 0.5, "夹宫弱": 0.2 },
+      "本宫平": { "夹宫旺": 0.6, "夹宫平": 0.4, "夹宫弱": 0.2 },
+      "本宫弱": { "夹宫旺": 0.3, "夹宫平": 0.1, "夹宫弱": 0.05 }
+    },
+    "禄存增减分": { "旺": 0.3, "平": 0, "陷": -0.3 },
+    "亮度初始分与天花板": {
+      "极旺": { "base": 8.5, "ceiling": 8.5 },
+      "旺": { "base": 7.0, "ceiling": 8.5 },
+      "平": { "base": 5.0, "ceiling": 8.0 },
+      "陷": { "base": 3.0, "ceiling": 7.3 },
+      "空": { "base": 2.0, "ceiling": 5.3 },
+      "极弱": { "base": 1.5, "ceiling": 5.0 }
+    },
+    "宫位亮度阈值": {
+      "实旺": 7.5,
+      "磨炼": 6.0,
+      "虚浮": 4.5,
+      "凶危": 3.0,
+      "绝败": 0
+    },
+    "煞星强度系数": {
+      "实旺": 0.3,
+      "磨炼": 0.5,
+      "虚浮": 1.0,
+      "凶危": 1.5
+    },
+    "格局倍率": {
+      "大吉": 1.5,
+      "中吉": 1.3,
+      "小吉": 1.0,
+      "小凶": 1.0,
+      "中凶": 0.7,
+      "大凶": 0.5
+    },
+    "绝败规则": {
+      "condition1": { "description": "忌星4颗以上在本宫+三方四正", "jiCountThreshold": 4, "scope": "三方四正" },
+      "condition2": { "description": "陷宫主星 + 火铃 + 化忌 三者在同一宫", "requires": ["deficientMajor", "huoLing", "huaJi"], "scope": "本宫" },
+      "condition3": { "description": "化禄与化忌同宫且主星陷", "requires": ["huaLu", "huaJi", "deficientMajor"], "scope": "本宫" },
+      "condition4": { "description": "陷宫主星 + 羊/陀之一 + 火/铃之一同宫", "requires": ["deficientMajor", "yangTuo", "huoLing"], "scope": "本宫", "exceptions": [{ "majorStar": ["紫微单星", "天府单星"], "condition": "jiGreaterThanSha" }] },
+      "condition5": { "description": "旺宫主星 + 羊/陀之一 + 火/铃之一同宫", "requires": ["prosperousMajor", "yangTuo", "huoLing"], "scope": "本宫", "exceptions": [{ "majorStar": ["紫微单星", "天府单星"], "condition": "jiGreaterThanSha" }, { "majorStar": ["七杀单星", "破军单星", "贪狼单星"], "condition": "noException" }] }
+    }
+  },
+  "夹宫有效组合": {
+    "昌曲夹": { "left": "文昌", "right": "文曲", "type": "吉夹" },
+    "魁钺夹": { "left": "天魁", "right": "天钺", "type": "吉夹" },
+    "左右夹": { "left": "左辅", "right": "右弼", "type": "吉夹" },
+    "羊陀夹": { "left": "擎羊", "right": "陀罗", "type": "煞夹" },
+    "空劫夹": { "left": "地空", "right": "地劫", "type": "煞夹" },
+    "火铃夹": { "left": "火星", "right": "铃星", "type": "煞夹" },
+    "双禄夹": { "left": "化禄", "right": "化禄", "type": "吉夹", "note": "左右邻宫各有一个化禄" },
+    "双忌夹": { "left": "化忌", "right": "化忌", "type": "煞夹", "note": "左右邻宫各有一个化忌" }
+  }
+}

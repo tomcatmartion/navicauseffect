@@ -43,13 +43,21 @@ export function getTriadBranches(branch: Branch): [Branch, Branch] {
 }
 
 /**
- * 获取夹宫地支
+ * 获取夹宫地支（左右邻宫）
+ *
+ * 方向约定（scoring_params.json directionConvention）：
+ * - 左 = counterClockwise（逆时针方向为左）= 索引 +1
+ * - 右 = clockwise（顺时针方向为右）= 索引 -1
+ *
+ * 例如：本宫为丑(1)，则 left = 寅(2)（逆时针前一宫），right = 子(0)（顺时针前一宫）
+ *
  * 返回 [左夹, 右夹]
  */
 export function getFlankBranches(branch: Branch): [Branch, Branch] {
   const idx = BRANCH_INDEX[branch];
-  const leftIdx = (idx - 1 + 12) % 12;
-  const rightIdx = (idx + 1) % 12;
+  // left = idx + 1 (counterClockwise), right = idx - 1 (clockwise)
+  const leftIdx = (idx + 1) % 12;
+  const rightIdx = (idx - 1 + 12) % 12;
   return [BRANCH_ORDER[leftIdx], BRANCH_ORDER[rightIdx]];
 }
 
