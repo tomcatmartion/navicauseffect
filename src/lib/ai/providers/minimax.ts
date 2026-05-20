@@ -22,8 +22,9 @@ export class MiniMaxProvider implements AIProvider {
     messages: ChatMessage[],
     options?: ChatOptions
   ): Promise<ReadableStream<Uint8Array>> {
+    const timeoutMs = options?.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(this.endpoint(), {
         method: "POST",
@@ -53,7 +54,7 @@ export class MiniMaxProvider implements AIProvider {
     } catch (err) {
       clearTimeout(timeout);
       if (err instanceof Error && err.name === "AbortError") {
-        throw new Error(`AI 请求超时（${DEFAULT_TIMEOUT_MS / 1000}s），请检查网络或切换模型重试`);
+        throw new Error(`AI 请求超时（${timeoutMs / 1000}s），请检查网络或切换模型重试`);
       }
       throw err;
     }

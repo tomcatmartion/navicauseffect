@@ -112,7 +112,7 @@ export function readChartFromData(chartData: Record<string, unknown>): Normalize
   let birthZhi: DiZhi = extractBirthZhi(solarDate)
 
   // iztro 的 rawDates.chineseDate.yearly = [天干, 地支]
-  const rawChinese = (data as any).rawDates?.chineseDate
+  const rawChinese = (data as { rawDates?: { chineseDate?: { yearly?: string[] } } }).rawDates?.chineseDate
   if (rawChinese?.yearly && Array.isArray(rawChinese.yearly) && rawChinese.yearly.length === 2) {
     const [gan, zhi] = rawChinese.yearly
     if (GAN_TABLE.includes(gan as TianGan)) birthGan = gan as TianGan

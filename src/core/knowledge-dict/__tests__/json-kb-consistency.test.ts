@@ -6,34 +6,29 @@ import { getStarAttributes, getPalaceMeanings, getTaiSuiTables, getScoringParams
 const DATA_DIR = path.join(process.cwd(), 'data')
 
 describe('JSON 与 KB 知识库一致性核验', () => {
-  it('star_attributes.json 应包含14颗主星', () => {
+  it('star_system.json 应包含14颗主星及辅星', () => {
     const data = getStarAttributes()
     const stars = Object.keys(data)
-    expect(stars).toHaveLength(14)
-    expect(stars).toContain('紫微')
-    expect(stars).toContain('天府')
-    expect(stars).toContain('天机')
-    expect(stars).toContain('天同')
-    expect(stars).toContain('太阳')
-    expect(stars).toContain('太阴')
-    expect(stars).toContain('武曲')
-    expect(stars).toContain('天相')
-    expect(stars).toContain('天梁')
-    expect(stars).toContain('廉贞')
-    expect(stars).toContain('贪狼')
-    expect(stars).toContain('巨门')
-    expect(stars).toContain('七杀')
-    expect(stars).toContain('破军')
+    // 合并后的 star_system.json 包含14主星+六吉星+六煞星+其他辅星
+    expect(stars.length).toBeGreaterThanOrEqual(14)
+    // 必须包含14主星
+    const majorStars = ['紫微', '天府', '天机', '天同', '太阳', '太阴', '武曲', '天相', '天梁', '廉贞', '贪狼', '巨门', '七杀', '破军']
+    for (const star of majorStars) {
+      expect(stars).toContain(star)
+    }
 
-    // 验证每颗星都有核心字段（yinYang/category 为可选）
+    // 验证每颗星都有核心字段（四化星可能没有element，但必须有coreTrait/positiveTrait/negativeTrait）
     for (const [name, attr] of Object.entries(data)) {
-      expect(attr.element, `${name} 缺少 element`).toBeTruthy()
+      // element 对四化星是可选的
+      if (attr.element !== undefined) {
+        expect(attr.element, `${name} 缺少 element`).toBeTruthy()
+      }
       expect(attr.positiveTrait, `${name} 缺少 positiveTrait`).toBeTruthy()
       expect(attr.negativeTrait, `${name} 缺少 negativeTrait`).toBeTruthy()
     }
   })
 
-  it('palace_meanings.json 应包含12宫位', () => {
+  it('palace_system.json 应包含12宫位', () => {
     const data = getPalaceMeanings()
     const palaces = Object.keys(data)
     expect(palaces).toHaveLength(12)
@@ -64,7 +59,7 @@ describe('JSON 与 KB 知识库一致性核验', () => {
     expect(tables.wuHuDunGan['甲'][0]).toBe('丙寅')
   })
 
-  it('scoring_params.json 应包含完整评分参数', () => {
+  it('scoring.json 应包含完整评分参数', () => {
     const params = getScoringParams()
 
     // 吉星/煞星列表

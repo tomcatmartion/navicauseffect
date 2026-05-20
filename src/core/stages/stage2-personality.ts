@@ -22,7 +22,17 @@ import {
   generateFourDimensionTags,
   generateHolographicBase,
   judgeThreePalaceTone,
+  analyzeThreePalaceCrossTension,
 } from '@/core/personality-analyzer/four-dimension'
+import {
+  extractPatternPersonalityInfluences,
+  aggregatePatternTraits,
+} from '@/core/personality-analyzer/pattern-to-personality'
+import {
+  mapPalaceScoreToPersonality,
+  mapAllPalaceScoresToPersonality,
+  extractKeyPersonalityDimensions,
+} from '@/core/personality-analyzer/score-reason-to-personality'
 import { buildPalaceInput } from './helpers/palace-input-builder'
 import { injectStage2Knowledge } from './helpers/knowledge-injector'
 
@@ -94,6 +104,35 @@ export function executeStage2(input: Stage2Input): Stage2Output {
   }
   const knowledgeSnippets = injectStage2Knowledge(focusPalaces)
 
+  // ═══════════════════════════════════════════════════════════════════
+  // P0: 格局人格特质注入
+  // ═══════════════════════════════════════════════════════════════════
+  const patternInfluences = extractPatternPersonalityInfluences(stage1.allPatterns)
+  const aggregatedTraits = aggregatePatternTraits(patternInfluences)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // P1: 评分原因 → 性格维度映射
+  // ═══════════════════════════════════════════════════════════════════
+  const mingPalaceScore = palaceScores[mingIdx]
+  const mingProfile = mingPalaceScore ? mapPalaceScoreToPersonality(mingPalaceScore) : null
+  const allProfiles = mapAllPalaceScoresToPersonality(palaceScores)
+  const keyDimensions = extractKeyPersonalityDimensions(allProfiles)
+
+  // ═══════════════════════════════════════════════════════════════════
+  // P2: 三宫交叉张力分析
+  // ═══════════════════════════════════════════════════════════════════
+  const threePalaceCross = analyzeThreePalaceCrossTension({
+    mingScore: palaceScores[mingIdx]?.finalScore ?? 5,
+    mingStars: ctx.palaces[mingIdx].majorStars.map(ms => ({ star: String(ms.star), brightness: ms.brightness })),
+    mingSihua: ctx.palaces[mingIdx].stars.filter(s => s.sihua).map(s => ({ star: s.name, type: s.sihua! })),
+    shenScore: palaceScores[shenIdx]?.finalScore ?? 5,
+    shenStars: ctx.palaces[shenIdx].majorStars.map(ms => ({ star: String(ms.star), brightness: ms.brightness })),
+    shenSihua: ctx.palaces[shenIdx].stars.filter(s => s.sihua).map(s => ({ star: s.name, type: s.sihua! })),
+    taiSuiScore: taiSuiIdx >= 0 ? palaceScores[taiSuiIdx]?.finalScore ?? 5 : 5,
+    taiSuiStars: taiSuiIdx >= 0 ? ctx.palaces[taiSuiIdx].majorStars.map(ms => ({ star: String(ms.star), brightness: ms.brightness })) : [],
+    taiSuiSihua: taiSuiIdx >= 0 ? ctx.palaces[taiSuiIdx].stars.filter(s => s.sihua).map(s => ({ star: s.name, type: s.sihua! })) : [],
+  })
+
   return {
     mingGongTags,
     shenGongTags,
@@ -101,6 +140,42 @@ export function executeStage2(input: Stage2Input): Stage2Output {
     overallTone,
     mingGongHolographic,
     knowledgeSnippets,
+    shenGongIndex: shenIdx,
+    taiSuiIndex: taiSuiIdx >= 0 ? taiSuiIdx : 0,
+    patternPersonality: {
+      influences: patternInfluences.map(inf => ({
+        patternName: inf.patternName,
+        level: inf.level,
+        traits: inf.traits.map(t => ({ keyword: t.keyword, dimension: t.dimension, intensity: t.intensity })),
+        personalityBase: inf.personalityBase,
+        behavioralTendency: inf.behavioralTendency,
+        interpersonalStyle: inf.interpersonalStyle,
+        stressResponse: inf.stressResponse,
+      })),
+      aggregated: aggregatedTraits,
+    },
+    scoreReasonPersonality: mingProfile ? {
+      mingProfile: {
+        palace: mingProfile.palace,
+        finalScore: mingProfile.finalScore,
+        bonusReasons: mingProfile.bonusReasons.map(r => ({
+          dimension: r.dimension,
+          item: r.item,
+          personalityInterpretation: r.personalityInterpretation,
+          impactLevel: r.impactLevel,
+        })),
+        penaltyReasons: mingProfile.penaltyReasons.map(r => ({
+          dimension: r.dimension,
+          item: r.item,
+          personalityInterpretation: r.personalityInterpretation,
+          impactLevel: r.impactLevel,
+        })),
+        subduePersonality: mingProfile.subduePersonality,
+        synthesis: mingProfile.synthesis,
+      },
+      keyDimensions,
+    } : undefined,
+    threePalaceCross,
   }
 }
 

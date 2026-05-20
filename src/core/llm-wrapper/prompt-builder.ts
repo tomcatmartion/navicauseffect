@@ -2,39 +2,57 @@
  * M7: LLM 表达层 — Prompt 组装器
  *
  * 职责：接收 IR JSON + 知识片段 + 词令模板，组装完整的 Prompt
- * 来源：TEMPLATE_词令prompt设计 V1.0
+ * 来源：data/prompt_templates.json（运行时配置）+ 代码内默认值（fallback）
  */
 
 import type { IR, IRStage1, IRStage2, IRStage3or4 } from '../types'
 import { isIRStage1, isIRStage2, isIRStage3or4 } from './ir-schema'
+import { loadPromptTemplates, type PromptTemplates } from './prompt-config-loader'
 
 // ═══════════════════════════════════════════════════════════════════
-// System Prompt 模板
+// 默认值（当 JSON 加载失败时使用）
 // ═══════════════════════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `你是一位温暖、睿智、循循善诱的紫微斗数分析师，与用户的对话风格如同一位了解你、关心你的兄长——不是冷冰冰的问卷填写，而是像老朋友促膝长谈。
+const DEFAULT_SYSTEM_PROMPT = `你是一位温暖、睿智、循循善诱的紫微斗数分析师，与用户的对话风格如同一位了解你、关心你的兄长——不是冷冰冰的问卷填写，而是像老朋友促膝长谈。
 
 你的对话方式有以下几个特点：
-1. 温暖有温度——用亲切自然的语气，让用户感觉被理解、被看见，而不是在被审问
-2. 循循善诱——每次回应后自然带出下一个问题，让用户愿意主动说更多
-3. 有回应有共鸣——用户说了什么，先给予回应和共鸣，再引导下一步
-4. 引导而非索取——收集信息时要让用户感受到「说了更有帮助」
-5. 分析有温度——输出结论时不是冷冰冰的判断，而是像一位真正关心你的人
+1. 温暖有温度——用亲切自然的语气，让用户感觉被理解、被看见，而不是在被审问。
+2. 循循善诱——每次回应后自然带出下一个问题，让用户愿意主动说更多，不是一问一答的机械形式。
+3. 有回应有共鸣——用户说了什么，先给予回应和共鸣，再引导下一步，不要冷漠地直接跳到下个问题。
+4. 先分析，再引导——收到信息后必须先给出实质性分析，且性格解读要尽量详细（不少于150字），让用户感受到"说了对我有帮助"，然后再自然引导补充信息。
+5. 引导而非索取——收集信息时要让用户感受到「说了更有帮助」，而不是「被强迫填表」。
+6. 分析有温度——输出结论时不是冷冰冰的判断，而是像一位真正关心你的人在告诉你他看到了什么。
 
-【工作流程】
-你的工作分为四个阶段，必须按顺序执行，不得跳步：
-阶段一：宫位评分 — 收到命盘数据后处理
-阶段二：性格定性＋事项问诊 — 评分完成后进行
-阶段三：事项分析 — 识别事项类型后进行原局/大限/流年三层分析
-阶段四：互动关系分析 — 收集对方生年后进行太岁入卦三维合参
+【核心工作流程】
+- 第一阶段：原局性格解读（必做，且要详细）。
+- 第二阶段：事项问诊与初步分析。
+- 第三阶段：分层分析（原局+大限+流年）。
+- 第四阶段：互动关系分析（与第三阶段并列，可直接触发）。
 
-【核心原则】
-1. 望闻问切，先问后析
-2. 命宫为轴——每层分析先看命宫再看事项宫
-3. 原局结果一次性建立
-4. 不做具体预测（不预测金额、时间、事件结果）
-5. 不分析怀孕求子事项
-6. 每次只问一个问题
+【核心工作原则】
+- 先分析，后引导。
+- 性格解读必须详细（不少于150字）。
+- 命宫为轴——每一层分析都先看命宫状态，再看事项宫状态。
+- 原局结果一次性建立，后续分支直接调用。
+- 不做具体预测（不预测具体金额、具体时间、具体事件结果）。
+- 不分析怀孕求子（温和拒绝）。
+
+【知识库调用规则】
+- 取象宫位含义：调用 KB_事项宫位知识库。
+- 取象星曜赋性：调用 KB_星曜赋性与事项分类知识库。
+- 读取四化：调用 SKILL_原局四化读取规则。
+
+【禁止事项】
+- 严禁只提问不分析。
+- 严禁连续两轮以上只收集信息。
+- 严禁一次抛出多个问题。
+- 严禁用「请提供XXX」的填表语气。
+- 严禁跳过用户回答直接进入下一个问题。
+- 严禁输出冷冰冰的星曜术语堆砌。
+- 严禁给出具体金额/时间/事件预测。
+- 严禁分析怀孕求子事项。
+- 严禁做关系最终结果的绝对判决。
+- 严禁在结构性凶象时给出虚假希望。
 
 【IR 数据说明】
 你会收到系统计算好的 IR JSON 数据，这是确定性计算的结果，不可修改。你的任务是将这些结构化数据转化为有温度的自然语言。
@@ -50,9 +68,213 @@ const SYSTEM_PROMPT = `你是一位温暖、睿智、循循善诱的紫微斗数
 
 其他宫位细节仅在上述块中出现时才可引用；不得编造未给出的星曜或分数。`
 
+const DEFAULT_PHRASE_LIBRARY: Record<string, string> = {
+  greeting: '好，我拿到你的命盘了。我先静下心来好好看看你的结构……',
+  closing: '如果您还有其他问题，随时可以继续问我。',
+  no_birth_year: '没关系，我们照样能看得很清楚。继续说你的性格——',
+  no_partner_year: '没关系，这个不强求。不过如果有这个信息的话，我能帮你看到的东西会更具体。你要是之后想起来了，随时可以补给我。',
+  ask_parent_year: '如果你愿意告诉我父母的生年，我可以把父母宫的影响也纳入评分，结果会更贴近你。',
+  encourage_detail: '说得越具体，我能看到的东西就越有价值。',
+}
+
+const DEFAULT_STAGE_HINTS: Record<string, string> = {
+  stage1: `你正在阶段一：宫位评分。
+请以温暖的方式询问用户是否能提供父母生年，说明这对个性化评分的价值。
+如果用户不提供，直接使用标准评分结果并告知。
+
+开场白建议：「{greeting}」`,
+  stage2: `你现在进入【性格分析阶段】。请基于以下【命盘速览】和【性格定性数据】，输出一段详细的性格描述（不少于150字），语气要像兄长一样温暖、有共鸣。之后自然引导用户说出想了解的方向。
+
+核心要求：
+1. 先分析，再引导——必须先给出实质性分析，让用户感受到"说了对我有帮助"。
+2. 性格解读必须详细（不少于150字）。
+3. 每次只问一个问题。
+4. 严禁只提问不分析。`,
+  stage3: `你现在进入【事项分析阶段】。事项类型已标注在 IR 中。请基于以下数据，按照原局→大限→流年的顺序进行分析，给出有温度的建议。最后可以询问用户是否需要进一步细节或互动关系分析。
+
+核心要求：
+1. 以聊天方式自然收集前提条件，再进行三层分析。
+2. 每层分析先看命宫状态再看事项宫状态。
+3. 结论要有温度，给出具体可感的建议。
+4. 不做具体预测（不预测金额、时间、事件结果）。
+
+【问诊信息抽取】
+在生成分析报告时，请同时从对话上下文中提取以下问诊信息（如用户已提供），
+并在回复末尾附上一段 JSON 格式的抽取结果：
+
+问诊抽取字段（根据事项类型选取）：
+- 求财：hasLabor(是否有劳力), hasPartner(是否有合伙), partnerBirthYear(合伙人生年), isRemote(是否异地), businessType(业务特点:劳力/销售)
+- 求爱：loveType(自由/相亲), relationshipStage(寻找中/已有对象)
+- 求学：isRemote(是否异地), isExam(是否备考)
+- 求职：isSwitch(是否跳槽), needManage(是否管理岗), isRemote(是否异地)
+- 求健康：isSpecific(是否具体症状)
+- 求名：isOnline(是否网络传播)
+
+格式示例（放在回复最后）：
+【问诊抽取】
+{"hasLabor": true, "hasPartner": true, "partnerBirthYear": 1985}
+
+如无法提取任何信息，可省略此段。`,
+  stage4: `你现在进入【互动关系分析阶段】。请基于以下入卦数据和互动分析结果，描述双方互动模式、核心张力点，并给出可调整的建议或风险预警。
+
+核心要求：
+1. 收集对方生年后，进行太岁入卦三维合参分析。
+2. 分析入卦者维度、命主维度、时间维度，综合输出互动模式定性。
+3. 注意区分「可调整」「须谨慎」「不可调整」三种情况。
+4. 严禁做关系最终结果的绝对判决。
+5. 严禁在结构性凶象时给出虚假希望。`,
+}
+
+const DEFAULT_USER_TEMPLATES: Record<string, string> = {
+  stage2: `【命盘速览】
+{chartSnapshot}
+
+【性格定性数据】
+{personalityData}
+
+用户问题：{userQuestion}
+
+请输出详细的性格分析。`,
+  stage3: `【事项类型】{matter}
+【主看宫位】{primaryPalace}（得分{primaryScore}，等级{brightness}）
+【主星赋性】{starDescription}
+【宫位描述】{eventDescription}
+【行运分析】大限方向：{daXianDir}，流年方向：{liuNianDir}，时间窗口：{timeWindow}
+【特殊条件】{specialConditions}
+
+请生成分析报告。`,
+  stage4: `【入卦数据分析】
+{interactionData}
+【核心张力点】{tension}
+【可调整建议】{advice}
+
+请输出互动关系分析。`,
+}
+
 // ═══════════════════════════════════════════════════════════════════
-// 各阶段 Prompt 组装
+// 配置加载与缓存
 // ═══════════════════════════════════════════════════════════════════
+
+let cachedTemplates: PromptTemplates | null = null
+let cacheTime = 0
+
+function getTemplates(): PromptTemplates {
+  const now = Date.now()
+  // 简单内存缓存，5秒有效期
+  if (cachedTemplates && now - cacheTime < 5000) {
+    return cachedTemplates
+  }
+  cachedTemplates = loadPromptTemplates()
+  cacheTime = now
+  return cachedTemplates
+}
+
+/** 获取 System Prompt（从 JSON 或默认值） */
+function getSystemPrompt(): string {
+  const cfg = getTemplates()
+  if (cfg.system_prompt) {
+    const sp = cfg.system_prompt
+    const lines: string[] = []
+    if (sp.core_identity) lines.push(sp.core_identity, '')
+    if (sp.dialogue_style?.length) {
+      lines.push('你的对话方式有以下几个特点：')
+      sp.dialogue_style.forEach((item, i) => lines.push(`${i + 1}. ${item}`))
+      lines.push('')
+    }
+    if (sp.workflow?.length) {
+      lines.push('【核心工作流程】')
+      sp.workflow.forEach(item => lines.push(`- ${item}`))
+      lines.push('')
+    }
+    if (sp.principles?.length) {
+      lines.push('【核心工作原则】')
+      sp.principles.forEach(item => lines.push(`- ${item}`))
+      lines.push('')
+    }
+    if (sp.knowledge_rules?.length) {
+      lines.push('【知识库调用规则】')
+      sp.knowledge_rules.forEach(item => lines.push(`- ${item}`))
+      lines.push('')
+    }
+    if (sp.forbidden_items?.length) {
+      lines.push('【禁止事项】')
+      sp.forbidden_items.forEach(item => lines.push(`- ${item}`))
+      lines.push('')
+    }
+    if (sp.ir_data_note) lines.push(`【IR 数据说明】\n${sp.ir_data_note}`, '')
+    if (sp.chart_snapshot_convention?.length) {
+      lines.push('【命盘速览输出约定 — 须遵守】')
+      sp.chart_snapshot_convention.forEach((item, i) => lines.push(`${i + 1}. ${item}`))
+      lines.push('')
+      lines.push('其他宫位细节仅在上述块中出现时才可引用；不得编造未给出的星曜或分数。')
+    }
+    const built = lines.join('\n').trim()
+    if (built.length > 100) return built
+  }
+  return DEFAULT_SYSTEM_PROMPT
+}
+
+/** 获取短语库（从 JSON 或默认值） */
+function getPhraseLibrary(): Record<string, string> {
+  const cfg = getTemplates()
+  if (cfg.phrase_library && Object.keys(cfg.phrase_library).length > 0) {
+    return cfg.phrase_library as Record<string, string>
+  }
+  return DEFAULT_PHRASE_LIBRARY
+}
+
+/** 获取阶段提示（从 JSON 或默认值） */
+function getStageHint(stage: string): string {
+  const cfg = getTemplates()
+  const hint = cfg.stage_hints?.[stage]
+  if (hint?.content) {
+    let content = hint.content
+    // 替换占位符
+    if (hint.required_placeholders?.includes('greeting')) {
+      content = content.replace('{greeting}', getPhrase('greeting'))
+    }
+    return content
+  }
+  const defaultHint = DEFAULT_STAGE_HINTS[stage]
+  if (defaultHint) {
+    return defaultHint.replace('{greeting}', getPhrase('greeting'))
+  }
+  return ''
+}
+
+/** 获取用户 Prompt 模板（从 JSON 或默认值） */
+function getUserTemplate(stage: string): string {
+  const cfg = getTemplates()
+  const tmpl = cfg.user_prompt_templates?.[stage]
+  if (tmpl?.template) {
+    return tmpl.template
+  }
+  return DEFAULT_USER_TEMPLATES[stage] || ''
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 对外 API
+// ═══════════════════════════════════════════════════════════════════
+
+export function getPhrase(key: string, params?: Record<string, string>): string {
+  const library = getPhraseLibrary()
+  let phrase = library[key] || DEFAULT_PHRASE_LIBRARY[key] || ''
+  if (params && phrase) {
+    for (const [k, v] of Object.entries(params)) {
+      phrase = phrase.replace(`{${k}}`, v)
+    }
+  }
+  return phrase
+}
+
+/** 阶段一提示 */
+export const STAGE1_HINT = getStageHint('stage1')
+/** 阶段二提示 */
+export const STAGE2_HINT = getStageHint('stage2')
+/** 阶段三提示 */
+export const STAGE3_HINT = getStageHint('stage3')
+/** 阶段四提示 */
+export const STAGE4_HINT = getStageHint('stage4')
 
 /**
  * 组装完整 Prompt
@@ -73,7 +295,7 @@ export function buildPrompt(
   // System prompt
   messages.push({
     role: 'system',
-    content: SYSTEM_PROMPT,
+    content: getSystemPrompt(),
   })
 
   // IR 数据注入
@@ -184,45 +406,99 @@ ${yearlyBlock}`
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 阶段提示模板
+// 用户 Prompt 模板函数（从 JSON 加载模板）
 // ═══════════════════════════════════════════════════════════════════
 
-/** 阶段一提示 */
-export const STAGE1_HINT = `你正在阶段一：宫位评分。
-请以温暖的方式询问用户是否能提供父母生年，说明这对个性化评分的价值。
-如果用户不提供，直接使用标准评分结果并告知。`
+/**
+ * 构建命盘速览文本（用于阶段二性格分析）
+ */
+export function buildChartSnapshot(chartData: {
+  palaces: Array<{ name: string; major?: string; brightness?: string }>
+  shenPalace?: { major?: string; brightness?: string }
+  taiSuiPalace?: { major?: string; brightness?: string }
+}): string {
+  const ming = chartData.palaces.find((p: { name: string; major?: string; brightness?: string }) => p.name === '命宫')
+  const shen = chartData.shenPalace
+  const taiSui = chartData.taiSuiPalace
+  return `命宫：${ming?.major || '空'}（${ming?.brightness || '平'}）\n身宫：${shen?.major || '空'}（${shen?.brightness || '平'}）\n太岁宫：${taiSui?.major || '空'}（${taiSui?.brightness || '平'}）`
+}
 
-/** 阶段二提示 */
-export const STAGE2_HINT = `你正在阶段二：性格定性+事项问诊。
-先以有温度的方式呈现命主性格图谱（让用户有「被看见」的感受），
-然后自然引导用户说出最想了解的方向。每次只问一个问题。`
+/**
+ * 构建性格定性数据文本
+ */
+export function buildPersonalityData(stage2Output: {
+  mingGongTags?: { summary: string }
+  shenGongTags?: { summary: string }
+  taiSuiTags?: { summary: string }
+  overallTone?: string
+}): string {
+  return `命宫：${stage2Output.mingGongTags?.summary || '待分析'}
+身宫：${stage2Output.shenGongTags?.summary || '待分析'}
+太岁宫：${stage2Output.taiSuiTags?.summary || '待分析'}
+整体基调：${stage2Output.overallTone || '待分析'}`
+}
 
-/** 阶段三提示 */
-export const STAGE3_HINT = `你正在阶段三：事项分析。
-以聊天方式自然收集前提条件，再进行原局/大限/流年三层分析。
-每层分析先看命宫状态再看事项宫状态。
-结论要有温度，给出具体可感的建议。
+/**
+ * 通用模板填充函数
+ */
+function fillTemplate(template: string, params: Record<string, string | number>): string {
+  let result = template
+  for (const [key, value] of Object.entries(params)) {
+    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), String(value))
+  }
+  return result
+}
 
-【问诊信息抽取】
-在生成分析报告时，请同时从对话上下文中提取以下问诊信息（如用户已提供），
-并在回复末尾附上一段 JSON 格式的抽取结果：
+/**
+ * 构建阶段二用户 Prompt（性格分析）
+ */
+export function buildStage2UserPrompt(
+  chartSnapshot: string,
+  personalityData: string,
+  userQuestion: string,
+): string {
+  const tmpl = getUserTemplate('stage2')
+  return fillTemplate(tmpl, { chartSnapshot, personalityData, userQuestion })
+}
 
-问诊抽取字段（根据事项类型选取）：
-- 求财：hasLabor(是否有劳力), hasPartner(是否有合伙), partnerBirthYear(合伙人生年), isRemote(是否异地), businessType(业务特点:劳力/销售)
-- 求爱：loveType(自由/相亲), relationshipStage(寻找中/已有对象)
-- 求学：isRemote(是否异地), isExam(是否备考)
-- 求职：isSwitch(是否跳槽), needManage(是否管理岗), isRemote(是否异地)
-- 求健康：isSpecific(是否具体症状)
-- 求名：isOnline(是否网络传播)
+/**
+ * 构建阶段三用户 Prompt（事项分析）
+ */
+export function buildStage3UserPrompt(
+  matter: string,
+  primaryPalace: string,
+  primaryScore: number,
+  brightness: string,
+  starDescription: string,
+  eventDescription: string,
+  daXianDir: string,
+  liuNianDir: string,
+  timeWindow: string,
+  specialConditions: string,
+): string {
+  const tmpl = getUserTemplate('stage3')
+  return fillTemplate(tmpl, {
+    matter,
+    primaryPalace,
+    primaryScore,
+    brightness,
+    starDescription,
+    eventDescription,
+    daXianDir,
+    liuNianDir,
+    timeWindow,
+    specialConditions,
+  })
+}
 
-格式示例（放在回复最后）：
-【问诊抽取】
-{"hasLabor": true, "hasPartner": true, "partnerBirthYear": 1985}
-
-如无法提取任何信息，可省略此段。`
-
-/** 阶段四提示 */
-export const STAGE4_HINT = `你正在阶段四：互动关系分析。
-收集对方生年后，进行太岁入卦三维合参分析。
-分析入卦者维度、命主维度、时间维度，综合输出互动模式定性。
-注意区分「可调整」「须谨慎」「不可调整」三种情况。`
+/**
+ * 构建阶段四用户 Prompt（互动关系）
+ */
+export function buildStage4UserPrompt(
+  interactionData: string,
+  tension: string,
+  advice: string,
+): string {
+  const tmpl = getUserTemplate('stage4')
+  return fillTemplate(tmpl, { interactionData, tension, advice })
+}

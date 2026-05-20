@@ -290,11 +290,44 @@ export function generateHolographicBase(input: PalaceInput): HolographicBase {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 三宫综合定性
+// 三宫综合定性（增强版：含交叉张力分析）
 // ═══════════════════════════════════════════════════════════════════
 
+/** 三宫交叉张力分析输入 */
+export interface ThreePalaceCrossInput {
+  /** 命宫评分 */
+  mingScore: number
+  /** 命宫主星 */
+  mingStars: Array<{ star: string; brightness: string }>
+  /** 命宫四化 */
+  mingSihua: Array<{ star: string; type: string }>
+  /** 身宫评分 */
+  shenScore: number
+  /** 身宫主星 */
+  shenStars: Array<{ star: string; brightness: string }>
+  /** 身宫四化 */
+  shenSihua: Array<{ star: string; type: string }>
+  /** 太岁宫评分 */
+  taiSuiScore: number
+  /** 太岁宫主星 */
+  taiSuiStars: Array<{ star: string; brightness: string }>
+  /** 太岁宫四化 */
+  taiSuiSihua: Array<{ star: string; type: string }>
+}
+
+/** 三宫交叉张力分析结果 */
+export interface ThreePalaceCrossResult {
+  /** 基础基调（基于分数） */
+  baseTone: string
+  /** 交叉张力描述 */
+  crossTensions: string[]
+  /** 三宫综合结论 */
+  synthesis: string
+}
+
 /**
- * 三宫综合强弱判定
+ * 三宫综合强弱判定（增强版）
+ * 不仅看分数，还分析主星/四化差异产生的性格张力
  */
 export function judgeThreePalaceTone(
   mingScore: number,
@@ -316,4 +349,105 @@ export function judgeThreePalaceTone(
     return '三宫均弱 — 易受外界影响'
   }
   return '三宫混杂 — 逐宫分析，内外层存在落差'
+}
+
+/**
+ * 三宫交叉张力分析（P2）
+ * 分析命宫/身宫/太岁宫之间的主星、四化差异产生的性格张力
+ */
+export function analyzeThreePalaceCrossTension(
+  input: ThreePalaceCrossInput,
+): ThreePalaceCrossResult {
+  const { mingScore, mingStars, mingSihua, shenScore, shenStars, shenSihua, taiSuiScore, taiSuiStars, taiSuiSihua } = input
+
+  const crossTensions: string[] = []
+
+  // 1. 分数差异张力
+  const mingShenDiff = Math.abs(mingScore - shenScore)
+  const mingTaiDiff = Math.abs(mingScore - taiSuiScore)
+  const shenTaiDiff = Math.abs(shenScore - taiSuiScore)
+
+  if (mingShenDiff >= 2.5) {
+    crossTensions.push(
+      mingScore > shenScore
+        ? `命宫(${mingScore.toFixed(1)})与身宫(${shenScore.toFixed(1)})落差大：外显强势但内在根基不稳，容易"外强中干"`
+        : `命宫(${mingScore.toFixed(1)})与身宫(${shenScore.toFixed(1)})落差大：外在表现温和但内在意志坚定，属于"外柔内刚"`
+    )
+  }
+
+  if (mingTaiDiff >= 2.5) {
+    crossTensions.push(
+      mingScore > taiSuiScore
+        ? `命宫(${mingScore.toFixed(1)})与太岁宫(${taiSuiScore.toFixed(1)})落差大：先天条件好但后天发展受限，需注意运势起伏`
+        : `命宫(${mingScore.toFixed(1)})与太岁宫(${taiSuiScore.toFixed(1)})落差大：先天条件一般但后天有发展潜力，可通过努力突破`
+    )
+  }
+
+  if (shenTaiDiff >= 2.5) {
+    crossTensions.push(
+      shenScore > taiSuiScore
+        ? `身宫(${shenScore.toFixed(1)})与太岁宫(${taiSuiScore.toFixed(1)})落差大：后天努力方向与运势走势不一致，需调整策略`
+        : `身宫(${shenScore.toFixed(1)})与太岁宫(${taiSuiScore.toFixed(1)})落差大：后天发展受制于运势，需顺势而为`
+    )
+  }
+
+  // 2. 主星差异张力
+  const mingStarNames = new Set(mingStars.map(s => s.star))
+  const shenStarNames = new Set(shenStars.map(s => s.star))
+  const taiSuiStarNames = new Set(taiSuiStars.map(s => s.star))
+
+  // 命宫 vs 身宫主星差异
+  const mingShenOverlap = [...mingStarNames].filter(s => shenStarNames.has(s))
+  if (mingShenOverlap.length === 0 && mingStars.length > 0 && shenStars.length > 0) {
+    crossTensions.push(
+      `命宫主星(${mingStars.map(s => s.star).join('、')})与身宫主星(${shenStars.map(s => s.star).join('、')})完全不同：` +
+      `外在性格与内在追求存在明显反差，容易"表里不一"或"双重性格"`
+    )
+  }
+
+  // 3. 四化差异张力
+  const mingHasLu = mingSihua.some(s => s.type === '化禄')
+  const mingHasQuan = mingSihua.some(s => s.type === '化权')
+  const mingHasJi = mingSihua.some(s => s.type === '化忌')
+  const shenHasLu = shenSihua.some(s => s.type === '化禄')
+  const shenHasQuan = shenSihua.some(s => s.type === '化权')
+  const shenHasJi = shenSihua.some(s => s.type === '化忌')
+  const taiSuiHasLu = taiSuiSihua.some(s => s.type === '化禄')
+  const taiSuiHasJi = taiSuiSihua.some(s => s.type === '化忌')
+
+  if (mingHasLu && shenHasJi) {
+    crossTensions.push('命宫化禄 + 身宫化忌：外圆内方，表面随和圆融但内心有执念和底线，对在意的事绝不妥协')
+  }
+  if (mingHasQuan && shenHasLu) {
+    crossTensions.push('命宫化权 + 身宫化禄：外强内柔，外在强势主导但内在渴望和谐，容易在掌控与妥协间摇摆')
+  }
+  if (mingHasJi && taiSuiHasLu) {
+    crossTensions.push('命宫化忌 + 太岁宫化禄：先天纠结但后天顺遂，早年多波折但中年后运势转好')
+  }
+  if (!mingHasLu && !mingHasQuan && shenHasLu) {
+    crossTensions.push('命宫无禄权 + 身宫有禄：先天条件一般，但后天努力能带来财富和机遇，适合白手起家')
+  }
+
+  // 4. 旺弱差异张力
+  const mingWang = mingStars.some(s => ['旺', '庙'].includes(s.brightness))
+  const shenXian = shenStars.some(s => ['陷', '平'].includes(s.brightness))
+  if (mingWang && shenXian) {
+    crossTensions.push('命宫旺 + 身宫陷：先天资质好但后天发展受限，容易"高开低走"，需注重持续积累')
+  }
+
+  const baseTone = judgeThreePalaceTone(mingScore, shenScore, taiSuiScore)
+
+  // 综合结论
+  let synthesis = baseTone
+  if (crossTensions.length > 0) {
+    synthesis += `。交叉张力：${crossTensions.length > 2 ? crossTensions.slice(0, 2).join('；') + '等' + (crossTensions.length - 2) + '项' : crossTensions.join('；')}`
+  } else {
+    synthesis += '。三宫之间无明显交叉张力，性格较为统一。'
+  }
+
+  return {
+    baseTone,
+    crossTensions,
+    synthesis,
+  }
 }

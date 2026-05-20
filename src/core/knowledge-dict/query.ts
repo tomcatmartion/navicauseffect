@@ -82,7 +82,7 @@ export function getPalaceMeaning(palace: PalaceName): PalaceMeaning | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 星曜分类查询（从 scoring_params.json 加载）
+// 星曜分类查询（从 scoring.json 加载）
 // ═══════════════════════════════════════════════════════════════════
 
 /** 六吉星列表 */
@@ -124,7 +124,7 @@ export function getInauspiciousScore(): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 制煞能力等级（从 scoring_params.json 加载）
+// 制煞能力等级（从 scoring.json 加载）
 // ═══════════════════════════════════════════════════════════════════
 
 /**
@@ -183,10 +183,10 @@ const FLANKING_DECAY_TABLE = loadFlankingDecayTable()
 
 const fixedCfg = getScoringParams().fixedDecay
 
-/** 对宫衰减系数（来自 scoring_params.json，可配置） */
+/** 对宫衰减系数（来自 scoring.json，可配置） */
 export const OPPOSITE_DECAY = typeof fixedCfg?.opposite === 'number' ? fixedCfg.opposite : 0.8
 
-/** 三合宫衰减系数（来自 scoring_params.json，可配置） */
+/** 三合宫衰减系数（来自 scoring.json，可配置） */
 export const TRINE_DECAY = typeof fixedCfg?.trine === 'number' ? fixedCfg.trine : 0.7
 
 /**

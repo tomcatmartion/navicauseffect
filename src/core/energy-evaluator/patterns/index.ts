@@ -1,7 +1,7 @@
 /**
  * M2: 格局判定 — 统一导出
  *
- * 格局元数据从 data/patterns.json 加载，判定函数保留在 TypeScript 中
+ * 格局元数据从 data/pattern_library.json 加载，判定函数保留在 TypeScript 中
  */
 
 export { greatAuspiciousPatterns } from './great-auspicious'

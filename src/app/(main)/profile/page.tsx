@@ -49,16 +49,6 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [newNickname, setNewNickname] = useState("");
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/login");
-      return;
-    }
-    if (status === "authenticated") {
-      fetchProfile();
-    }
-  }, [status, router]);
-
   const fetchProfile = async () => {
     try {
       const res = await fetch("/api/user/profile");
@@ -73,6 +63,16 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/login");
+      return;
+    }
+    if (status === "authenticated") {
+      fetchProfile();
+    }
+  }, [status, router]);
 
   const handleUpdateNickname = async () => {
     if (!newNickname.trim()) {

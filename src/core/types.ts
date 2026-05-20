@@ -337,8 +337,12 @@ export interface IRStage2 {
   taiSuiTags: FourDimensionTags
   /** 整体性格基调 */
   overallTone: string
-  /** 命宫全息底色（原局层） */
+  /** 命宫全息底色 */
   mingGongHolographic: HolographicBase
+  /** 身宫索引（用于定位身宫） */
+  shenGongIndex?: number
+  /** 太岁宫索引 */
+  taiSuiIndex?: number
 }
 
 /** 四维合参标签 */
@@ -486,6 +490,65 @@ export interface DaXianPalaceMapping {
   mutagen: string[]
   /** 大限下的十二宫评分（可选，调用 M2 后填入） */
   scores?: PalaceScore[]
+  /** 大限格局识别结果（可选，调用运限格局模块后填入） */
+  patterns?: PatternMatch[]
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 运限格局识别
+// ═══════════════════════════════════════════════════════════════════
+
+/** 运限类型 */
+export type LimitType = '大限' | '流年' | '小限'
+
+/** 运限格局识别结果 */
+export interface LimitPatternResult {
+  /** 运限类型 */
+  limitType: LimitType
+  /** 运限标识（如：大限第3限 20-29岁 / 流年2025 / 小限32岁） */
+  limitLabel: string
+  /** 运限命宫在原局中的索引 */
+  mingPalaceIndex: number
+  /** 运限命宫地支 */
+  mingPalaceZhi: DiZhi
+  /** 运限天干 */
+  limitGan: TianGan
+  /** 匹配到的格局 */
+  patterns: PatternMatch[]
+  /** 格局与原局格局的对比分析 */
+  comparisonWithNatal?: {
+    /** 原局格局数量 */
+    natalPatternCount: number
+    /** 运限新增格局数量 */
+    newPatternCount: number
+    /** 运限消失的原局格局数量 */
+    lostPatternCount: number
+    /** 持续存在的格局数量 */
+    sustainedPatternCount: number
+    /** 对比结论 */
+    conclusion: string
+  }
+}
+
+/** 全量运限格局识别输出 */
+export interface LimitPatternsOutput {
+  /** 原局格局（参考基准） */
+  natalPatterns: PatternMatch[]
+  /** 十大限格局识别结果 */
+  decadalPatterns: LimitPatternResult[]
+  /** 指定流年格局识别结果 */
+  yearlyPatterns: LimitPatternResult[]
+  /** 小限格局识别结果（可选） */
+  minorPatterns?: LimitPatternResult[]
+  /** 运限格局综合分析 */
+  synthesis: {
+    /** 格局运势趋势 */
+    trend: string
+    /** 关键转折大限 */
+    keyDecennials: string[]
+    /** 格局能量峰值年份 */
+    peakYears: number[]
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -615,6 +678,54 @@ export interface Stage2Output {
   mingGongHolographic: HolographicBase
   /** 知识片段 */
   knowledgeSnippets: KnowledgeSnippet[]
+  /** 身宫索引 */
+  shenGongIndex?: number
+  /** 太岁宫索引 */
+  taiSuiIndex?: number
+  /** P0: 格局人格特质注入结果 */
+  patternPersonality?: {
+    influences: Array<{
+      patternName: string
+      level: string
+      traits: Array<{ keyword: string; dimension: string; intensity: number }>
+      personalityBase: string
+      behavioralTendency: string
+      interpersonalStyle: string
+      stressResponse: string
+    }>
+    aggregated: {
+      surfaceTraits: string[]
+      middleTraits: string[]
+      coreTraits: string[]
+      personalityBase: string
+      behavioralTendency: string
+      interpersonalStyle: string
+      stressResponse: string
+    }
+  }
+  /** P1: 评分原因性格映射结果 */
+  scoreReasonPersonality?: {
+    mingProfile: {
+      palace: string
+      finalScore: number
+      bonusReasons: Array<{ dimension: string; item: string; personalityInterpretation: string; impactLevel: string }>
+      penaltyReasons: Array<{ dimension: string; item: string; personalityInterpretation: string; impactLevel: string }>
+      subduePersonality: string
+      synthesis: string
+    }
+    keyDimensions: {
+      strengths: string[]
+      challenges: string[]
+      抗压能力: string
+      人际风格: string
+    }
+  }
+  /** P2: 三宫交叉张力分析结果 */
+  threePalaceCross?: {
+    baseTone: string
+    crossTensions: string[]
+    synthesis: string
+  }
 }
 
 /** 阶段三输入 */

@@ -4,7 +4,7 @@
  * P01-P12：12种骨架（以紫微所在宫位命名）
  * 每种骨架定义12地支对应的主星和旺弱等级
  *
- * 数据来源：data/palace_innate_skeleton.json（支持热加载）
+ * 数据来源：data/palace_system.json（支持热加载）
  */
 
 import type { DiZhi, PalaceBrightness } from '../types'
@@ -93,7 +93,7 @@ export const SKELETON_MAP: SkeletonEntry[] = new Proxy([] as SkeletonEntry[], {
         .filter((e): e is SkeletonEntry => e !== null)
     }
     const val = (cachedMap as unknown as Record<string | symbol, unknown>)[prop]
-    if (typeof val === 'function') return (val as Function).bind(cachedMap)
+    if (typeof val === 'function') return (val as (...args: unknown[]) => unknown).bind(cachedMap)
     return val
   },
 })

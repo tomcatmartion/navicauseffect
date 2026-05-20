@@ -2,7 +2,21 @@
  * 流式结束后解析尾部 JSON（memory_update / intent）与 narrative 分离
  */
 
+import { createInitialState } from '@/core/orchestrator/state-machine'
+import type { SessionPersisted } from './types'
+
 const MEMORY_KEYS = ['memory_update', 'memoryUpdate'] as const
+
+export function createEmptyHybridPersisted(): SessionPersisted {
+  return {
+    version: 1,
+    sessionState: createInitialState(),
+    conversationHistory: [],
+    collected: { eventAnswers: {} },
+  }
+}
+
+export type { SessionPersisted }
 
 /**
  * 从助手全文回复中剥离可能的 JSON 块，返回叙事正文与 memory patch

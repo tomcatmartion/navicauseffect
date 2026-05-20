@@ -17,12 +17,6 @@ importers:
       '@prisma/client':
         specifier: ^6.19.2
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
-      '@zvec/bindings-linux-x64':
-        specifier: ^0.3.2
-        version: 0.3.2
-      '@zvec/zvec':
-        specifier: ^0.3.2
-        version: 0.3.2
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -2232,29 +2226,6 @@ packages:
   '@xtuc/long@4.2.2':
     resolution: {integrity: sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==}
 
-  '@zvec/bindings-darwin-arm64@0.3.2':
-    resolution: {integrity: sha512-r0XE6Ec+A9qK1jcebRXMdNW5trzOgIjBfEY1yvRZSnf7C3RLpexdOfTW5uP+3W20MbiFlQnbv9etCFhkqKynZA==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@zvec/bindings-linux-arm64@0.3.2':
-    resolution: {integrity: sha512-9iDPc8Ff9foSbVZk3Yow39bND0wgYq/oOyHk8H/XubKtwtjlEQvFWfxdnh6Jtwn8dSXDnrHFGdvGVqsExQeCzA==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@zvec/bindings-linux-x64@0.3.2':
-    resolution: {integrity: sha512-1UAJtSqkJVnLilHO2AVMgccFP9wFX1vtviu0zoODABiJ5yZ49Q+aW8PQEYbu3BaJRHTPBeZncvuVx8jCAuSBtw==}
-    cpu: [x64]
-    os: [linux]
-
-  '@zvec/bindings-win32-x64@0.3.2':
-    resolution: {integrity: sha512-unsP44FIr93B9N0H5G0ZAueAN6zDsWm1h8nzF/k5kjXOgUEgbs3LzpyhZJjVxPxh7G0tVu0XEtkdxy70k0QmJA==}
-    cpu: [x64]
-    os: [win32]
-
-  '@zvec/zvec@0.3.2':
-    resolution: {integrity: sha512-Ml+HyrT0jdnMMkfWKqLr/OyEWbbhiEdBMJTehL2M1dZe35QlCE4/kUTO71t9Qz12w8LOQmKPKgAd0av9a1uxcQ==}
-
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -2425,9 +2396,6 @@ packages:
 
   big.js@5.2.2:
     resolution: {integrity: sha512-vyL2OymJxmarO8gxMr0mhChsO9QGwhynfuu4+MHTAW6czfq9humCB7rKpUjDd9YUiDPU4mzpyupFSvOClAwbmQ==}
-
-  bindings@1.5.0:
-    resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
 
   bluebird@3.4.7:
     resolution: {integrity: sha512-iD3898SR7sWVRHbiQv+sHUtHnMvC1o3nW5rAcqnq3uOn07DSAppZYUkIGslDz6gXC7HfunPe7YVBgoEJASPcHA==}
@@ -3115,9 +3083,6 @@ packages:
   file-entry-cache@8.0.0:
     resolution: {integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==}
     engines: {node: '>=16.0.0'}
-
-  file-uri-to-path@1.0.0:
-    resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
 
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
@@ -7087,26 +7052,6 @@ snapshots:
 
   '@xtuc/long@4.2.2': {}
 
-  '@zvec/bindings-darwin-arm64@0.3.2':
-    optional: true
-
-  '@zvec/bindings-linux-arm64@0.3.2':
-    optional: true
-
-  '@zvec/bindings-linux-x64@0.3.2': {}
-
-  '@zvec/bindings-win32-x64@0.3.2':
-    optional: true
-
-  '@zvec/zvec@0.3.2':
-    dependencies:
-      bindings: 1.5.0
-    optionalDependencies:
-      '@zvec/bindings-darwin-arm64': 0.3.2
-      '@zvec/bindings-linux-arm64': 0.3.2
-      '@zvec/bindings-linux-x64': 0.3.2
-      '@zvec/bindings-win32-x64': 0.3.2
-
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -7275,10 +7220,6 @@ snapshots:
   bcryptjs@3.0.3: {}
 
   big.js@5.2.2: {}
-
-  bindings@1.5.0:
-    dependencies:
-      file-uri-to-path: 1.0.0
 
   bluebird@3.4.7: {}
 
@@ -8114,8 +8055,6 @@ snapshots:
   file-entry-cache@8.0.0:
     dependencies:
       flat-cache: 4.0.1
-
-  file-uri-to-path@1.0.0: {}
 
   fill-range@7.1.1:
     dependencies:

@@ -1,7 +1,7 @@
 /**
  * M2: 宫位评分 — 六步评分流程引擎
  *
- * 基于 scoring_formula.json v2.3 实现：
+ * 基于 scoring.json formula 部分实现：
  * 步骤0: 空宫借对宫
  * 步骤1: 初始基础分（含空宫处理）
  * 步骤2: 加分阶段（8个子步骤，含空间衰减）
@@ -142,7 +142,7 @@ export function getTrineIndices(idx: number): [number, number] {
 /**
  * 获取夹宫索引（左右邻宫）
  *
- * 方向约定（scoring_params.json directionConvention）：
+ * 方向约定（scoring.json params.directionConvention）：
  * - 左 = counterClockwise（逆时针方向为左）= 索引 +1
  * - 右 = clockwise（顺时针方向为右）= 索引 -1
  *
@@ -179,7 +179,7 @@ interface FlankingPair {
 /**
  * 获取所有成对的夹宫组合（符合 jiagongValidPairs）
  *
- * 根据 scoring_params.json 规定：
+ * 根据 scoring.json params 规定：
  * - 成对星曜必须分居左右两侧一宫，缺一不可
  * - 仅一侧出现 → 不构成夹
  * - 非成对组合的两颗星分处两侧 → 不构成夹
@@ -291,7 +291,7 @@ function getIntensityFactor(brightness: WarmCoolLabel): number {
 }
 
 function getLuCunDeltaByLabel(label: WarmCoolLabel): number {
-  // 从 scoring_params.json 加载 luCunDelta
+  // 从 scoring.json params 加载 luCunDelta
   const params = getScoringParams()
   let delta: number
   if (label === '旺') delta = params?.luCunDelta?.['旺'] ?? 0.3
@@ -509,7 +509,7 @@ function step4_penalty(palaceIdx: number, ctx: ScoringContext, state: ScoringSta
   ]
 
   // 4.1 三方四正煞星（擎羊、陀罗、火星、铃星、地空、地劫）
-  // 使用全称：擎羊、陀罗、火星、铃星、地空、地劫（patterns.json 已修复缩写）
+  // 使用全称：擎羊、陀罗、火星、铃星、地空、地劫（pattern_library.json 已修复缩写）
   // 夹宫处理：只有成对出现的煞星才按夹宫动态衰减计分，每对只计一次
   const shaStars = new Set(getScoringParams().shaStarNames)
   const shaFlankingPairs = getAllFlankingPairs(palaceIdx, ctx, '煞夹')

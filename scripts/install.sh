@@ -77,13 +77,6 @@ log ".env 已存在"
 
 echo "[3/5] 创建数据目录..."
 
-mkdir -p "$APP_DIR/data/zvec/sysknowledge_dim1536"
-mkdir -p "$APP_DIR/data/zvec/sysknowledge_dim1024"
-
-rm -f "$APP_DIR/data/zvec/.sysknowledge-reindex.lock" 2>/dev/null || true
-rm -f "$APP_DIR/data/zvec/.index-progress.json" 2>/dev/null || true
-rm -f "$APP_DIR/data/zvec/.retag-progress.json" 2>/dev/null || true
-
 mkdir -p "$APP_DIR/sysfiles/systag"
 mkdir -p "$APP_DIR/sysfiles/sysknowledge"
 
@@ -163,13 +156,6 @@ if [ -f "$APP_DIR/node_modules/.prisma/client/libquery_engine-rhel-openssl-1.1.x
   log "Prisma Linux 引擎 OK"
 else
   err "Prisma Linux 引擎缺失"
-  ERRORS=$((ERRORS + 1))
-fi
-
-if [ -f "$APP_DIR/node_modules/@zvec/bindings-linux-x64/zvec_node_binding.node" ]; then
-  log "zvec Linux 绑定 OK"
-else
-  err "zvec Linux 绑定缺失"
   ERRORS=$((ERRORS + 1))
 fi
 

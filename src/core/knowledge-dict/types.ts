@@ -3,8 +3,15 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════
-// 骨架映射类型（palace_innate_skeleton.json）
+// 宫位系统类型（palace_system.json）
 // ═══════════════════════════════════════════════════════════════════
+
+/** 宫位含义数据 */
+export interface PalaceMeaning {
+  meaning: string
+  domains: string[]
+  modernContext: string
+}
 
 /** 骨架中单个宫位的数据 */
 export interface SkeletonPalaceEntry {
@@ -15,12 +22,16 @@ export interface SkeletonPalaceEntry {
 }
 
 /**
- * 宫位骨架映射表（palace_innate_skeleton.json）
+ * 宫位系统配置（palace_system.json）
  *
- * 键：P01_紫微在子 ~ P12_紫杀在亥
- * 值：12地支 → { major, brightness }
+ * 包含宫位含义与骨架亮度映射
  */
-export type PalaceInnateSkeleton = Record<string, Record<string, SkeletonPalaceEntry>>
+export interface PalaceSystem {
+  version: string
+  description: string
+  宫位含义: Record<string, PalaceMeaning>
+  宫位骨架亮度映射: Record<string, Record<string, SkeletonPalaceEntry>>
+}
 
 // ═══════════════════════════════════════════════════════════════════
 
@@ -30,12 +41,6 @@ export interface StarAttribute {
   positiveTrait: string
   negativeTrait: string
   specialNote: string
-}
-
-export interface PalaceMeaning {
-  meaning: string
-  domains: string[]
-  modernContext: string
 }
 
 export interface EventStarTraitMap {

@@ -4,7 +4,7 @@
  * 职责：根据用户回答序列，确定事项类型、主看宫位、兼看宫位
  *       6分支决策树：求学/求爱/求财/求职/求健康/求名
  *
- * 数据来源：data/router_tree.json（支持热加载）
+ * 数据来源：data/routing.json（支持热加载）
  */
 
 import type { MatterType, MatterRouteResult, PalaceName } from '../types'
@@ -71,7 +71,8 @@ function evaluateCondition(condition: string, answers: Record<string, string>): 
 
 function resolveBranch(matterType: MatterType, answers: Record<string, string>): RouteResult {
   const tree = getRouterTree() as unknown as RouterTreeData
-  const branch = tree.branches[matterType]
+  // 优先使用 detailedBranches（包含完整决策逻辑），回退到 branches
+  const branch = (tree as unknown as { detailedBranches?: Record<string, BranchData> }).detailedBranches?.[matterType] ?? tree.branches[matterType]
   if (!branch) {
     return { primaryPalace: '命宫', secondaryPalaces: [], specialConditions: [], needInteraction: false }
   }

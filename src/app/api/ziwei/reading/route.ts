@@ -114,6 +114,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
+function mapSseStreamError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  const name = err instanceof Error ? err.name : ''
+  const isTimeout =
+    name === 'TimeoutError' ||
+    msg.includes('aborted due to timeout') ||
+    msg.includes('请求超时')
+  if (isTimeout) {
+    return 'AI 响应超时（生成时间较长），请稍后重试或缩短提问'
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return `生成中断：${msg.slice(0, 300)}`
+  }
+  return '生成中断，请稍后重试'
+}
+
 function createSseStream(
   stream: ReadableStream,
   sessionId: string,
@@ -163,6 +179,9 @@ function createSseStream(
               if (data === '[DONE]') continue
 
               const chunk = parseOpenAiSseEventBlock(line)
+              if (chunk?.providerError) {
+                throw new Error(chunk.providerError)
+              }
               if (chunk?.deltaText) {
                 const deltaText = chunk.deltaText
                 fullReply += deltaText
@@ -197,7 +216,9 @@ function createSseStream(
         }
       } catch (err) {
         console.error('[SSE] 流处理错误:', err)
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: '生成中断' })}\n\n`))
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ error: mapSseStreamError(err) })}\n\n`),
+        )
       } finally {
         controller.close()
       }

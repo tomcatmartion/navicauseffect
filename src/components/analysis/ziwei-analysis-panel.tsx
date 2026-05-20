@@ -123,7 +123,7 @@ interface PipelineSnapshot {
       allStars: Array<{ name: string; sihua?: string; sihuaSource?: string }>;
       formula: string;
       relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>;
-      /** 六步评分流程（基于 scoring_formula.json v2.3） */
+      /** 六步评分流程（基于 scoring.json formula 部分） */
       sixSteps?: {
         step0_emptyBorrow?: {
           isEmpty: boolean;
@@ -180,10 +180,44 @@ interface PipelineSnapshot {
   }>;
   personality: {
     overview: string;
-    traits: { surface: string[]; core: string[] };
+    traits: { surface: string[]; middle: string[]; core: string[] };
+    fourDimensions: {
+      self: string;
+      opposite: string;
+      trine: string;
+      flanking: string;
+      synthesis: string;
+    };
     strengths: string[];
     weaknesses: string[];
-    advice: { overall: string };
+    advice: { overall: string; career: string; relationship: string; health: string };
+    knowledgeSnippets: Array<{ source: string; key: string; content: string }>;
+    /** 命宫能级 */
+    mingGongScore?: number;
+    scoreLevel?: string;
+    scoreInfluence?: string;
+    /** 身宫能级 */
+    shenGongScore?: number;
+    shenScoreLevel?: string;
+    shenScoreInfluence?: string;
+    /** 太岁宫能级 */
+    taiSuiScore?: number;
+    taiSuiScoreLevel?: string;
+    taiSuiScoreInfluence?: string;
+    /** 三宫能级综合 */
+    threePalaceScoreSynthesis?: string;
+    /** 格局影响 */
+    patternInfluences?: string[];
+    /** 三方四正交互 */
+    trineInteraction?: string;
+    oppositeInteraction?: string;
+    trineSihuaFlow?: string;
+    trineAuspiciousInauspicious?: string;
+    /** 夹宫影响 */
+    flankingInfluence?: string;
+    singleFlankingInfluence?: string;
+    /** 四化性格映射 */
+    sihuaPersonalityTraits?: string[];
   };
   affair: {
     overview: string;
@@ -254,6 +288,71 @@ interface PersonalityVm {
     summary?: string;
   };
   knowledgeSnippets?: KnowledgeSnippet[];
+  /** 命宫能级评分 */
+  mingGongScore?: number;
+  scoreLevel?: string;
+  scoreInfluence?: string;
+  /** 三方四正交互 */
+  trineInteraction?: string;
+  oppositeInteraction?: string;
+  /** 夹宫影响 */
+  flankingInfluence?: string;
+  /** 身宫能级评分 */
+  shenGongScore?: number;
+  shenScoreLevel?: string;
+  shenScoreInfluence?: string;
+  /** 太岁宫能级评分 */
+  taiSuiScore?: number;
+  taiSuiScoreLevel?: string;
+  taiSuiScoreInfluence?: string;
+  /** 三宫能级综合 */
+  threePalaceScoreSynthesis?: string;
+  /** 四化性格特质映射 */
+  sihuaPersonalityTraits?: string[];
+  /** 三方四正四化流转 */
+  trineSihuaFlow?: string;
+  /** 三方四正吉煞分布 */
+  trineAuspiciousInauspicious?: string;
+  /** 单侧夹宫分析 */
+  singleFlankingInfluence?: string;
+  /** P0: 格局人格特质注入 */
+  patternPersonality?: {
+    personalityBase: string;
+    behavioralTendency: string;
+    interpersonalStyle: string;
+    stressResponse: string;
+    surfaceTraits: string[];
+    middleTraits: string[];
+    coreTraits: string[];
+    influences: Array<{
+      patternName: string;
+      level: string;
+      traits: string;
+      description: string;
+    }>;
+  };
+  /** P1: 评分原因性格映射 */
+  scoreReasonPersonality?: {
+    mingProfile: {
+      finalScore: number;
+      subduePersonality: string;
+      synthesis: string;
+      strengths: string[];
+      challenges: string[];
+    };
+    keyDimensions: {
+      strengths: string[];
+      challenges: string[];
+      抗压能力: string;
+      人际风格: string;
+    };
+  };
+  /** P2: 三宫交叉张力分析 */
+  threePalaceCross?: {
+    baseTone: string;
+    crossTensions: string[];
+    synthesis: string;
+  };
 }
 
 interface AffairVm {
@@ -955,17 +1054,187 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
           </div>
         )}
 
+        {/* 三宫能级评分 */}
+        {(profile.mingGongScore !== undefined || profile.shenGongScore !== undefined || profile.taiSuiScore !== undefined) && (
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground font-medium">三宫能级评分</div>
+            <div className="grid grid-cols-3 gap-2">
+              {profile.mingGongScore !== undefined && (
+                <div className="bg-red-50/50 dark:bg-red-950/20 rounded p-2 border border-red-100 dark:border-red-900/30">
+                  <div className="text-[10px] text-red-600 dark:text-red-400 font-medium mb-1">命宫</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-lg font-bold text-primary">{profile.mingGongScore.toFixed(1)}</span>
+                    <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
+                      profile.scoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
+                      : profile.scoreLevel === '中等' ? 'border-blue-400 text-blue-600'
+                      : profile.scoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
+                      : 'border-red-400 text-red-600'
+                    }`}>{profile.scoreLevel}</Badge>
+                  </div>
+                  {profile.scoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.scoreInfluence}</div>}
+                </div>
+              )}
+              {profile.shenGongScore !== undefined && (
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
+                  <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mb-1">身宫</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-lg font-bold text-primary">{profile.shenGongScore.toFixed(1)}</span>
+                    <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
+                      profile.shenScoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
+                      : profile.shenScoreLevel === '中等' ? 'border-blue-400 text-blue-600'
+                      : profile.shenScoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
+                      : 'border-red-400 text-red-600'
+                    }`}>{profile.shenScoreLevel}</Badge>
+                  </div>
+                  {profile.shenScoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.shenScoreInfluence}</div>}
+                </div>
+              )}
+              {profile.taiSuiScore !== undefined && (
+                <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded p-2 border border-amber-100 dark:border-amber-900/30">
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">太岁宫</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-lg font-bold text-primary">{profile.taiSuiScore.toFixed(1)}</span>
+                    <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
+                      profile.taiSuiScoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
+                      : profile.taiSuiScoreLevel === '中等' ? 'border-blue-400 text-blue-600'
+                      : profile.taiSuiScoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
+                      : 'border-red-400 text-red-600'
+                    }`}>{profile.taiSuiScoreLevel}</Badge>
+                  </div>
+                  {profile.taiSuiScoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.taiSuiScoreInfluence}</div>}
+                </div>
+              )}
+            </div>
+            {profile.threePalaceScoreSynthesis && (
+              <div className="text-[11px] text-muted-foreground bg-gradient-to-r from-muted/30 to-muted/50 rounded p-2 border border-primary/10">
+                <span className="font-medium text-primary">综合：</span>{profile.threePalaceScoreSynthesis}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 格局影响 */}
         {profile.patternInfluences && profile.patternInfluences.length > 0 && (
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground font-medium">格局影响</div>
-            <div className="space-y-1">
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">命宫成格格局 · 性格底色影响</div>
+            <div className="space-y-1.5">
               {profile.patternInfluences.map((p: string, i: number) => (
-                <div key={i} className="text-[11px] text-foreground flex items-start gap-1">
-                  <span>•</span>
-                  <span>{p}</span>
+                <div
+                  key={i}
+                  className={`text-[11px] rounded p-2 flex items-start gap-1.5 ${
+                    p.includes('吉')
+                      ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30'
+                      : p.includes('凶')
+                        ? 'bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30'
+                        : 'bg-muted/30'
+                  }`}
+                >
+                  <span className={p.includes('吉') ? 'text-emerald-500' : p.includes('凶') ? 'text-red-500' : 'text-muted-foreground'}>
+                    {p.includes('吉') ? '✨' : p.includes('凶') ? '⚡' : '•'}
+                  </span>
+                  <span className="text-foreground">{p}</span>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 四化性格特质映射 */}
+        {profile.sihuaPersonalityTraits && profile.sihuaPersonalityTraits.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">四化性格特质映射</div>
+            <div className="space-y-1.5">
+              {profile.sihuaPersonalityTraits.map((trait: string, i: number) => (
+                <div key={i} className={`text-[11px] rounded p-2 flex items-start gap-1.5 ${
+                  trait.includes('化禄') ? 'bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/30'
+                  : trait.includes('化权') ? 'bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30'
+                  : trait.includes('化科') ? 'bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30'
+                  : trait.includes('化忌') ? 'bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30'
+                  : 'bg-muted/30'
+                }`}>
+                  <span className={
+                    trait.includes('化禄') ? 'text-green-500'
+                    : trait.includes('化权') ? 'text-blue-500'
+                    : trait.includes('化科') ? 'text-purple-500'
+                    : trait.includes('化忌') ? 'text-red-500'
+                    : 'text-muted-foreground'
+                  }>
+                    {trait.includes('化禄') ? '💰' : trait.includes('化权') ? '⚡' : trait.includes('化科') ? '📜' : trait.includes('化忌') ? '🔒' : '•'}
+                  </span>
+                  <span className="text-foreground">{trait}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 三方四正交互 */}
+        {(profile.trineInteraction || profile.oppositeInteraction || profile.trineSihuaFlow || profile.trineAuspiciousInauspicious) && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">三方四正星曜交互</div>
+            <div className="space-y-1.5 text-[11px]">
+              {profile.trineInteraction && (
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">三合会照：</span>
+                  <span className="text-foreground">{profile.trineInteraction}</span>
+                </div>
+              )}
+              {profile.trineSihuaFlow && (
+                <div className="bg-indigo-50/50 dark:bg-indigo-950/20 rounded p-2 border border-indigo-100 dark:border-indigo-900/30">
+                  <span className="text-indigo-600 dark:text-indigo-400 font-medium">四化流转：</span>
+                  <span className="text-foreground">{profile.trineSihuaFlow}</span>
+                </div>
+              )}
+              {profile.trineAuspiciousInauspicious && (
+                <div className="bg-teal-50/50 dark:bg-teal-950/20 rounded p-2 border border-teal-100 dark:border-teal-900/30">
+                  <span className="text-teal-600 dark:text-teal-400 font-medium">吉煞分布：</span>
+                  <span className="text-foreground">{profile.trineAuspiciousInauspicious}</span>
+                </div>
+              )}
+              {profile.oppositeInteraction && (
+                <div className="bg-purple-50/50 dark:bg-purple-950/20 rounded p-2 border border-purple-100 dark:border-purple-900/30">
+                  <span className="text-purple-600 dark:text-purple-400 font-medium">对宫投射：</span>
+                  <span className="text-foreground">{profile.oppositeInteraction}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 夹宫影响 */}
+        {(profile.flankingInfluence || profile.singleFlankingInfluence) && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">夹宫影响</div>
+            {profile.flankingInfluence && (
+              <div
+                className={`text-[11px] rounded p-2 border ${
+                  profile.flankingInfluence.includes('夹')
+                    ? profile.flankingInfluence.includes('羊陀') || profile.flankingInfluence.includes('空劫') || profile.flankingInfluence.includes('火铃')
+                      ? 'bg-red-50/50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30'
+                      : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30'
+                    : 'bg-muted/30 border-muted'
+                }`}
+              >
+                <span
+                  className={`font-medium ${
+                    profile.flankingInfluence.includes('夹')
+                      ? profile.flankingInfluence.includes('羊陀') || profile.flankingInfluence.includes('空劫') || profile.flankingInfluence.includes('火铃')
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {profile.flankingInfluence.includes('夹') ? (profile.flankingInfluence.includes('羊陀') || profile.flankingInfluence.includes('空劫') || profile.flankingInfluence.includes('火铃') ? '⚠️ 煞夹：' : '✨ 吉夹：') : '• '}
+                </span>
+                <span className="text-foreground">{profile.flankingInfluence}</span>
+              </div>
+            )}
+            {profile.singleFlankingInfluence && !profile.singleFlankingInfluence.includes('已在上文') && !profile.singleFlankingInfluence.includes('均无星曜') && (
+              <div className="text-[11px] rounded p-2 border bg-amber-50/50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30">
+                <span className="font-medium text-amber-600 dark:text-amber-400">📍 单侧夹宫：</span>
+                <span className="text-foreground">{profile.singleFlankingInfluence}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -998,6 +1267,124 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* P0: 格局人格特质注入 */}
+        {profile.patternPersonality && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">🎯 格局人格特质</div>
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-lg p-3 border border-indigo-100 dark:border-indigo-900/30">
+              <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium mb-1">性格底色</div>
+              <div className="text-[11px] text-foreground leading-relaxed">{profile.patternPersonality.personalityBase}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
+                <div className="text-blue-600 dark:text-blue-400 font-medium mb-0.5">行为倾向</div>
+                <div className="text-foreground">{profile.patternPersonality.behavioralTendency}</div>
+              </div>
+              <div className="bg-pink-50/50 dark:bg-pink-950/20 rounded p-2 border border-pink-100 dark:border-pink-900/30">
+                <div className="text-pink-600 dark:text-pink-400 font-medium mb-0.5">人际风格</div>
+                <div className="text-foreground">{profile.patternPersonality.interpersonalStyle}</div>
+              </div>
+              <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded p-2 border border-amber-100 dark:border-amber-900/30 col-span-2">
+                <div className="text-amber-600 dark:text-amber-400 font-medium mb-0.5">压力反应</div>
+                <div className="text-foreground">{profile.patternPersonality.stressResponse}</div>
+              </div>
+            </div>
+            {profile.patternPersonality.influences.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-muted-foreground">格局影响明细</div>
+                {profile.patternPersonality.influences.map((inf, i) => (
+                  <div key={i} className={`text-[11px] rounded p-2 border ${
+                    inf.level.includes('吉') ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30'
+                    : inf.level.includes('凶') ? 'bg-red-50/50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30'
+                    : 'bg-muted/30 border-muted'
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={inf.level.includes('吉') ? 'text-emerald-500' : inf.level.includes('凶') ? 'text-red-500' : 'text-muted-foreground'}>
+                        {inf.level.includes('吉') ? '✨' : inf.level.includes('凶') ? '⚡' : '•'}
+                      </span>
+                      <span className="font-medium">{inf.patternName}</span>
+                      <Badge variant="outline" className="text-[9px] px-1 py-0">{inf.level}</Badge>
+                    </div>
+                    <div className="text-muted-foreground mt-0.5 pl-5">{inf.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* P1: 评分原因性格映射 */}
+        {profile.scoreReasonPersonality && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">📊 评分原因性格解读</div>
+            <div className="bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-950/20 dark:to-teal-950/20 rounded-lg p-3 border border-cyan-100 dark:border-cyan-900/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-cyan-700 dark:text-cyan-300 font-medium">命宫评分：{profile.scoreReasonPersonality.mingProfile.finalScore.toFixed(1)}</span>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                  {profile.scoreReasonPersonality.mingProfile.subduePersonality.slice(0, 4)}
+                </Badge>
+              </div>
+              <div className="text-[11px] text-foreground leading-relaxed">{profile.scoreReasonPersonality.mingProfile.synthesis}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {profile.scoreReasonPersonality.mingProfile.strengths.length > 0 && (
+                <div className="bg-green-50/50 dark:bg-green-950/20 rounded p-2 border border-green-100 dark:border-green-900/30">
+                  <div className="text-[10px] text-green-600 dark:text-green-400 font-medium mb-1">评分优势</div>
+                  {profile.scoreReasonPersonality.mingProfile.strengths.map((s, i) => (
+                    <div key={i} className="text-[11px] text-foreground flex items-start gap-1">
+                      <span className="text-green-500">✅</span>
+                      <span>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {profile.scoreReasonPersonality.mingProfile.challenges.length > 0 && (
+                <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded p-2 border border-orange-100 dark:border-orange-900/30">
+                  <div className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mb-1">评分挑战</div>
+                  {profile.scoreReasonPersonality.mingProfile.challenges.map((c, i) => (
+                    <div key={i} className="text-[11px] text-foreground flex items-start gap-1">
+                      <span className="text-orange-500">⚠️</span>
+                      <span>{c}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
+                <span className="text-blue-600 dark:text-blue-400 font-medium">抗压能力：</span>
+                <span className="text-foreground">{profile.scoreReasonPersonality.keyDimensions.抗压能力}</span>
+              </div>
+              <div className="bg-purple-50/50 dark:bg-purple-950/20 rounded p-2 border border-purple-100 dark:border-purple-900/30">
+                <span className="text-purple-600 dark:text-purple-400 font-medium">人际风格：</span>
+                <span className="text-foreground">{profile.scoreReasonPersonality.keyDimensions.人际风格}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* P2: 三宫交叉张力分析 */}
+        {profile.threePalaceCross && (
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground font-medium">⚡ 三宫交叉张力</div>
+            <div className="bg-gradient-to-r from-rose-50 to-orange-50 dark:from-rose-950/20 dark:to-orange-950/20 rounded-lg p-3 border border-rose-100 dark:border-rose-900/30">
+              <div className="text-[11px] text-rose-700 dark:text-rose-300 font-medium mb-1">综合结论</div>
+              <div className="text-[11px] text-foreground leading-relaxed">{profile.threePalaceCross.synthesis}</div>
+            </div>
+            {profile.threePalaceCross.crossTensions.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-muted-foreground">张力明细</div>
+                {profile.threePalaceCross.crossTensions.map((tension, i) => (
+                  <div key={i} className="text-[11px] rounded p-2 border bg-amber-50/50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30">
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">张力{i + 1}：</span>
+                    <span className="text-foreground">{tension}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

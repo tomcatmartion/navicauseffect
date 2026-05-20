@@ -75,7 +75,10 @@ export function Header() {
           ) : isLoggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-muted focus:outline-none min-h-[44px]">
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-muted focus:outline-none min-h-[44px] h-auto"
+                >
                   <div className="flex h-8 w-8 min-h-[32px] min-w-[32px] items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
                     {user?.name?.charAt(0) || "U"}
                   </div>
@@ -87,7 +90,7 @@ export function Header() {
                       {PLAN_LABELS[user?.membershipPlan || "FREE"]}
                     </Badge>
                   )}
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <div className="px-2 py-1.5">

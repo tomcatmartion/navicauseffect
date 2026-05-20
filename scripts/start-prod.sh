@@ -19,18 +19,7 @@ if [ ! -f "$APP_DIR/.env" ]; then
   exit 1
 fi
 
-# 1. 确保数据目录存在
-mkdir -p "$APP_DIR/data/zvec/sysknowledge_dim1536"
-mkdir -p "$APP_DIR/data/zvec/sysknowledge_dim1024"
-
-# 2. 清理残留锁和过期进度（防止上次中断导致卡死）
-rm -f "$APP_DIR/data/zvec/.sysknowledge-reindex.lock" 2>/dev/null || true
-rm -f "$APP_DIR/data/zvec/.index-progress.json" 2>/dev/null || true
-rm -f "$APP_DIR/data/zvec/.retag-progress.json" 2>/dev/null || true
-# 清理 collection 级别的空 LOCK 文件（进程异常退出后遗留）
-find "$APP_DIR/data/zvec" -name 'LOCK' -size 0 -delete 2>/dev/null || true
-
-# 3. 数据库迁移（用项目自带 prisma 版本）
+# 1. 数据库迁移（用项目自带 prisma 版本）
 echo "[1/2] 执行数据库迁移..."
 PRISMA_CLI="./node_modules/.bin/prisma"
 [ ! -x "$PRISMA_CLI" ] && PRISMA_CLI="npx prisma"

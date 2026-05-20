@@ -180,8 +180,8 @@ do_build() {
 # ─── 数据目录 ───
 create_data_dirs() {
   info "创建数据目录..."
-  mkdir -p data/zvec/sysknowledge_dim1536 data/zvec/sysknowledge_dim1024
-  log "data/zvec/ 目录就绪"
+  mkdir -p sysfiles/systag sysfiles/sysknowledge
+  log "sysfiles/ 目录就绪"
 }
 
 # ─── 数据库初始化 ───

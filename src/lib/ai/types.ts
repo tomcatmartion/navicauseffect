@@ -7,6 +7,8 @@ export interface ChatOptions {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  /** 单次流式请求总超时（含读流），默认见各 Provider */
+  requestTimeoutMs?: number;
 }
 
 export interface AIProvider {

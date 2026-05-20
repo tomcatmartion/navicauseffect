@@ -14,10 +14,11 @@ import { CHART_FIXTURE } from './chart-fixture'
 
 let stage1Output: ReturnType<typeof executeStage1>
 
+beforeAll(() => {
+  stage1Output = executeStage1({ chartData: CHART_FIXTURE })
+})
+
 describe('Stage 1: 宫位评分', () => {
-  beforeAll(() => {
-    stage1Output = executeStage1({ chartData: CHART_FIXTURE })
-  })
 
   it('应返回十二宫评分', () => {
     expect(stage1Output.palaceScores).toHaveLength(12)

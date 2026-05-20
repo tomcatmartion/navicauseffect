@@ -171,7 +171,6 @@ model AIModelConfig {
   modelId         String  @map("model_id")
   isActive        Boolean @default(true) @map("is_active")
   isDefault       Boolean @default(false) @map("is_default")
-  promptTemplates Json?   @map("prompt_templates")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

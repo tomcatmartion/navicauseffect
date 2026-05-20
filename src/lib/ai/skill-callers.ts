@@ -5,6 +5,7 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { createProvider } from '@/lib/ai'
+import { AI_STREAM_TIMEOUT_MS } from '@/lib/ai/stream-timeout'
 import type { ChatMessage as ProviderChatMessage } from '@/lib/ai/types'
 import type { AIModelConfig as PrismaAIModelRow } from '@prisma/client'
 
@@ -210,7 +211,7 @@ export async function callAIStream(params: {
         max_tokens,
         stream: true,
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(AI_STREAM_TIMEOUT_MS),
     })
 
     if (!response.ok || !response.body) {
@@ -234,5 +235,6 @@ export async function callAIStream(params: {
     temperature,
     maxTokens: max_tokens,
     stream: true,
+    requestTimeoutMs: AI_STREAM_TIMEOUT_MS,
   })
 }

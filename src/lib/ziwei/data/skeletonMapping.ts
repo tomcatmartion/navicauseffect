@@ -51,8 +51,8 @@ function parseBranchesString(str: string): SkeletonMapping['branches'] {
 
   for (const part of parts) {
     // 提取地支和旺弱状态
-    let branch = part[0] as keyof typeof branches;
-    let strength = part.slice(1);
+    const branch = part[0] as keyof typeof branches;
+    const strength = part.slice(1);
 
     // 处理特殊格式如 "空陷"、"机巨极弱" 等
     if (strength === '空陷' || strength === '空') {

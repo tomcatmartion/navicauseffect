@@ -16,8 +16,9 @@ export class ClaudeProvider implements AIProvider {
     messages: ChatMessage[],
     options?: ChatOptions
   ): Promise<ReadableStream<Uint8Array>> {
+    const timeoutMs = options?.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const systemMsg = messages.find((m) => m.role === "system");
       const nonSystemMsgs = messages.filter((m) => m.role !== "system");
@@ -40,7 +41,7 @@ export class ClaudeProvider implements AIProvider {
           temperature: options?.temperature ?? 0.7,
           stream: true,
         }),
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!response.ok) {

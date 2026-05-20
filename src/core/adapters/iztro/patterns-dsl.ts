@@ -1,5 +1,5 @@
 /**
- * 格局 DSL — patterns.json 递归条件求值
+ * 格局 DSL — pattern_library.json 递归条件求值
  *
  * Sprint 策略（Claude 评审）：先跑通少量核心格局，再增量扩展；当前 JSON 约 10 条，
  * `evaluateCondition` 仅支持 all/any、palace+hasMajor、named；新增原子条件时须同步扩展本文件与单测。
@@ -39,7 +39,7 @@ export function evaluateCondition(cond: Record<string, unknown>, ctx: PatternEva
 function getRules(): PatternRuleJson[] {
   const cfg = getPatternConfig()
   if (Array.isArray(cfg)) return cfg as PatternRuleJson[]
-  // data/patterns.json 是对象格式：{ multipliers, categories, definitions }
+  // data/pattern_library.json 是对象格式：{ multipliers, categories, definitions }
   // 规则定义在 definitions 下，但当前 JSON 格式与 PatternRuleJson 不匹配
   // 先安全地返回空数组，避免 'all' in undefined 错误
   const defs = cfg && typeof cfg === 'object' && 'definitions' in cfg

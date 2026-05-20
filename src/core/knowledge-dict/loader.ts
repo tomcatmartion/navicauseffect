@@ -13,7 +13,7 @@ import type {
   TaiSuiTables,
   EventStarAttributes,
   ScoringParams,
-  PalaceInnateSkeleton,
+  PalaceSystem,
 } from './types'
 
 // ═══════════════════════════════════════════════════════════════════
@@ -22,16 +22,15 @@ import type {
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
-const STAR_ATTR_PATH = path.join(DATA_DIR, 'star_attributes.json')
-const PALACE_MEANING_PATH = path.join(DATA_DIR, 'palace_meanings.json')
-const EVENT_STAR_ATTR_PATH = path.join(DATA_DIR, 'event_star_attributes.json')
+const STAR_SYSTEM_PATH = path.join(DATA_DIR, 'star_system.json')
+const PALACE_SYSTEM_PATH = path.join(DATA_DIR, 'palace_system.json')
+const EVENT_DESCRIPTIONS_PATH = path.join(DATA_DIR, 'event_descriptions.json')
 const TAI_SUI_TABLES_PATH = path.join(DATA_DIR, 'tai_sui_rua_gua_tables.json')
-const SCORING_PARAMS_PATH = path.join(DATA_DIR, 'scoring_params.json')
-const ROUTER_TREE_PATH = path.join(DATA_DIR, 'router_tree.json')
-const PATTERNS_PATH = path.join(DATA_DIR, 'patterns.json')
-const INTERACTION_QU_XIANG_PATH = path.join(DATA_DIR, 'interaction_qu_xiang.json')
+const SCORING_PATH = path.join(DATA_DIR, 'scoring.json')
+const ROUTING_PATH = path.join(DATA_DIR, 'routing.json')
+const PATTERN_LIBRARY_PATH = path.join(DATA_DIR, 'pattern_library.json')
+const INTERACTION_RULES_PATH = path.join(DATA_DIR, 'interaction_rules.json')
 const LIMIT_DIRECTION_PATH = path.join(DATA_DIR, 'limit_direction.json')
-const PALACE_SKELETON_PATH = path.join(DATA_DIR, 'palace_innate_skeleton.json')
 
 // ═══════════════════════════════════════════════════════════════════
 // 缓存与修改时间追踪
@@ -42,16 +41,15 @@ interface CacheEntry<T> {
   mtime: number
 }
 
-const starAttrCache: CacheEntry<Record<string, StarAttribute>> = { data: null, mtime: 0 }
-const palaceMeaningCache: CacheEntry<Record<string, PalaceMeaning>> = { data: null, mtime: 0 }
-const eventStarAttrCache: CacheEntry<EventStarAttributes> = { data: null, mtime: 0 }
+const starSystemCache: CacheEntry<Record<string, StarAttribute>> = { data: null, mtime: 0 }
+const palaceSystemCache: CacheEntry<PalaceSystem> = { data: null, mtime: 0 }
+const eventDescriptionsCache: CacheEntry<EventStarAttributes> = { data: null, mtime: 0 }
 const taiSuiTablesCache: CacheEntry<TaiSuiTables> = { data: null, mtime: 0 }
-const scoringParamsCache: CacheEntry<ScoringParams> = { data: null, mtime: 0 }
-const routerTreeCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
-const patternsCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
-const interactionQuXiangCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
+const scoringCache: CacheEntry<ScoringParams> = { data: null, mtime: 0 }
+const routingCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
+const patternLibraryCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
+const interactionRulesCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const limitDirectionCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
-const palaceSkeletonCache: CacheEntry<PalaceInnateSkeleton> = { data: null, mtime: 0 }
 
 // ═══════════════════════════════════════════════════════════════════
 // 核心加载函数
@@ -80,14 +78,23 @@ function loadJsonFile<T>(filePath: string, cache: CacheEntry<T>): T {
 // 对外 API
 // ═══════════════════════════════════════════════════════════════════
 
-/** 获取星曜赋性数据（自动热加载） */
+/** 获取星曜系统数据（自动热加载） */
 export function getStarAttributes(): Record<string, StarAttribute> {
-  return loadJsonFile(STAR_ATTR_PATH, starAttrCache)
+  const raw = loadJsonFile<Record<string, unknown>>(STAR_SYSTEM_PATH, starSystemCache)
+  const stars = (raw?.stars ?? raw ?? {}) as Record<string, unknown>
+  const result: Record<string, StarAttribute> = {}
+  for (const [name, entry] of Object.entries(stars)) {
+    if (entry && typeof entry === 'object' && '赋性' in entry) {
+      result[name] = (entry as Record<string, unknown>).赋性 as StarAttribute
+    }
+  }
+  return result
 }
 
 /** 获取宫位含义数据（自动热加载） */
 export function getPalaceMeanings(): Record<string, PalaceMeaning> {
-  return loadJsonFile(PALACE_MEANING_PATH, palaceMeaningCache)
+  const system = loadJsonFile<PalaceSystem>(PALACE_SYSTEM_PATH, palaceSystemCache)
+  return system?.['宫位含义'] || {}
 }
 
 /** 获取太岁入卦查表数据（自动热加载） */
@@ -95,29 +102,31 @@ export function getTaiSuiTables(): TaiSuiTables {
   return loadJsonFile(TAI_SUI_TABLES_PATH, taiSuiTablesCache)
 }
 
-/** 获取事项分类赋性数据（自动热加载） */
+/** 获取事件描述数据（自动热加载） */
 export function getEventStarAttributes(): EventStarAttributes {
-  return loadJsonFile(EVENT_STAR_ATTR_PATH, eventStarAttrCache)
+  return loadJsonFile(EVENT_DESCRIPTIONS_PATH, eventDescriptionsCache)
 }
 
-/** 获取评分参数数据（自动热加载） — 唯一评分配置源 */
+/** 获取评分配置数据（自动热加载） — 唯一评分配置源 */
 export function getScoringParams(): ScoringParams {
-  return loadJsonFile(SCORING_PARAMS_PATH, scoringParamsCache)
+  const raw = loadJsonFile<ScoringParams>(SCORING_PATH, scoringCache)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (raw as any)?.params ?? raw ?? {} as ScoringParams
 }
 
-/** 获取事项路由决策树（自动热加载） */
+/** 获取路由配置（自动热加载） */
 export function getRouterTree(): Record<string, unknown> {
-  return loadJsonFile(ROUTER_TREE_PATH, routerTreeCache)
+  return loadJsonFile(ROUTING_PATH, routingCache)
 }
 
-/** 获取格局配置（自动热加载） */
+/** 获取格局库配置（自动热加载） */
 export function getPatternConfig(): Record<string, unknown> {
-  return loadJsonFile(PATTERNS_PATH, patternsCache)
+  return loadJsonFile(PATTERN_LIBRARY_PATH, patternLibraryCache)
 }
 
-/** 获取互动取象配置（自动热加载） */
+/** 获取互动规则配置（自动热加载） */
 export function getInteractionQuXiang(): Record<string, unknown> {
-  return loadJsonFile(INTERACTION_QU_XIANG_PATH, interactionQuXiangCache)
+  return loadJsonFile(INTERACTION_RULES_PATH, interactionRulesCache)
 }
 
 /** 获取大限流年方向配置（自动热加载） */
@@ -125,23 +134,28 @@ export function getLimitDirection(): Record<string, unknown> {
   return loadJsonFile(LIMIT_DIRECTION_PATH, limitDirectionCache)
 }
 
+/** 获取宫位系统数据（自动热加载） */
+export function getPalaceSystem(): PalaceSystem {
+  return loadJsonFile(PALACE_SYSTEM_PATH, palaceSystemCache)
+}
+
 /** 获取宫位骨架映射表（自动热加载） */
-export function getPalaceInnateSkeleton(): PalaceInnateSkeleton {
-  return loadJsonFile(PALACE_SKELETON_PATH, palaceSkeletonCache)
+export function getPalaceInnateSkeleton(): Record<string, Record<string, { major: string; brightness: string }>> {
+  const system = loadJsonFile<PalaceSystem>(PALACE_SYSTEM_PATH, palaceSystemCache)
+  return system?.['宫位骨架亮度映射'] || {}
 }
 
 /** 手动重新加载所有知识库 */
 export function reloadAll() {
-  starAttrCache.mtime = 0
-  palaceMeaningCache.mtime = 0
-  eventStarAttrCache.mtime = 0
+  starSystemCache.mtime = 0
+  palaceSystemCache.mtime = 0
+  eventDescriptionsCache.mtime = 0
   taiSuiTablesCache.mtime = 0
-  scoringParamsCache.mtime = 0
-  routerTreeCache.mtime = 0
-  patternsCache.mtime = 0
-  interactionQuXiangCache.mtime = 0
+  scoringCache.mtime = 0
+  routingCache.mtime = 0
+  patternLibraryCache.mtime = 0
+  interactionRulesCache.mtime = 0
   limitDirectionCache.mtime = 0
-  palaceSkeletonCache.mtime = 0
   getStarAttributes()
   getPalaceMeanings()
   getEventStarAttributes()

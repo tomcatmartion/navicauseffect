@@ -109,13 +109,18 @@ export interface SessionPersisted {
   /** ChartBridge 缓存（可选，可由 chartData 重建） */
   baseIR?: BaseIR
   collected: HybridCollected
+  /** 运行时 Stage 输出缓存（不持久化，仅内存使用） */
+  stage1Output?: Stage1Output
+  stage2Output?: Stage2Output
+  stage3Output?: Stage3Output
+  stage4Output?: Stage4Output
 }
 
 /** @deprecated 使用 SessionPersisted 替代 */
-export interface HybridPersisted extends SessionPersisted {}
+export type HybridPersisted = SessionPersisted
 
 /** @deprecated 使用 ConversationMessage 替代 */
-export interface HybridHistoryMessage extends ConversationMessage {}
+export type HybridHistoryMessage = ConversationMessage
 
 /**
  * 性格分析详细结构（Stage2 输出）

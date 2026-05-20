@@ -28,9 +28,12 @@ import {
 } from '@/core/llm-wrapper/prompt-builder'
 import { getDunGan } from '@/core/sihua-calculator/tables'
 import type { TianGan, DiZhi, PalaceBrightness } from '@/core/types'
+import { PALACE_NAMES } from '@/core/types'
 import type { VirtualChart } from '@/core/tai-sui-rua-gua/virtual-chart'
 import { getWeakerBrightness } from '@/core/energy-evaluator/scoring-flow'
 import { getFlankingDecay } from '@/core/knowledge-dict/query'
+import { evaluateLimitPatterns } from '@/core/limit-analyzer/limit-pattern-evaluator'
+import type { LimitPatternsOutput, LimitPatternResult } from '@/core/types'
 
 export interface ChartPipelineDebugOptions {
   /** 事项类型（与面板一致） */
@@ -109,7 +112,7 @@ export interface UiPalaceRow {
     formula: string
     /** 参与计算的宫位（三方四正+夹宫） */
     relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>
-    /** 六步评分流程（基于 scoring_formula.json v1.3） */
+    /** 六步评分流程（基于 scoring.json formula 部分） */
     sixSteps?: {
       /** 步骤0：空宫借对宫 */
       step0_emptyBorrow?: {
@@ -172,6 +175,27 @@ export interface UiPalaceRow {
   }
 }
 
+export interface UiLimitPatternRow {
+  /** 运限类型 */
+  limitType: string
+  /** 运限标识 */
+  limitLabel: string
+  /** 运限命宫地支 */
+  mingPalaceZhi: string
+  /** 运限天干 */
+  limitGan: string
+  /** 匹配到的格局 */
+  patterns: UiPatternRow[]
+  /** 与原局格局对比 */
+  comparison?: {
+    natalPatternCount: number
+    newPatternCount: number
+    lostPatternCount: number
+    sustainedPatternCount: number
+    conclusion: string
+  }
+}
+
 export interface ChartPipelineDebugSnapshot {
   engine: 'hybrid-stages'
   patterns: UiPatternRow[]
@@ -191,6 +215,17 @@ export interface ChartPipelineDebugSnapshot {
     weaknesses: string[]
     advice: { overall: string; career: string; relationship: string; health: string }
     knowledgeSnippets: Array<{ source: string; key: string; content: string }>
+    /** 命宫能级评分 */
+    mingGongScore: number
+    scoreLevel: string
+    scoreInfluence: string
+    /** 格局影响 */
+    patternInfluences: string[]
+    /** 三方四正交互 */
+    trineInteraction: string
+    oppositeInteraction: string
+    /** 夹宫影响 */
+    flankingInfluence: string
   }
   affair: {
     overview: string
@@ -200,6 +235,21 @@ export interface ChartPipelineDebugSnapshot {
       obstacles: string[]
     }
     advice: { strategy: string[] }
+  }
+  /** 运限格局识别结果 */
+  limitPatterns: {
+    /** 原局格局 */
+    natal: UiPatternRow[]
+    /** 十大限格局 */
+    decadal: UiLimitPatternRow[]
+    /** 流年格局 */
+    yearly: UiLimitPatternRow[]
+    /** 综合分析 */
+    synthesis: {
+      trend: string
+      keyDecennials: string[]
+      peakYears: number[]
+    }
   }
   extended: {
     birthGan: TianGan
@@ -309,6 +359,68 @@ export function buildChartPipelineDebugSnapshot(
   const stage1 = executeStage1({ chartData })
   const stage2 = executeStage2({ stage1, question: opts.affair || '性格与事项调试' })
 
+  // ═══════════════════════════════════════════════════════════════════
+  // 运限格局识别
+  // ═══════════════════════════════════════════════════════════════════
+  const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
+  const birthYear = typeof birthInfo?.year === 'number' ? birthInfo.year : 1990
+  const gender = birthInfo?.gender === '女' ? '女' : '男'
+
+  const limitPatternsOutput = evaluateLimitPatterns({
+    natalCtx: stage1.scoringCtx,
+    chartData,
+    birthYear,
+    gender,
+    targetYears: [opts.targetYear - 2, opts.targetYear - 1, opts.targetYear, opts.targetYear + 1, opts.targetYear + 2],
+  })
+
+  // 转换运限格局为 UI 格式
+  const uiLimitPatternRow = (lp: LimitPatternResult): UiLimitPatternRow => ({
+    limitType: lp.limitType,
+    limitLabel: lp.limitLabel,
+    mingPalaceZhi: lp.mingPalaceZhi,
+    limitGan: lp.limitGan,
+    patterns: lp.patterns.map(p => ({
+      name: p.name,
+      category: p.category || '格局',
+      effect: patternLevelToEffect(p.level),
+      source: lp.limitType === '大限' ? 'decennial' : lp.limitType === '流年' ? 'yearly' : 'minor',
+      description: `${p.level}（倍率×${p.multiplier}）`,
+      level: p.level,
+      debug: {
+        requiredStars: [p.name],
+        starPalaces: {},
+        judgmentBasis: `${p.level}（${p.category}类）｜运限：${lp.limitLabel}`,
+        multiplierSource: `运限格局倍率：${p.level} → ×${p.multiplier}`,
+        multiplierValue: p.multiplier,
+        triggerCondition: `运限天干${lp.limitGan}四化引动`,
+      },
+    })),
+    comparison: lp.comparisonWithNatal,
+  })
+
+  const limitPatterns = {
+    natal: limitPatternsOutput.natalPatterns.map(p => ({
+      name: p.name,
+      category: p.category || '格局',
+      effect: patternLevelToEffect(p.level),
+      source: 'natal',
+      description: `${p.level}（倍率×${p.multiplier}）`,
+      level: p.level,
+      debug: {
+        requiredStars: [p.name],
+        starPalaces: {},
+        judgmentBasis: `${p.level}（${p.category}类）｜原局格局`,
+        multiplierSource: `原局格局倍率：${p.level} → ×${p.multiplier}`,
+        multiplierValue: p.multiplier,
+        triggerCondition: '原局星曜组合成格',
+      },
+    })),
+    decadal: limitPatternsOutput.decadalPatterns.map(uiLimitPatternRow),
+    yearly: limitPatternsOutput.yearlyPatterns.map(uiLimitPatternRow),
+    synthesis: limitPatternsOutput.synthesis,
+  }
+
   const matchedNames = new Set(stage1.allPatterns.map(p => p.name))
   const starsByPalaceIndex = stage1.scoringCtx.palaces.map(p => p.majorStars.map(s => String(s)))
   const dslHits = evaluateJsonPatterns({ starsByPalaceIndex, matchedPatternNames: matchedNames })
@@ -318,7 +430,7 @@ export function buildChartPipelineDebugSnapshot(
     const def = getPatternDefinition(p.name)
     const multiplierFromJson = getPatternMultiplier(p.level)
 
-    // 从 patterns.json definitions[name].description 提取星曜名称
+    // 从 pattern_library.json definitions[name].description 提取星曜名称
     const description = def && 'description' in def ? String(def.description) : ''
     const triggerFromJson = def && 'trigger' in def ? String(def.trigger) : ''
 
@@ -328,7 +440,7 @@ export function buildChartPipelineDebugSnapshot(
 
     // 从 scoringCtx 查找格局相关星曜的宫位
     const starPalaces: Record<string, string> = {}
-    const requiredStars: string[] = extractedStars.length > 0 ? extractedStars : ['（从 patterns.json description 中未提取到星曜）']
+    const requiredStars: string[] = extractedStars.length > 0 ? extractedStars : ['（从 pattern_library.json description 中未提取到星曜）']
 
     // 遍历所有宫位，查找提取到的星曜
     for (const palace of stage1.scoringCtx.palaces) {
@@ -349,10 +461,10 @@ export function buildChartPipelineDebugSnapshot(
     const triggerCondition = triggerFromJson || '详见 SKILL_宫位原生能级评估_V3.0.md 格局库章节'
 
     // 吉凶依据：明确说明来源
-    const judgmentBasis = `${p.level}（${p.category}类）｜来源：data/patterns.json definitions["${p.name}"].level="${p.level}"，category="${p.category}"｜SKILL_宫位原生能级评估_V3.0.md 格局库「${p.name}」条`
+    const judgmentBasis = `${p.level}（${p.category}类）｜来源：data/pattern_library.json definitions["${p.name}"].level="${p.level}"，category="${p.category}"｜SKILL_宫位原生能级评估_V3.0.md 格局库「${p.name}」条`
 
     // 倍率来源：明确说明来源
-    const multiplierSource = `data/patterns.json → multipliers["${p.level}"] = ${multiplierFromJson}｜SKILL_宫位原生能级评估_V3.0.md：${p.level}格局倍率×${multiplierFromJson}`
+    const multiplierSource = `data/pattern_library.json → multipliers["${p.level}"] = ${multiplierFromJson}｜SKILL_宫位原生能级评估_V3.0.md：${p.level}格局倍率×${multiplierFromJson}`
 
     return {
       name: p.name,
@@ -553,8 +665,8 @@ export function buildChartPipelineDebugSnapshot(
     })
     
     const patternMultiplierSource = relatedPatterns.length > 0
-      ? `格局加成：${relatedPatterns.map(pat => `${pat.name}（${pat.level}×${pat.multiplier}）`).join('、')}｜来源：data/patterns.json multipliers + SKILL_宫位原生能级评估_V3.0.md 格局库「${relatedPatterns.map(p => p.name).join('、')}」条`
-      : '无格局加成（倍率×1.0）｜来源：data/patterns.json multipliers 默认值为1.0'
+      ? `格局加成：${relatedPatterns.map(pat => `${pat.name}（${pat.level}×${pat.multiplier}）`).join('、')}｜来源：data/pattern_library.json multipliers + SKILL_宫位原生能级评估_V3.0.md 格局库「${relatedPatterns.map(p => p.name).join('、')}」条`
+      : '无格局加成（倍率×1.0）｜来源：data/pattern_library.json multipliers 默认值为1.0'
 
     // 构建公式说明（SKILL_V3.0：骨架分 + 加分×倍率 + 减分 + 禄存）
     const formula = `最终分 = min(${ps.skeletonScore.toFixed(1)} + (${ps.bonusTotal.toFixed(2)} × ${ps.patternMultiplier.toFixed(1)}) + ${ps.penaltyTotal.toFixed(2)} + ${ps.luCunDelta.toFixed(1)}, ${ps.ceiling.toFixed(1)}) = ${ps.finalScore.toFixed(2)}`
@@ -641,6 +753,222 @@ export function buildChartPipelineDebugSnapshot(
   const quanCount = (stage2.mingGongHolographic.sihuaDirection.match(/化权/g) || []).length
   const jiCount = (stage2.mingGongHolographic.sihuaDirection.match(/化忌/g) || []).length
 
+  // ═══════════════════════════════════════════════════════════════════
+  // 新增：整合 Stage1 格局 + 宫位能级 + 三方四正 + 夹宫 到性格分析
+  // ═══════════════════════════════════════════════════════════════════
+
+  const mingIdx = 0
+  const shenIdx = stage2.shenGongIndex ?? 6
+  const taiSuiIdx = stage2.taiSuiIndex ?? 0
+
+  // 1. 三宫能级评分（命宫 + 身宫 + 太岁宫）
+  const getScoreLevel = (score: number) => score >= 7 ? '强旺' : score >= 5 ? '中等' : score >= 3 ? '虚浮' : '凶危'
+  const getScoreInfluence = (score: number, palaceName: string) => score >= 7
+    ? `${palaceName}强旺，性格特质明显且稳定，主见坚定`
+    : score >= 5
+      ? `${palaceName}中等，性格有发展空间，可塑性强`
+      : score >= 3
+        ? `${palaceName}虚浮，性格易受外界影响，缺乏核心定力`
+        : `${palaceName}凶危，性格存在明显短板，需特别注意`
+
+  const mingGongScore = stage1.palaceScores[mingIdx]?.finalScore ?? 5
+  const scoreLevel = getScoreLevel(mingGongScore)
+  const scoreInfluence = getScoreInfluence(mingGongScore, '命宫')
+
+  const shenGongScore = stage1.palaceScores[shenIdx]?.finalScore ?? 5
+  const shenScoreLevel = getScoreLevel(shenGongScore)
+  const shenScoreInfluence = getScoreInfluence(shenGongScore, '身宫')
+
+  const taiSuiScore = stage1.palaceScores[taiSuiIdx]?.finalScore ?? 5
+  const taiSuiScoreLevel = getScoreLevel(taiSuiScore)
+  const taiSuiScoreInfluence = getScoreInfluence(taiSuiScore, '太岁宫')
+
+  // 三宫能级综合
+  const avgScore = (mingGongScore + shenGongScore + taiSuiScore) / 3
+  const threePalaceScoreSynthesis = avgScore >= 6.0
+    ? `三宫均强旺（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 主见坚定，意志力强，性格特质显化程度高`
+    : mingGongScore >= 6.0 && (shenGongScore < 4.5 || taiSuiScore < 4.5)
+      ? `表强里弱（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 外显强势但内核动摇，需加强内在修养`
+      : mingGongScore < 4.5 && shenGongScore >= 6.0 && taiSuiScore >= 6.0
+        ? `表弱里强（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 外显柔和但有韧性，内在潜能充足`
+        : avgScore < 4.5
+          ? `三宫均弱（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 易受外界影响，性格显化程度低，需借助后天努力`
+          : `三宫混杂（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 逐宫分析，内外层存在落差`
+
+  // 2. 命宫成格格局 → 性格底色影响
+  const mingGongPatterns = stage1.allPatterns.filter(p => {
+    const def = getPatternDefinition(p.name)
+    if (!def) return false
+    const desc = String(def.description || '')
+    const starRegex = /紫微|天机|太阳|武曲|天同|廉贞|天府|太阴|贪狼|巨门|天相|天梁|七杀|破军|左辅|右弼|文昌|文曲|天魁|天钺|禄存|擎羊|陀罗|火星|铃星|地空|地劫|化禄|化权|化科|化忌/g
+    const requiredStars = Array.from(new Set(desc.match(starRegex) || []))
+    const mingGongCtx = stage1.scoringCtx.palaces[mingIdx]
+    const mingStars = mingGongCtx.stars.map(s => s.name)
+    const mingMajorStars = mingGongCtx.majorStars.map(ms => String(ms.star))
+    return requiredStars.some(star => mingStars.includes(star) || mingMajorStars.includes(star))
+  })
+
+  const patternInfluences = mingGongPatterns.length > 0
+    ? mingGongPatterns.map(p => {
+        const def = getPatternDefinition(p.name)
+        const desc = String(def?.description || '')
+        const effect = p.level.includes('吉')
+          ? `增强${desc.includes('贵') ? '贵气与领导力' : desc.includes('富') ? '财运与圆融' : '正面特质与机遇'}
+            ${p.level === '大吉' ? '，影响深远且稳定' : p.level === '中吉' ? '，影响显著' : '，影响温和'}
+          `
+          : p.level.includes('凶')
+            ? `带来${desc.includes('破') ? '破耗与变动' : desc.includes('劫') ? '波折与挑战' : '挑战与考验'}
+              ${p.level === '大凶' ? '，影响剧烈需化解' : p.level === '中凶' ? '，影响明显需留意' : '，影响轻微可调和'}
+            `
+            : '中性影响，需结合其他因素判断'
+        return `${p.name}（${p.level}·倍率×${p.multiplier}）：${effect}`
+      })
+    : ['命宫无成格格局，性格由主星和四化主导']
+
+  // 3. 三方四正星曜交互分析（含主星 + 四化 + 吉煞）
+  const trineIndices = [mingIdx, (mingIdx + 4) % 12, (mingIdx + 8) % 12]
+  const trineMajorStars = new Set<string>()
+  const trineSihuaList: string[] = []
+  const auspiciousStarNames = new Set(['左辅', '右弼', '文昌', '文曲', '天魁', '天钺'])
+  const inauspiciousStarNames = new Set(['擎羊', '陀罗', '火星', '铃星', '地空', '地劫'])
+  let trineAuspiciousCount = 0
+  let trineInauspiciousCount = 0
+
+  for (const idx of trineIndices) {
+    const palace = stage1.scoringCtx.palaces[idx]
+    if (!palace) continue
+    palace.majorStars.forEach(ms => trineMajorStars.add(String(ms.star)))
+    palace.stars.forEach(s => {
+      if (s.sihua) trineSihuaList.push(`${s.sihua}${s.name}`)
+      if (auspiciousStarNames.has(s.name)) trineAuspiciousCount++
+      if (inauspiciousStarNames.has(s.name)) trineInauspiciousCount++
+    })
+  }
+
+  const trineInteraction = trineMajorStars.size >= 3
+    ? `三方会照星曜丰富（${Array.from(trineMajorStars).join('、')}），性格多面且复杂，既有${Array.from(trineMajorStars)[0]}的特质，又受${Array.from(trineMajorStars)[1]}影响，形成独特的复合型性格`
+    : `三方会照星曜较少（${Array.from(trineMajorStars).join('、') || '无'}），性格相对单纯，特质集中且明确`
+
+  // 三方四正四化流转
+  const trineSihuaFlow = trineSihuaList.length > 0
+    ? `三方四正四化流转：${trineSihuaList.join('、')}。${trineSihuaList.some(s => s.includes('化忌')) ? '有化忌介入，性格中存在执念与纠结面' : trineSihuaList.some(s => s.includes('化禄')) ? '有化禄加持，性格圆融通达' : '四化影响中性，性格发展平稳'}`
+    : '三方四正无四化介入，性格发展不受四化特殊影响'
+
+  // 三方四正吉煞分布
+  const trineAuspiciousInauspicious = trineAuspiciousCount > 0 || trineInauspiciousCount > 0
+    ? `三方四正吉星${trineAuspiciousCount}颗，煞星${trineInauspiciousCount}颗。${trineAuspiciousCount > trineInauspiciousCount ? '吉星占优，性格稳定性强，遇事多得助力' : trineInauspiciousCount > trineAuspiciousCount ? '煞星偏多，性格中带有挑战与磨砺特质，抗压能力强但易有波折' : '吉凶平衡，性格中既有圆融面也有磨砺面，发展较为全面'}`
+    : '三方四正无特殊吉煞影响'
+
+  // 4. 对宫星曜交互
+  const oppositeIdx = (mingIdx + 6) % 12
+  const oppositeMajorStars = stage1.scoringCtx.palaces[oppositeIdx]?.majorStars || []
+  const oppositeSihua = stage1.scoringCtx.palaces[oppositeIdx]?.stars.filter(s => s.sihua).map(s => `${s.sihua}${s.name}`) ?? []
+  const oppositeInteraction = oppositeMajorStars.length > 0
+    ? `对宫（迁移/外在）有${oppositeMajorStars.map(ms => `${ms.star}(${ms.brightness})`).join('、')}投射${oppositeSihua.length > 0 ? '，附带' + oppositeSihua.join('、') : ''}，外在表现${oppositeMajorStars.some(ms => ['旺', '庙'].includes(ms.brightness)) ? '强势且自信' : '较为内敛'}，与内在性格形成${oppositeMajorStars.length >= 2 ? '复杂对比' : '一定反差'}`
+    : '对宫无主星，外在表现较为直接，与内在性格基本一致'
+
+  // 5. 夹宫影响分析（双侧 + 单侧）
+  const leftFlankIdx = (mingIdx + 1) % 12
+  const rightFlankIdx = (mingIdx - 1 + 12) % 12
+  const leftFlank = stage1.scoringCtx.palaces[leftFlankIdx]
+  const rightFlank = stage1.scoringCtx.palaces[rightFlankIdx]
+
+  const flankingInfluence = (() => {
+    if (!leftFlank || !rightFlank) return '夹宫数据不完整'
+
+    const leftStars = new Set(leftFlank.stars.map(s => s.name))
+    const rightStars = new Set(rightFlank.stars.map(s => s.name))
+
+    // 吉夹
+    const jiPairs = [
+      { name: '昌曲夹', left: '文昌', right: '文曲', effect: '聪明机智，文采出众，学习能力强，思维敏捷' },
+      { name: '魁钺夹', left: '天魁', right: '天钺', effect: '贵人运强，逢凶化吉，人缘极佳，易得助力' },
+      { name: '左右夹', left: '左辅', right: '右弼', effect: '辅助力强，人缘极佳，善于协调，团队合作佳' },
+      { name: '紫府夹', left: '紫微', right: '天府', effect: '贵气天成，领导力强，稳重有魄力，事业易成' },
+    ]
+    for (const pair of jiPairs) {
+      if ((leftStars.has(pair.left) && rightStars.has(pair.right)) ||
+          (leftStars.has(pair.right) && rightStars.has(pair.left))) {
+        return `${pair.name}：${pair.effect}`
+      }
+    }
+
+    // 煞夹
+    const shaPairs = [
+      { name: '羊陀夹', left: '擎羊', right: '陀罗', effect: '性格急躁，易有波折，行事冲动，需注意情绪管理' },
+      { name: '空劫夹', left: '地空', right: '地劫', effect: '思想独特，但易有虚无感，理想主义，需脚踏实地' },
+      { name: '火铃夹', left: '火星', right: '铃星', effect: '脾气急躁，行动力强但易冲动，爆发力强但持久性弱' },
+    ]
+    for (const pair of shaPairs) {
+      if ((leftStars.has(pair.left) && rightStars.has(pair.right)) ||
+          (leftStars.has(pair.right) && rightStars.has(pair.left))) {
+        return `${pair.name}：${pair.effect}`
+      }
+    }
+
+    return '无特殊夹宫影响，性格发展较为平顺'
+  })()
+
+  // 单侧夹宫分析
+  const singleFlankingInfluence = (() => {
+    if (!leftFlank || !rightFlank) return '夹宫数据不完整'
+    const leftStarNames = leftFlank.stars.map(s => s.name)
+    const rightStarNames = rightFlank.stars.map(s => s.name)
+    const leftHas = leftFlank.majorStars.length > 0 || leftStarNames.length > 0
+    const rightHas = rightFlank.majorStars.length > 0 || rightStarNames.length > 0
+
+    if (leftHas && rightHas) return '双侧夹宫均有星曜，已在上文分析'
+    if (!leftHas && !rightHas) return '双侧夹宫均无星曜，无单侧夹宫影响'
+
+    const side = leftHas ? '左' : '右'
+    const flank = leftHas ? leftFlank : rightFlank
+    const stars = [...flank.majorStars.map(ms => ms.star), ...flank.stars.map(s => s.name)]
+    const auspicious = flank.stars.some(s => auspiciousStarNames.has(s.name))
+    const inauspicious = flank.stars.some(s => inauspiciousStarNames.has(s.name))
+
+    return `${side}侧夹宫有${stars.join('、')}，形成偏夹之势。${auspicious && !inauspicious ? '吉星偏夹，性格中该侧特质较为突出，易得该方向助力' : inauspicious && !auspicious ? '煞星偏夹，性格中该侧易受干扰，需注意该方向挑战' : '吉凶混杂偏夹，性格中该侧特质复杂，既有助力也有挑战'}`
+  })()
+
+  // 6. 四化性格特质映射
+  const sihuaPersonalityTraits = (() => {
+    const traits: string[] = []
+    const mingSihua = stage1.scoringCtx.palaces[mingIdx]?.stars.filter(s => s.sihua) ?? []
+
+    for (const s of mingSihua) {
+      switch (s.sihua) {
+        case '化禄':
+          traits.push(`${s.name}化禄：圆融随和，人缘佳，对${s.name}所主事项有天然亲和力`)
+          break
+        case '化权':
+          traits.push(`${s.name}化权：主导意识强，有掌控欲，对${s.name}所主事项追求主导权`)
+          break
+        case '化科':
+          traits.push(`${s.name}化科：注重名誉，有贵人缘，对${s.name}所主事项有解厄能力`)
+          break
+        case '化忌':
+          traits.push(`${s.name}化忌：执着敏感，易有纠结，对${s.name}所主事项需特别注意情绪管理`)
+          break
+      }
+    }
+
+    // 三方四正中的四化也影响性格
+    for (const idx of [...trineIndices, oppositeIdx]) {
+      const palace = stage1.scoringCtx.palaces[idx]
+      if (!palace || idx === mingIdx) continue
+      const sihuaStars = palace.stars.filter(s => s.sihua)
+      for (const s of sihuaStars) {
+        const palaceName = PALACE_NAMES[idx] ?? '未知宫'
+        if (s.sihua === '化忌') {
+          traits.push(`${s.name}化忌入${palaceName}：性格中对该领域易有执念，影响${palaceName}相关决策`)
+        } else if (s.sihua === '化禄') {
+          traits.push(`${s.name}化禄入${palaceName}：性格中对该领域较为圆融，${palaceName}发展顺畅`)
+        }
+      }
+    }
+
+    return traits.length > 0 ? traits : ['命宫及三方四正无特殊四化影响']
+  })()
+
   const personality = {
     overview: [
       `命宫（${stage2.mingGongTags.palace}·${stage2.mingGongTags.diZhi}）：${stage2.mingGongTags.summary}`,
@@ -683,6 +1011,75 @@ export function buildChartPipelineDebugSnapshot(
       key: s.key,
       content: s.content,
     })),
+    // 新增字段 — 命宫能级
+    mingGongScore,
+    scoreLevel,
+    scoreInfluence,
+    // 新增字段 — 身宫能级
+    shenGongScore,
+    shenScoreLevel,
+    shenScoreInfluence,
+    // 新增字段 — 太岁宫能级
+    taiSuiScore,
+    taiSuiScoreLevel,
+    taiSuiScoreInfluence,
+    // 新增字段 — 三宫能级综合
+    threePalaceScoreSynthesis,
+    // 新增字段 — 格局影响
+    patternInfluences,
+    // 新增字段 — 三方四正交互
+    trineInteraction,
+    oppositeInteraction,
+    trineSihuaFlow,
+    trineAuspiciousInauspicious,
+    // 新增字段 — 夹宫影响
+    flankingInfluence,
+    singleFlankingInfluence,
+    // 新增字段 — 四化性格映射
+    sihuaPersonalityTraits,
+    // ═══════════════════════════════════════════════════════════════════
+    // P0: 格局人格特质注入（新增）
+    // ═══════════════════════════════════════════════════════════════════
+    patternPersonality: stage2.patternPersonality ? {
+      personalityBase: stage2.patternPersonality.aggregated.personalityBase,
+      behavioralTendency: stage2.patternPersonality.aggregated.behavioralTendency,
+      interpersonalStyle: stage2.patternPersonality.aggregated.interpersonalStyle,
+      stressResponse: stage2.patternPersonality.aggregated.stressResponse,
+      surfaceTraits: stage2.patternPersonality.aggregated.surfaceTraits,
+      middleTraits: stage2.patternPersonality.aggregated.middleTraits,
+      coreTraits: stage2.patternPersonality.aggregated.coreTraits,
+      influences: stage2.patternPersonality.influences.map(inf => ({
+        patternName: inf.patternName,
+        level: inf.level,
+        traits: inf.traits.map(t => t.keyword).join('、'),
+        description: `${inf.personalityBase}。行为倾向：${inf.behavioralTendency}`,
+      })),
+    } : undefined,
+    // ═══════════════════════════════════════════════════════════════════
+    // P1: 评分原因性格映射（新增）
+    // ═══════════════════════════════════════════════════════════════════
+    scoreReasonPersonality: stage2.scoreReasonPersonality ? {
+      mingProfile: {
+        finalScore: stage2.scoreReasonPersonality.mingProfile.finalScore,
+        subduePersonality: stage2.scoreReasonPersonality.mingProfile.subduePersonality,
+        synthesis: stage2.scoreReasonPersonality.mingProfile.synthesis,
+        strengths: stage2.scoreReasonPersonality.mingProfile.bonusReasons
+          .filter(r => r.impactLevel === '强')
+          .map(r => r.personalityInterpretation),
+        challenges: stage2.scoreReasonPersonality.mingProfile.penaltyReasons
+          .filter(r => r.impactLevel === '强')
+          .map(r => r.personalityInterpretation),
+      },
+      keyDimensions: stage2.scoreReasonPersonality.keyDimensions,
+    } : undefined,
+    // ═══════════════════════════════════════════════════════════════════
+    // P2: 三宫交叉张力分析（新增）
+    // ═══════════════════════════════════════════════════════════════════
+    threePalaceCross: stage2.threePalaceCross ? {
+      baseTone: stage2.threePalaceCross.baseTone,
+      crossTensions: stage2.threePalaceCross.crossTensions,
+      synthesis: stage2.threePalaceCross.synthesis,
+    } : undefined,
   }
 
   const route = routeMatter(opts.affairType, {})
@@ -775,6 +1172,7 @@ export function buildChartPipelineDebugSnapshot(
     allPalaces,
     personality,
     affair,
+    limitPatterns,
     extended: {
       birthGan,
       taiSuiZhi,

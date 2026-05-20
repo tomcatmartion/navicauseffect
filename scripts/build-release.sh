@@ -36,8 +36,8 @@ echo ""
 # ─── 1. 构建 ──────────────────────────────────────────────────
 
 if [ "${1:-}" != "--skip-build" ]; then
-  echo "[1/5] 安装依赖（含 Linux 绑定）..."
-  npm install --force @zvec/bindings-linux-x64@0.3.2 2>/dev/null || true
+  echo "[1/5] 安装依赖..."
+  npm install
 
   echo "[2/5] 构建项目..."
   npm run build
@@ -57,11 +57,6 @@ STANDALONE="$PROJECT_DIR/.next/standalone"
 PRISMA_ENGINE="$STANDALONE/node_modules/.prisma/client/libquery_engine-rhel-openssl-1.1.x.so.node"
 [ -f "$PRISMA_ENGINE" ] || err "Prisma Linux 引擎不存在: $PRISMA_ENGINE"
 log "Prisma rhel 引擎 OK"
-
-# zvec Linux 绑定
-ZVEC_BINDING="$STANDALONE/node_modules/@zvec/bindings-linux-x64/zvec_node_binding.node"
-[ -f "$ZVEC_BINDING" ] || err "zvec linux-x64 绑定不存在: $ZVEC_BINDING"
-log "zvec linux-x64 绑定 OK"
 
 # ─── 3. 准备 staging 目录 ─────────────────────────────────────
 
@@ -136,25 +131,6 @@ cp "$PROJECT_DIR/scripts/start-prod.sh" "$STAGING/scripts/"
 cp "$PROJECT_DIR/scripts/install.sh" "$STAGING/scripts/" 2>/dev/null || warn "install.sh 尚未创建"
 cp "$PROJECT_DIR/scripts/seed-ai-models.js" "$STAGING/scripts/" 2>/dev/null || true
 
-# 编译 TS 运维脚本为独立 JS（生产环境不需要 tsx）
-echo "  编译运维脚本为独立 JS..."
-for script in logicdoc-index-zvec index-ziwei-knowledge; do
-  SRC="$PROJECT_DIR/scripts/${script}.ts"
-  if [ -f "$SRC" ]; then
-    npx esbuild "$SRC" \
-      --bundle --platform=node --format=cjs \
-      --external:@prisma/client \
-      --external:@prisma/engines \
-      --external:@zvec/zvec \
-      --external:@zvec/bindings-linux-x64 \
-      --external:@zvec/bindings-darwin-arm64 \
-      --external:dotenv \
-      --outfile="$STAGING/scripts/${script}.cjs" \
-      --sourcemap=inline
-    log "  已编译: ${script}.ts → ${script}.cjs"
-  fi
-done
-
 # 环境变量模板
 cp "$PROJECT_DIR/.env.example" "$STAGING/.env.example"
 
@@ -166,8 +142,6 @@ cp "$PROJECT_DIR/package-lock.json" "$STAGING/package-lock.json" 2>/dev/null || 
 find "$STAGING" -name ".DS_Store" -delete
 find "$STAGING" -name "*.broken" -type d -exec rm -rf {} + 2>/dev/null || true
 
-# 删除 darwin 绑定（减小体积，服务器不需要）
-rm -rf "$STAGING/node_modules/@zvec/bindings-darwin-arm64" 2>/dev/null || true
 # 删除 darwin 的 prisma 引擎（减小 ~19MB）
 rm -f "$STAGING/node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node" 2>/dev/null || true
 
