@@ -30,6 +30,18 @@ const GAN_TABLE: TianGan[] = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '
 /** 十二地支（标准顺序） */
 const DI_ZHI_ORDER: DiZhi[] = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
 
+/** iztro 短格式四化 → 系统长格式统一映射 */
+const SIHUA_NORMALIZE: Record<string, '化禄' | '化权' | '化科' | '化忌'> = {
+  '禄': '化禄', '权': '化权', '科': '化科', '忌': '化忌',
+  '化禄': '化禄', '化权': '化权', '化科': '化科', '化忌': '化忌',
+}
+
+/** 将 iztro mutagen 值统一为长格式 */
+function normalizeSihua(raw: string | undefined): '化禄' | '化权' | '化科' | '化忌' | undefined {
+  if (!raw) return undefined
+  return SIHUA_NORMALIZE[raw]
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 亮度转换
 // ═══════════════════════════════════════════════════════════════════
@@ -142,9 +154,17 @@ export function readChartFromData(chartData: Record<string, unknown>): Normalize
   const rawPalaces = data.palaces ?? []
 
   // 建立 palace.name → 原始索引的映射
+  // 兼容带"宫"和不带"宫"的名称（如 "迁移" / "迁移宫"）
   const nameToRawPalace = new Map<string, IztroPalace>()
   for (const p of rawPalaces) {
-    nameToRawPalace.set(p.name, p as IztroPalace)
+    const name = p.name as string
+    nameToRawPalace.set(name, p as IztroPalace)
+    // 同时注册带/不带"宫"的别名
+    if (name.endsWith('宫')) {
+      nameToRawPalace.set(name.slice(0, -1), p as IztroPalace)
+    } else {
+      nameToRawPalace.set(name + '宫', p as IztroPalace)
+    }
   }
 
   // 6. 找到紫微星所在的地支 → 确定骨架序号
@@ -256,7 +276,7 @@ function normalizePalace(raw: IztroPalace | undefined, palaceName: string): Norm
     if (star.mutagen) {
       sihuaAnnotations.push({
         star: star.name,
-        type: star.mutagen,
+        type: normalizeSihua(star.mutagen) ?? star.mutagen,
         source: '生年', // 临时标注，后续由 applyPalaceAnnotations 修正
       })
     }
@@ -317,12 +337,13 @@ export function normalizedChartToScoringContext(
     palaces: palaces.map((p, idx) => ({
       palaceIndex: idx,
       diZhi: p.diZhi,
+      tianGan: p.tianGan,
       brightness: p.majorStars.length > 0 ? p.majorStars[0].brightness : '空',
       majorStars: p.majorStars.map(ms => ({ star: ms.star, brightness: ms.brightness })),
       stars: [
         ...p.majorStars.map(ms => ({
           name: ms.star,
-          sihua: ms.mutagen as '化禄' | '化权' | '化科' | '化忌' | undefined,
+          sihua: normalizeSihua(ms.mutagen),
           sihuaSource: ms.mutagen ? '生年' as const : undefined,
         })),
         ...p.auspiciousStars.map(s => ({ name: s, sihua: undefined as undefined, sihuaSource: undefined as undefined })),

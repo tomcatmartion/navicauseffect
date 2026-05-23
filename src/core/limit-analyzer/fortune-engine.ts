@@ -1,15 +1,14 @@
 /**
  * Fortune Engine — 行运计算核心
  *
- * 从 stages/helpers/fortune-runner.ts 迁移并重构：
- * - 提取大限映射
- * - 构建三层宫位对照表（原局/大限/流年）
- * - 计算方向矩阵
+ * 数据源统一原则：
+ * - 所有命盘数据必须来自前端传入的 chartData（即 iztro 排盘后的序列化数据）
+ * - 禁止直接调用 iztro 重新排盘，避免前后端数据不一致
+ * - 大限信息从 chartData.palaces[].decadal 读取
+ * - 流年干支从 chartData.horoscope 读取，缺失时通过公式计算
  */
 
 import 'server-only'
-
-import { astro as iztroAstro } from 'iztro'
 
 import type {
   TianGan, DiZhi, PalaceName, SihuaEntry, SihuaType,
@@ -18,9 +17,11 @@ import type {
   DirectionMatrix,
 } from '@/core/types'
 import { PALACE_NAMES } from '@/core/types'
-import { evaluateAllPalaces } from '@/core/energy-evaluator'
+import { getSihuaTable } from '@/core/sihua-calculator'
 import type { ScoringContext, PalaceForScoring } from '@/core/energy-evaluator/scoring-flow'
-import { getSihuaTable } from '@/core/sihua-calculator/tables'
+import { evaluatePalacePatternsOnly } from '@/core/energy-evaluator/pattern-scoring'
+import { evaluateAllPalaces } from '@/core/energy-evaluator/scoring-flow'
+import { buildDaXianScoringContext } from './limit-scoring-context'
 
 /** 十天干 */
 const GAN_TABLE: TianGan[] = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸']
@@ -28,71 +29,106 @@ const GAN_TABLE: TianGan[] = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '
 /** 十二地支 */
 const DI_ZHI_ORDER: DiZhi[] = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
 
-// ── iztro 类型定义（消除 any） ─────────────────────────────
+// ── 类型定义（与 serialize-chart-for-reading.ts 输出结构统一） ───────
 
-interface IztroPalaceDecatal {
-  range?: [number, number]
-  ages?: number[]
-  heavenlyStem?: string
-  earthlyBranch?: string
+/** 序列化星曜（来自 serialize-chart-for-reading.ts 的输出） */
+interface SerializedStar {
+  name: string
+  type: string
+  mutagen: string
+  brightness: string
 }
 
-interface IztroPalaceData {
+/** 序列化宫位（来自 serialize-chart-for-reading.ts 的输出） */
+interface SerializedPalace {
   name: string
   earthlyBranch: string
   heavenlyStem: string
-  majorStars: Array<{ name: string; mutagen?: string; brightness?: number | string; type?: string }>
-  minorStars: Array<{ name: string; mutagen?: string; brightness?: number | string; type?: string }>
-  isBodyPalace?: boolean
-  decadal?: IztroPalaceDecatal
+  isBodyPalace: boolean
+  isOriginalPalace: boolean
+  majorStars: SerializedStar[]
+  minorStars: SerializedStar[]
+  adjectiveStars: SerializedStar[]
+  decadal?: {
+    range: [number, number]
+    heavenlyStem: string
+    earthlyBranch: string
+  }
   ages?: number[]
-  [key: string]: unknown
-}
-
-interface IztroAstrolabeData {
-  palaces: IztroPalaceData[]
-  horoscope(date: Date, hour: number): IztroHoroscopeData | null
-}
-
-interface IztroHoroscopeData {
-  decadal: IztroScopeItemData
-  yearly: IztroScopeItemData
-  age: IztroScopeItemData & { nominalAge?: number }
-  monthly: IztroScopeItemData
-  daily: IztroScopeItemData
-}
-
-interface IztroScopeItemData {
-  index: number
-  name: string
-  heavenlyStem: string
-  earthlyBranch: string
-  palaceNames: string[]
-  mutagen: string[]
 }
 
 // ── 核心函数 ──────────────────────────────────────────────
 
-/** 从出生信息重建 iztro 命盘 */
-function reconstructAstrolabe(chartData: Record<string, unknown>): IztroAstrolabeData | null {
-  const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
-  if (!birthInfo) return null
+/**
+ * 从 chartData 中提取宫位数组（统一数据源）
+ *
+ * 注意：chartData 由 serialize-chart-for-reading.ts 序列化生成，
+ * 因此结构应与 SerializedPalace 保持一致。
+ */
+function extractPalacesFromChartData(chartData: Record<string, unknown>): SerializedPalace[] {
+  const palaces = chartData.palaces as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(palaces)) return []
+  return palaces.map(p => ({
+    name: String(p.name ?? ''),
+    earthlyBranch: String(p.earthlyBranch ?? ''),
+    heavenlyStem: String(p.heavenlyStem ?? ''),
+    isBodyPalace: Boolean(p.isBodyPalace),
+    isOriginalPalace: Boolean(p.isOriginalPalace),
+    majorStars: (p.majorStars as Array<Record<string, unknown>> ?? []).map(s => ({
+      name: String(s.name ?? ''),
+      type: String(s.type ?? ''),
+      mutagen: String(s.mutagen ?? ''),
+      brightness: String(s.brightness ?? ''),
+    })),
+    minorStars: (p.minorStars as Array<Record<string, unknown>> ?? []).map(s => ({
+      name: String(s.name ?? ''),
+      type: String(s.type ?? ''),
+      mutagen: String(s.mutagen ?? ''),
+      brightness: String(s.brightness ?? ''),
+    })),
+    adjectiveStars: (p.adjectiveStars as Array<Record<string, unknown>> ?? []).map(s => ({
+      name: String(s.name ?? ''),
+      type: String(s.type ?? ''),
+      mutagen: String(s.mutagen ?? ''),
+      brightness: String(s.brightness ?? ''),
+    })),
+    decadal: p.decadal
+      ? {
+          range: (p.decadal as Record<string, unknown>).range as [number, number],
+          heavenlyStem: String((p.decadal as Record<string, unknown>).heavenlyStem ?? ''),
+          earthlyBranch: String((p.decadal as Record<string, unknown>).earthlyBranch ?? ''),
+        }
+      : undefined,
+    ages: Array.isArray(p.ages) ? p.ages as number[] : undefined,
+  }))
+}
 
-  const { year, month, day, hour, gender } = birthInfo as Record<string, unknown>
-  if (
-    typeof year !== 'number' || typeof month !== 'number' ||
-    typeof day !== 'number' || typeof hour !== 'number' ||
-    typeof gender !== 'string'
-  ) return null
-
-  try {
-    const genderStr = gender === 'MALE' || gender === '男' ? '男' : '女'
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return iztroAstro.bySolar(dateStr, hour as number, genderStr, true, 'zh-CN') as unknown as IztroAstrolabeData
-  } catch (err) {
-    console.error('[FortuneEngine] 重建命盘失败:', err)
-    return null
+function buildDaXianMappingsFromPalaces(palaces: SerializedPalace[]): DaXianPalaceMapping[] {
+  const mappings: DaXianPalaceMapping[] = []
+  for (const palace of palaces) {
+    const dec = palace.decadal
+    if (!dec) continue
+    const ageRange: [number, number] = dec.range ?? (
+      palace.ages && palace.ages.length >= 2
+        ? [palace.ages[0], palace.ages[palace.ages.length - 1]]
+        : [0, 0]
+    )
+    if (ageRange[0] <= 0) continue
+    const daXianGan = (dec.heavenlyStem ?? palace.heavenlyStem) as TianGan
+    const palaceIndex = PALACE_NAMES.indexOf(palace.name as PalaceName)
+    if (palaceIndex < 0) continue
+    mappings.push({
+      index: mappings.length + 1,
+      ageRange,
+      daXianGan,
+      mingPalaceName: palace.name as PalaceName,
+      palaceIndex,
+      mutagen: getSihuaFromGan(daXianGan),
+    })
   }
+  mappings.sort((a, b) => a.ageRange[0] - b.ageRange[0])
+  mappings.forEach((m, i) => { m.index = i + 1 })
+  return mappings
 }
 
 /**
@@ -105,49 +141,46 @@ function getSihuaFromGan(gan: TianGan): string[] {
 }
 
 /**
- * 从 iztro 命盘提取全部大限映射
+ * 从 chartData 提取全部大限映射（统一数据源）
+ *
+ * 统一数据源：直接读取 chartData.palaces[].decadal
+ * 禁止调用 iztro 重新排盘
  */
 export function extractAllDaXianMappings(
   chartData: Record<string, unknown>,
   _birthYear: number,
 ): DaXianPalaceMapping[] {
-  const astrolabe = reconstructAstrolabe(chartData)
-  if (!astrolabe) return []
+  return buildDaXianMappingsFromPalaces(extractPalacesFromChartData(chartData))
+}
 
-  const mappings: DaXianPalaceMapping[] = []
-
-  for (let i = 0; i < astrolabe.palaces.length; i++) {
-    const palace = astrolabe.palaces[i]
-    const dec = palace.decadal
-    if (!dec) continue
-
-    const ageRange: [number, number] = dec.range ?? (
-      palace.ages && palace.ages.length >= 2
-        ? [palace.ages[0], palace.ages[palace.ages.length - 1]]
-        : [0, 0]
-    )
-
-    if (ageRange[0] <= 0) continue
-
-    const daXianGan = (dec.heavenlyStem ?? palace.heavenlyStem) as TianGan
-    const mutagen = getSihuaFromGan(daXianGan)
-    const palaceIndex = PALACE_NAMES.indexOf(palace.name as PalaceName)
-    if (palaceIndex < 0) continue
-
-    mappings.push({
-      index: mappings.length + 1,
-      ageRange,
-      daXianGan,
-      mingPalaceName: palace.name as PalaceName,
-      palaceIndex,
-      mutagen,
-    })
+/**
+ * 流年干支单一真源：chartData.horoscope → 公式计算
+ * 禁止调用 iztro 重新排盘
+ */
+export function resolveLiuNianGanZhi(
+  chartData: Record<string, unknown>,
+  targetYear: number,
+): { gan: TianGan; zhi: DiZhi; source: 'snapshot' | 'formula' } {
+  const horoscope = chartData.horoscope as Record<string, unknown> | undefined
+  const refYear = typeof horoscope?.referenceYear === 'number' ? horoscope.referenceYear : undefined
+  const yearly = horoscope?.yearly as Record<string, unknown> | undefined
+  if (yearly?.heavenlyStem && refYear === targetYear) {
+    return {
+      gan: yearly.heavenlyStem as TianGan,
+      zhi: (yearly.earthlyBranch as DiZhi) ?? DI_ZHI_ORDER[(targetYear - 4) % 12],
+      source: 'snapshot',
+    }
   }
 
-  mappings.sort((a, b) => a.ageRange[0] - b.ageRange[0])
-  mappings.forEach((m, i) => { m.index = i + 1 })
+  return {
+    gan: GAN_TABLE[(targetYear - 4) % 10],
+    zhi: DI_ZHI_ORDER[(targetYear - 4) % 12],
+    source: 'formula',
+  }
+}
 
-  return mappings
+export function resolveLiuNianGan(chartData: Record<string, unknown>, targetYear: number): TianGan {
+  return resolveLiuNianGanZhi(chartData, targetYear).gan
 }
 
 /**
@@ -164,7 +197,11 @@ export function buildThreeLayerTable(
     try {
       const daXianCtx = buildDaXianScoringContext(mapping, natalCtx)
       if (daXianCtx) {
-        mapping.scores = evaluateAllPalaces(daXianCtx)
+        const palacePatterns = evaluatePalacePatternsOnly(daXianCtx)
+        const palaceScores = evaluateAllPalaces(daXianCtx)
+        mapping.scores = palaceScores
+        mapping.palacePatterns = palacePatterns
+        mapping.patterns = palacePatterns[mapping.palaceIndex] ?? palacePatterns[0] ?? []
       }
     } catch (err) {
       console.warn(`[FortuneEngine] 大限${mapping.index}评分失败:`, err)
@@ -185,19 +222,7 @@ export function buildThreeLayerTable(
     ? buildDaXianLayer(currentDaXian, natalCtx)
     : buildEmptyLayer('大限')
 
-  const birthHour = typeof birthInfo?.hour === 'number' ? birthInfo.hour : 12
-  const yearlyData = getYearlyFromIztro(chartData, targetYear, birthHour)
-
-  let liuNianGan: TianGan
-  let liuNianZhi: DiZhi
-
-  if (yearlyData) {
-    liuNianGan = yearlyData.heavenlyStem as TianGan
-    liuNianZhi = yearlyData.earthlyBranch as DiZhi
-  } else {
-    liuNianGan = GAN_TABLE[(targetYear - 4) % 10]
-    liuNianZhi = DI_ZHI_ORDER[(targetYear - 4) % 12]
-  }
+  const { gan: liuNianGan, zhi: liuNianZhi } = resolveLiuNianGanZhi(chartData, targetYear)
 
   const liuNianSihuaMap = getSihuaTable()[liuNianGan]
   const liuNianSihuaEntries: SihuaEntry[] = [
@@ -222,6 +247,7 @@ export function calculateDirectionMatrix(
   daXianMapping: DaXianPalaceMapping | undefined,
   targetYear: number,
   natalCtx?: ScoringContext,
+  chartData?: Record<string, unknown>,
 ): DirectionMatrix {
   let daXianScore = 0
   if (daXianMapping?.mutagen[0]) daXianScore += 2
@@ -246,7 +272,9 @@ export function calculateDirectionMatrix(
 
   const daXianDirection: '吉' | '凶' = daXianScore > 0 ? '吉' : (daXianScore < 0 ? '凶' : '吉')
 
-  const liuNianGan = GAN_TABLE[(targetYear - 4) % 10]
+  const liuNianGan = chartData
+    ? resolveLiuNianGan(chartData, targetYear)
+    : GAN_TABLE[(targetYear - 4) % 10]
   const liuNianSihua = getSihuaTable()[liuNianGan]
 
   let liuNianScore = 0
@@ -261,25 +289,6 @@ export function calculateDirectionMatrix(
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────
-
-function getYearlyFromIztro(
-  chartData: Record<string, unknown>,
-  targetYear: number,
-  birthHour: number,
-): IztroScopeItemData | null {
-  const astrolabe = reconstructAstrolabe(chartData)
-  if (!astrolabe) return null
-
-  try {
-    const targetDate = new Date(targetYear, 5, 15)
-    const horoscope = astrolabe.horoscope(targetDate, birthHour)
-    if (!horoscope) return null
-    return horoscope.yearly
-  } catch (err) {
-    console.warn('[FortuneEngine] iztro horoscope 调用失败:', err)
-    return null
-  }
-}
 
 function buildNatalLayer(ctx: ScoringContext): PalaceLayer {
   const entries: PalaceLayerEntry[] = ctx.palaces.map((p, i) => ({
@@ -354,35 +363,4 @@ function buildEmptyLayer(label: '大限' | '流年'): PalaceLayer {
   return { layer: label, palaces }
 }
 
-function buildDaXianScoringContext(mapping: DaXianPalaceMapping, natalCtx: ScoringContext): ScoringContext | null {
-  if (!mapping.mutagen || mapping.mutagen.length < 4) return null
-
-  const daXianPalaces: PalaceForScoring[] = natalCtx.palaces.map(p => ({
-    ...p,
-    stars: p.stars.map(s => ({ ...s })),
-    majorStars: [...p.majorStars],
-  }))
-
-  const sihuaTypes: SihuaType[] = ['化禄', '化权', '化科', '化忌']
-  for (let i = 0; i < mapping.mutagen.length && i < 4; i++) {
-    const starName = mapping.mutagen[i]
-    const sihuaType = sihuaTypes[i]
-    for (const palace of daXianPalaces) {
-      for (const star of palace.stars) {
-        if (star.name === starName && !star.sihua) {
-          star.sihua = sihuaType
-          star.sihuaSource = '大限'
-        }
-      }
-    }
-  }
-
-  return {
-    skeletonId: natalCtx.skeletonId,
-    palaces: daXianPalaces,
-    birthGan: mapping.daXianGan,
-    taiSuiZhi: natalCtx.taiSuiZhi,
-    shenGongIndex: natalCtx.shenGongIndex,
-    patterns: [],
-  }
-}
+export { buildDaXianScoringContext } from './limit-scoring-context'

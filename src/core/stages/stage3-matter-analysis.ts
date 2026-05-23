@@ -22,6 +22,7 @@ import type {
 import { getDirectionWindow } from '@/core/types'
 import { buildThreeLayerTable, calculateDirectionMatrix } from './helpers/fortune-runner'
 import { injectStage3Knowledge } from './helpers/knowledge-injector'
+import { getLimitDirectionMeta } from '@/core/knowledge-dict/limit-direction'
 
 /**
  * 执行阶段三：事项分析
@@ -60,7 +61,12 @@ export function executeStage3(input: Stage3Input): Stage3Output {
     d => d.ageRange[0] <= currentAge && d.ageRange[1] >= currentAge,
   )
 
-  const directionMatrix = calculateDirectionMatrix(currentDaXian, targetYear, stage1.scoringCtx)
+  const directionMatrix = calculateDirectionMatrix(
+    currentDaXian,
+    targetYear,
+    stage1.scoringCtx,
+    chartData,
+  )
   const directionWindow = getDirectionWindow(directionMatrix)
 
   // 4. 知识注入（M6）
@@ -70,6 +76,15 @@ export function executeStage3(input: Stage3Input): Stage3Output {
     stage1.palaceScores,
     allDaXianMappings,
   )
+
+  const dirMeta = getLimitDirectionMeta(directionMatrix)
+  if (dirMeta?.judgment) {
+    knowledgeSnippets.push({
+      source: '宫位含义',
+      key: `限运方向_${directionMatrix}`,
+      content: `大限×流年「${directionMatrix}」：${dirMeta.judgment}。建议：${dirMeta.suggestion}。${dirMeta.description}`,
+    })
+  }
 
   return {
     matterType,

@@ -8,12 +8,16 @@
 import type { PatternPredicate, ChartAccessor } from './types'
 import {
   getSanFangSiZheng,
-  hasZuoYouInSanFang,
   hasStarInSanFang,
   hasSihuaInSanFang,
+  hasZuoYouInSanFang,
   isJiGeYinDong,
   isMiaoWang,
   isLuoXian,
+  checkSanQiFromSameSource,
+  hasClampStars,
+  hasMinStarsInSanFang,
+  isAnchorPalaceEmpty,
   hasLuInSanFang,
 } from './types'
 
@@ -28,7 +32,7 @@ const ziShaDaiHuaQuan: PatternPredicate = {
   level: '中吉',
   category: '紫微',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '紫微') || !chart.hasStarInPalace(mingIdx, '七杀')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '巳' && zhi !== '亥') return false
@@ -50,7 +54,7 @@ const xiongSuChaoYuan: PatternPredicate = {
   level: '中吉',
   category: '廉贞',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '廉贞')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '未' && zhi !== '寅' && zhi !== '申') return false
@@ -72,7 +76,7 @@ const jueChuFengSheng: PatternPredicate = {
   level: '中吉',
   category: '廉贞',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '廉贞') || !chart.hasStarInPalace(mingIdx, '贪狼')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '亥') return false
 
@@ -97,7 +101,7 @@ const tanWuTongXing: PatternPredicate = {
   level: '中吉',
   category: '武曲',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '贪狼') || !chart.hasStarInPalace(mingIdx, '武曲')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '辰' && zhi !== '戌' && zhi !== '丑' && zhi !== '未') return false
@@ -114,7 +118,7 @@ const hengFa: PatternPredicate = {
   level: '中吉',
   category: '武曲',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '武曲')) return false
     const hasHuoXing = chart.hasStarInPalace(mingIdx, '火星')
     const hasLingXing = chart.hasStarInPalace(mingIdx, '铃星')
@@ -133,7 +137,7 @@ const wuPoBaiShou: PatternPredicate = {
   level: '中吉',
   category: '武曲',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '武曲') || !chart.hasStarInPalace(mingIdx, '破军')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '巳') return false
 
@@ -159,7 +163,7 @@ const shiZhongYinYu: PatternPredicate = {
   evaluate(chart) {
     if (chart.birthGan !== '辛' && chart.birthGan !== '癸') return false
 
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '巨门')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '子' && zhi !== '午') return false
@@ -181,7 +185,7 @@ const juJiGongQing: PatternPredicate = {
   level: '中吉',
   category: '巨门',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '巨门') || !chart.hasStarInPalace(mingIdx, '天机')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '卯') return false
 
@@ -203,7 +207,7 @@ const juHuoYangZhongShenBuXie: PatternPredicate = {
   level: '中吉',
   category: '巨门',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '巨门')) return false
 
     const sf = getSanFangSiZheng(chart, mingIdx)
@@ -235,7 +239,7 @@ const riYueJiaCai: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     const mingZhi = chart.getPalaceDiZhi(mingIdx)
 
     // 场景1：天府在未宫，丁年或庚年生
@@ -277,13 +281,13 @@ function hasRiYueJiHua(chart: ChartAccessor): boolean {
 // ─── 11. 马头带剑(日月) ────────────────────────────────────────
 // 天同太阴擎羊在命宫午宫 + 丙年生 + 天同化禄 + 见吉多 + 加吉格
 const maTouDaiJianRiYue: PatternPredicate = {
-  name: '马头带剑',
+  name: '马头带剑(日月)',
   level: '中吉',
   category: '日月',
   evaluate(chart) {
     if (chart.birthGan !== '丙') return false
 
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (chart.getPalaceDiZhi(mingIdx) !== '午') return false
     if (!chart.hasStarInPalace(mingIdx, '天同') || !chart.hasStarInPalace(mingIdx, '太阴') || !chart.hasStarInPalace(mingIdx, '擎羊')) return false
 
@@ -300,7 +304,7 @@ const shuiChengGuiE: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阴') || !chart.hasStarInPalace(mingIdx, '天同')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '子') return false
 
@@ -325,7 +329,7 @@ const yueLangTianMen: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阴')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '亥') return false
 
@@ -350,7 +354,7 @@ const yueLangTianMenQiGe: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阴')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '亥') return false
 
@@ -378,7 +382,7 @@ const jiZhiLingHuo: PatternPredicate = {
   evaluate(chart) {
     if (!chart.hasStarSihua('太阴', '化禄')) return false
 
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阴')) return false
     if (hasStarInSanFang(chart, mingIdx, '铃星')) return true
     return false
@@ -392,7 +396,7 @@ const weiYiJuZu: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阴')) return false
     const hasQingYang = chart.hasStarInPalace(mingIdx, '擎羊')
     const hasTuoLuo = chart.hasStarInPalace(mingIdx, '陀罗')
@@ -411,27 +415,32 @@ const riYueFanBei: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarSihua('太阴', '化禄')) return false
 
-    let taiYangIdx = -1
-    let taiYinIdx = -1
-    for (let i = 0; i < 12; i++) {
-      if (chart.hasStarInPalace(i, '太阳')) taiYangIdx = i
-      if (chart.hasStarInPalace(i, '太阴')) taiYinIdx = i
+    // 太阳和太阴必须在命宫三方四正范围内
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const hasTaiYang = sf.some((idx) => chart.hasStarInPalace(idx, '太阳'))
+    const hasTaiYin = sf.some((idx) => chart.hasStarInPalace(idx, '太阴'))
+    if (!hasTaiYang || !hasTaiYin) return false
+
+    // 太阳落陷
+    let taiYangLuoXian = false
+    let taiYinLuoXian = false
+    for (const idx of sf) {
+      const stars = chart.getStarsInPalace(idx)
+      for (const s of stars) {
+        if (s.star === '太阳' && isLuoXian(s.brightness)) taiYangLuoXian = true
+        if (s.star === '太阴' && isLuoXian(s.brightness)) taiYinLuoXian = true
+      }
     }
-    if (taiYangIdx < 0 || taiYinIdx < 0) return false
+    if (!taiYangLuoXian || !taiYinLuoXian) return false
 
-    if (!isLuoXian(chart.getPalaceBrightness(taiYangIdx))) return false
-    if (!isLuoXian(chart.getPalaceBrightness(taiYinIdx))) return false
-
-    const sfTaiYang = getSanFangSiZheng(chart, taiYangIdx)
-    if (!sfTaiYang.includes(taiYinIdx)) return false
-
-    const hasChangQu = hasStarInSanFang(chart, taiYinIdx, '文昌') || hasStarInSanFang(chart, taiYinIdx, '文曲')
-    const hasKuiYue = hasStarInSanFang(chart, taiYinIdx, '天魁') || hasStarInSanFang(chart, taiYinIdx, '天钺')
+    const hasChangQu = hasStarInSanFang(chart, mingIdx, '文昌') || hasStarInSanFang(chart, mingIdx, '文曲')
+    const hasKuiYue = hasStarInSanFang(chart, mingIdx, '天魁') || hasStarInSanFang(chart, mingIdx, '天钺')
     if (!hasChangQu && !hasKuiYue) return false
 
-    if (!isJiGeYinDong(chart, taiYinIdx)) return false
+    if (!isJiGeYinDong(chart, mingIdx)) return false
     return true
   },
 }
@@ -443,25 +452,31 @@ const riYueBingMing: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    let taiYangIdx = -1
-    let taiYinIdx = -1
-    for (let i = 0; i < 12; i++) {
-      if (chart.hasStarInPalace(i, '太阳')) taiYangIdx = i
-      if (chart.hasStarInPalace(i, '太阴')) taiYinIdx = i
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 太阳和太阴必须在命宫三方四正范围内
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const hasTaiYang = sf.some((idx) => chart.hasStarInPalace(idx, '太阳'))
+    const hasTaiYin = sf.some((idx) => chart.hasStarInPalace(idx, '太阴'))
+    if (!hasTaiYang || !hasTaiYin) return false
+
+    // 太阳太阴庙旺
+    let taiYangMiaoWang = false
+    let taiYinMiaoWang = false
+    for (const idx of sf) {
+      const stars = chart.getStarsInPalace(idx)
+      for (const s of stars) {
+        if (s.star === '太阳' && isMiaoWang(s.brightness)) taiYangMiaoWang = true
+        if (s.star === '太阴' && isMiaoWang(s.brightness)) taiYinMiaoWang = true
+      }
     }
-    if (taiYangIdx < 0 || taiYinIdx < 0) return false
+    if (!taiYangMiaoWang || !taiYinMiaoWang) return false
 
-    if (!isMiaoWang(chart.getPalaceBrightness(taiYangIdx))) return false
-    if (!isMiaoWang(chart.getPalaceBrightness(taiYinIdx))) return false
-
-    const sf = getSanFangSiZheng(chart, taiYangIdx)
-    if (!sf.includes(taiYinIdx)) return false
-
-    const hasChangQu = hasStarInSanFang(chart, taiYangIdx, '文昌') || hasStarInSanFang(chart, taiYangIdx, '文曲')
-    const hasKuiYue = hasStarInSanFang(chart, taiYangIdx, '天魁') || hasStarInSanFang(chart, taiYangIdx, '天钺')
+    const hasChangQu = hasStarInSanFang(chart, mingIdx, '文昌') || hasStarInSanFang(chart, mingIdx, '文曲')
+    const hasKuiYue = hasStarInSanFang(chart, mingIdx, '天魁') || hasStarInSanFang(chart, mingIdx, '天钺')
     if (!hasChangQu && !hasKuiYue) return false
 
-    if (!isJiGeYinDong(chart, taiYangIdx)) return false
+    if (!isJiGeYinDong(chart, mingIdx)) return false
     return true
   },
 }
@@ -473,7 +488,7 @@ const dingHuoXinQin: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阳')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '子') return false
 
@@ -497,7 +512,7 @@ const riLiZhongTian: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阳')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '午') return false
 
@@ -521,7 +536,7 @@ const chuShiRongHua: PatternPredicate = {
   level: '中吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阳') || !chart.hasStarInPalace(mingIdx, '太阴')) return false
 
     const sf = getSanFangSiZheng(chart, mingIdx)
@@ -550,7 +565,7 @@ const jiaGuanJinJue: PatternPredicate = {
   level: '中吉',
   category: '杀破狼',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '破军')) return false
 
     const hasHuaLu = chart.hasSihuaInPalace(mingIdx, '化禄')
@@ -569,7 +584,7 @@ const huoTanHengFa: PatternPredicate = {
   level: '中吉',
   category: '杀破狼',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '贪狼')) return false
     const hasHuoXing = chart.hasStarInPalace(mingIdx, '火星')
     const hasLingXing = chart.hasStarInPalace(mingIdx, '铃星')
@@ -588,7 +603,7 @@ const tongQuanBianErDuoMou: PatternPredicate = {
   level: '中吉',
   category: '杀破狼',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '贪狼')) return false
     const hasChang = chart.hasStarInPalace(mingIdx, '文昌')
     const hasQu = chart.hasStarInPalace(mingIdx, '文曲')
@@ -618,7 +633,7 @@ const fuXiangYuLu: PatternPredicate = {
   level: '中吉',
   category: '天府',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天府')) return false
 
     const sf = getSanFangSiZheng(chart, mingIdx)
@@ -646,7 +661,7 @@ const wuFuCaiChen: PatternPredicate = {
   level: '中吉',
   category: '天府',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天府') || !chart.hasStarInPalace(mingIdx, '武曲')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '子' && zhi !== '午') return false
@@ -672,13 +687,13 @@ const wuFuCaiChen: PatternPredicate = {
 // ─── 27. 寿星入庙(机梁同) ─────────────────────────────────────
 // 天梁在命宫午 + 丁己癸年生 + 见禄见科 + 加吉格
 const shouXingRuMiaoJiLiang: PatternPredicate = {
-  name: '寿星入庙',
+  name: '寿星入庙(机梁同)',
   level: '中吉',
   category: '机梁同',
   evaluate(chart) {
     if (chart.birthGan !== '丁' && chart.birthGan !== '己' && chart.birthGan !== '癸') return false
 
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天梁')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '午') return false
 
@@ -699,7 +714,7 @@ const guanZiQingXian: PatternPredicate = {
   level: '中吉',
   category: '机梁同',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天梁')) return false
 
     const sf = getSanFangSiZheng(chart, mingIdx)
@@ -731,7 +746,7 @@ const jiLiangYangJiMouZhiSheng: PatternPredicate = {
   level: '中吉',
   category: '机梁同',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天机')) return false
     if (!hasStarInSanFang(chart, mingIdx, '天梁')) return false
 
@@ -755,7 +770,7 @@ const weiZhiGongQing: PatternPredicate = {
   level: '中吉',
   category: '机梁同',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天梁')) return false
     if (!isMiaoWang(chart.getPalaceBrightness(mingIdx))) return false
 
@@ -778,7 +793,7 @@ const tianTongHuaQuanFanGui: PatternPredicate = {
   evaluate(chart) {
     if (chart.birthGan !== '丁') return false
 
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '天同')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '戌') return false
 
@@ -798,7 +813,7 @@ const yiLuGongMing: PatternPredicate = {
   level: '中吉',
   category: '其他',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     const stars = chart.getStarsInPalace(mingIdx)
     if (stars.length === 0) return false
 
@@ -823,7 +838,7 @@ const sanQiJiaHui: PatternPredicate = {
   level: '中吉',
   category: '其他',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     const sf = getSanFangSiZheng(chart, mingIdx)
 
     const sources = ['命造', '父亲', '母亲']
@@ -838,7 +853,364 @@ const sanQiJiaHui: PatternPredicate = {
   },
 }
 
-/** 中吉格局列表（33条，×1.3） */
+// ─── 34. 府相朝垣 ─────────────────────────────────────────────
+// 天府天相分居命宫三方
+// 三方四正吉多煞少
+const fuXiangChaoYuan: PatternPredicate = {
+  name: '府相朝垣',
+  level: '中吉',
+  category: '天府',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const sf = getSanFangSiZheng(chart, mingIdx)
+
+    // 天府和天相必须在三方四正范围内
+    const hasTianFu = sf.some((idx) => chart.hasStarInPalace(idx, '天府'))
+    const hasTianXiang = sf.some((idx) => chart.hasStarInPalace(idx, '天相'))
+    if (!hasTianFu || !hasTianXiang) return false
+
+    // 三方四正吉多煞少
+    const ji = chart.countAuspiciousInPalaces(sf)
+    const sha = chart.countInauspiciousInPalaces(sf)
+    return ji > sha
+  },
+}
+
+// ─── 35. 禄合鸳鸯 ─────────────────────────────────────────────
+// 禄存与化禄同宫
+// 无地空地劫冲破
+const luHeYuanYang: PatternPredicate = {
+  name: '禄合鸳鸯',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 禄存与化禄同宫
+    if (!chart.hasStarInPalace(mingIdx, '禄存')) return false
+    if (!chart.hasSihuaInPalace(mingIdx, '化禄')) return false
+
+    // 无地空地劫冲破
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const hasKong = sf.some((idx) => chart.hasStarInPalace(idx, '地空'))
+    const hasJie = sf.some((idx) => chart.hasStarInPalace(idx, '地劫'))
+    return !hasKong && !hasJie
+  },
+}
+
+// ─── 36. 双禄朝垣 ─────────────────────────────────────────────
+// 禄存与化禄分居命宫三方
+// 三方四正吉多
+const shuangLuChaoYuan: PatternPredicate = {
+  name: '双禄朝垣',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const sf = getSanFangSiZheng(chart, mingIdx)
+
+    // 禄存与化禄分居命宫三方
+    const hasLuCun = sf.some((idx) => chart.hasStarInPalace(idx, '禄存'))
+    const hasHuaLu = sf.some((idx) => chart.hasSihuaInPalace(idx, '化禄'))
+    if (!hasLuCun || !hasHuaLu) return false
+
+    // 三方四正吉多
+    const ji = chart.countAuspiciousInPalaces(sf)
+    const sha = chart.countInauspiciousInPalaces(sf)
+    return ji > sha
+  },
+}
+
+// ─── 37. 辅弼拱命 ─────────────────────────────────────────────
+// 左辅右弼分居命宫三方
+// 命宫主星庙旺
+const fuBiGongMing: PatternPredicate = {
+  name: '辅弼拱命',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const sf = getSanFangSiZheng(chart, mingIdx)
+
+    // 左辅右弼分居命宫三方
+    const hasZuoFu = sf.some((idx) => chart.hasStarInPalace(idx, '左辅'))
+    const hasYouBi = sf.some((idx) => chart.hasStarInPalace(idx, '右弼'))
+    if (!hasZuoFu || !hasYouBi) return false
+
+    // 命宫主星庙旺
+    const stars = chart.getStarsInPalace(mingIdx)
+    if (stars.length === 0) return false
+    return stars.some((s) => isMiaoWang(s.brightness))
+  },
+}
+
+// ─── 38. 昌曲夹命 ─────────────────────────────────────────────
+// 文昌文曲夹命宫
+// 命宫主星庙旺
+const changQuJiaMing: PatternPredicate = {
+  name: '昌曲夹命',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 文昌文曲夹命宫
+    if (!hasClampStars(chart, mingIdx, '文昌', '文曲')) return false
+
+    // 命宫主星庙旺
+    const stars = chart.getStarsInPalace(mingIdx)
+    if (stars.length === 0) return false
+    return stars.some((s) => isMiaoWang(s.brightness))
+  },
+}
+
+// ─── 39. 左右夹命 ─────────────────────────────────────────────
+// 左辅右弼夹命宫
+// 命宫主星庙旺
+const zuoYouJiaMing: PatternPredicate = {
+  name: '左右夹命',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 左辅右弼夹命宫
+    if (!hasClampStars(chart, mingIdx, '左辅', '右弼')) return false
+
+    // 命宫主星庙旺
+    const stars = chart.getStarsInPalace(mingIdx)
+    if (stars.length === 0) return false
+    return stars.some((s) => isMiaoWang(s.brightness))
+  },
+}
+
+// ─── 40. 七杀朝斗 ─────────────────────────────────────────────
+// 七杀在子午宫独坐，三方四正会照吉星
+// 主威权出众，适合武职或管理工作
+const qiShaChaoDou: PatternPredicate = {
+  name: '七杀朝斗',
+  level: '中吉',
+  category: '杀破狼',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const zhi = chart.getPalaceDiZhi(mingIdx)
+
+    // 七杀在子午宫独坐
+    if (zhi !== '子' && zhi !== '午') return false
+    if (!chart.hasStarInPalace(mingIdx, '七杀')) return false
+
+    // 三方四正会照吉星（左辅右弼文昌文曲天魁天钺禄存化禄化权化科）
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const jiXing = ['左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存']
+    const hasJi = sf.some((idx) => jiXing.some((star) => chart.hasStarInPalace(idx, star)))
+    const hasHuaLu = sf.some((idx) => chart.hasSihuaInPalace(idx, '化禄'))
+    const hasHuaQuan = sf.some((idx) => chart.hasSihuaInPalace(idx, '化权'))
+    const hasHuaKe = sf.some((idx) => chart.hasSihuaInPalace(idx, '化科'))
+
+    return hasJi || hasHuaLu || hasHuaQuan || hasHuaKe
+  },
+}
+
+// ─── 41. 七杀仰斗 ─────────────────────────────────────────────
+// 七杀在寅申宫独坐，三方四正会照吉星
+// 主威权出众，适合武职或管理工作
+const qiShaYangDou: PatternPredicate = {
+  name: '七杀仰斗',
+  level: '中吉',
+  category: '杀破狼',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const zhi = chart.getPalaceDiZhi(mingIdx)
+
+    // 七杀在寅申宫独坐
+    if (zhi !== '寅' && zhi !== '申') return false
+    if (!chart.hasStarInPalace(mingIdx, '七杀')) return false
+
+    // 三方四正会照吉星
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const jiXing = ['左辅', '右弼', '文昌', '文曲', '天魁', '天钺', '禄存']
+    const hasJi = sf.some((idx) => jiXing.some((star) => chart.hasStarInPalace(idx, star)))
+    const hasHuaLu = sf.some((idx) => chart.hasSihuaInPalace(idx, '化禄'))
+    const hasHuaQuan = sf.some((idx) => chart.hasSihuaInPalace(idx, '化权'))
+    const hasHuaKe = sf.some((idx) => chart.hasSihuaInPalace(idx, '化科'))
+
+    return hasJi || hasHuaLu || hasHuaQuan || hasHuaKe
+  },
+}
+
+// ─── 42. 机月同梁 ─────────────────────────────────────────────
+// 天机、太阴、天同、天梁在命宫三方四正会齐
+// 经典大格局，主聪明机变、善于谋划、适合公职或企划类工作
+const jiYueTongLiang: PatternPredicate = {
+  name: '机月同梁',
+  level: '中吉',
+  category: '机梁同',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const sf = getSanFangSiZheng(chart, mingIdx)
+
+    // 四颗星必须在三方四正范围内全部出现
+    const hasTianJi = sf.some((idx) => chart.hasStarInPalace(idx, '天机'))
+    const hasTaiYin = sf.some((idx) => chart.hasStarInPalace(idx, '太阴'))
+    const hasTianTong = sf.some((idx) => chart.hasStarInPalace(idx, '天同'))
+    const hasTianLiang = sf.some((idx) => chart.hasStarInPalace(idx, '天梁'))
+
+    return hasTianJi && hasTaiYin && hasTianTong && hasTianLiang
+  },
+}
+
+// ─── 43. 禄马交驰 ─────────────────────────────────────────────
+// 禄存与天马同宫或在对宫
+// 主动态来财，越跑越赚，适合经商或流动性工作
+const luMaJiaoChi: PatternPredicate = {
+  name: '禄马交驰',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 命宫有禄存
+    if (!chart.hasStarInPalace(mingIdx, '禄存')) return false
+
+    // 命宫有天马，或对宫有天马
+    if (chart.hasStarInPalace(mingIdx, '天马')) return true
+    const duiGong = (mingIdx + 6) % 12
+    if (chart.hasStarInPalace(duiGong, '天马')) return true
+
+    return false
+  },
+}
+
+// ─── 44. 天乙拱命 ─────────────────────────────────────────────
+// 天魁天钺夹命宫或分居命宫三方
+// 主贵人扶持，逢凶化吉
+const tianYiGongMing: PatternPredicate = {
+  name: '天乙拱命',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 天魁天钺夹命宫
+    if (hasClampStars(chart, mingIdx, '天魁', '天钺')) return true
+
+    // 或天魁天钺分居命宫三方
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const hasTianKui = sf.some((idx) => chart.hasStarInPalace(idx, '天魁'))
+    const hasTianYue = sf.some((idx) => chart.hasStarInPalace(idx, '天钺'))
+    return hasTianKui && hasTianYue
+  },
+}
+
+// ─── 45. 科权禄夹命 ───────────────────────────────────────────
+// 化科、化权、化禄夹命宫
+// 主富贵双全，功名显达
+const keQuanLuJiaMing: PatternPredicate = {
+  name: '科权禄夹命',
+  level: '中吉',
+  category: '其他',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const [leftIdx, rightIdx] = chart.getFlankingIndices(mingIdx)
+
+    // 左右邻宫分别有不同化曜
+    const sihuaTypes = ['化禄', '化权', '化科'] as const
+    const foundSihua = new Set<string>()
+
+    for (const type of sihuaTypes) {
+      if (chart.hasSihuaInPalace(leftIdx, type) || chart.hasSihuaInPalace(rightIdx, type)) {
+        foundSihua.add(type)
+      }
+    }
+
+    return foundSihua.has('化禄') && foundSihua.has('化权') && foundSihua.has('化科')
+  },
+}
+
+// ─── 46. 日月照壁 ─────────────────────────────────────────────
+// 太阳太阴在田宅宫同宫或会照
+// 主置产丰厚，家宅兴旺
+// 田宅宫位置 = (命宫 + 9) % 12
+const riYueZhaoBi: PatternPredicate = {
+  name: '日月照壁',
+  level: '中吉',
+  category: '日月',
+  evaluate(chart) {
+    // 田宅宫索引 = (命宫 + 9) % 12
+    const tianZhaiIdx = (chart.anchorPalaceIndex + 9) % 12
+
+    // 太阳太阴在田宅宫同宫或会照
+    const sf = getSanFangSiZheng(chart, tianZhaiIdx)
+    const hasTaiYang = sf.some((idx) => chart.hasStarInPalace(idx, '太阳'))
+    const hasTaiYin = sf.some((idx) => chart.hasStarInPalace(idx, '太阴'))
+    return hasTaiYang && hasTaiYin
+  },
+}
+
+// ─── 47. 善荫朝纲 ─────────────────────────────────────────────
+// 天梁在旺宫与文昌或文曲同宫
+// 主聪明正直，有领导才能，适合公职
+const shanYinChaoGang: PatternPredicate = {
+  name: '善荫朝纲',
+  level: '中吉',
+  category: '机梁同',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+
+    // 命宫有天梁
+    if (!chart.hasStarInPalace(mingIdx, '天梁')) return false
+
+    // 天梁庙旺
+    const stars = chart.getStarsInPalace(mingIdx)
+    const tianLiang = stars.find((s) => s.star === '天梁')
+    if (!tianLiang || !isMiaoWang(tianLiang.brightness)) return false
+
+    // 与文昌或文曲同宫
+    return chart.hasStarInPalace(mingIdx, '文昌') || chart.hasStarInPalace(mingIdx, '文曲')
+  },
+}
+
+// ─── 48. 紫府朝垣 ─────────────────────────────────────────────
+// 紫微天府在三方四正朝照命宫
+// 主权贵格局，领导力强
+const ziFuChaoYuan: PatternPredicate = {
+  name: '紫府朝垣',
+  level: '中吉',
+  category: '紫微',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const sf = getSanFangSiZheng(chart, mingIdx)
+
+    // 紫微天府在三方四正朝照命宫
+    const hasZiWei = sf.some((idx) => chart.hasStarInPalace(idx, '紫微'))
+    const hasTianFu = sf.some((idx) => chart.hasStarInPalace(idx, '天府'))
+    return hasZiWei && hasTianFu
+  },
+}
+
+// ─── 49. 廉贞清白 ─────────────────────────────────────────────
+// 廉贞在寅申宫独坐，无煞星冲破
+// 主清廉正直，有节操
+const lianZhenQingBai: PatternPredicate = {
+  name: '廉贞清白',
+  level: '中吉',
+  category: '廉贞',
+  evaluate(chart) {
+    const mingIdx = chart.anchorPalaceIndex
+    const zhi = chart.getPalaceDiZhi(mingIdx)
+
+    // 廉贞在寅申宫独坐
+    if (zhi !== '寅' && zhi !== '申') return false
+    if (!chart.hasStarInPalace(mingIdx, '廉贞')) return false
+
+    // 无煞星冲破
+    const sf = getSanFangSiZheng(chart, mingIdx)
+    const shaXing = ['火星', '铃星', '擎羊', '陀罗', '地空', '地劫']
+    return !sf.some((idx) => shaXing.some((star) => chart.hasStarInPalace(idx, star)))
+  },
+}
+
+/** 中吉格局列表（49条，×1.3） */
 export const mediumAuspiciousPatterns: PatternPredicate[] = [
   ziShaDaiHuaQuan,
   xiongSuChaoYuan,
@@ -873,4 +1245,20 @@ export const mediumAuspiciousPatterns: PatternPredicate[] = [
   tianTongHuaQuanFanGui,
   yiLuGongMing,
   sanQiJiaHui,
+  fuXiangChaoYuan,
+  luHeYuanYang,
+  shuangLuChaoYuan,
+  fuBiGongMing,
+  changQuJiaMing,
+  zuoYouJiaMing,
+  qiShaChaoDou,
+  qiShaYangDou,
+  jiYueTongLiang,
+  luMaJiaoChi,
+  tianYiGongMing,
+  keQuanLuJiaMing,
+  riYueZhaoBi,
+  shanYinChaoGang,
+  ziFuChaoYuan,
+  lianZhenQingBai,
 ]

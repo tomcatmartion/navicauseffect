@@ -15,6 +15,8 @@ import { detectMatterIntent } from '@/core/router/decision-tree'
 import { buildVirtualChart } from '@/core/tai-sui-rua-gua/virtual-chart'
 import { buildPrompt, STAGE1_HINT, STAGE2_HINT } from '@/core/llm-wrapper/prompt-builder'
 import type { DiZhi, TianGan, PalaceBrightness, MajorStar, IRStage1, IRStage2 } from '@/core/types'
+import { resolveLiuNianGan } from '@/core/limit-analyzer/fortune-engine'
+import { CHART_FIXTURE } from '@/core/stages/__tests__/chart-fixture'
 import type { ChartAccessor } from '@/core/energy-evaluator/patterns/types'
 
 function buildTestScoringContext(): ScoringContext {
@@ -156,6 +158,15 @@ describe('混合架构 Pipeline', () => {
       expect(GAN_TABLE[(2024 - 4) % 10]).toBe('甲')
       expect(GAN_TABLE[(1982 - 4) % 10]).toBe('壬')
       expect(GAN_TABLE[(1990 - 4) % 10]).toBe('庚')
+    })
+
+    it('resolveLiuNianGan 与公式表一致（无 horoscope 快照时）', () => {
+      const chart = {
+        ...CHART_FIXTURE,
+        birthInfo: { year: 1990, month: 6, day: 15, hour: 6, gender: '男' },
+      }
+      expect(resolveLiuNianGan(chart, 2024)).toBe('甲')
+      expect(resolveLiuNianGan(chart, 1990)).toBe('庚')
     })
   })
 

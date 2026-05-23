@@ -17,7 +17,7 @@
  */
 
 import type { Stage2Input, Stage2Output, PalaceName } from '@/core/types'
-import { PALACE_NAMES } from '@/core/types'
+import { PALACE_NAMES, PALACE_NAME_TO_INDEX } from '@/core/types'
 import {
   generateFourDimensionTags,
   generateHolographicBase,
@@ -45,7 +45,7 @@ export function executeStage2(input: Stage2Input): Stage2Output {
   const ctx = scoringCtx
 
   // 1. 确定三宫索引
-  const mingIdx = 0 // 命宫始终在索引 0
+  const mingIdx = PALACE_NAME_TO_INDEX['命宫'] // 动态查找，避免硬编码
   const shenIdx = findShenGongFromCtx(ctx)
   // 太岁宫 = 生年地支对应的宫位（独立于命宫位置）
   // SKILL_宫位原生能级评估："命主生年地支 = 太岁宫"

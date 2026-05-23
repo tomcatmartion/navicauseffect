@@ -35,7 +35,7 @@ import {
 import { getSkeletonBrightness } from './skeleton'
 import { getDunGanSihua, getShengNianSihua } from '../sihua-calculator'
 import type { SihuaMap } from '../types'
-import { getScoringParams, getPatternConfig } from '../knowledge-dict/loader'
+import { getScoringParams, getPatternDefinition, getPatternMultiplierByLevel } from '../knowledge-dict/loader'
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -57,6 +57,8 @@ export interface PalaceForScoring {
   palaceIndex: number
   /** 宫位地支 */
   diZhi: DiZhi
+  /** 宫位天干（可选，用于运限四化计算） */
+  tianGan?: TianGan
   /** 宫位旺弱等级（原始骨架亮度） */
   brightness: PalaceBrightness
   /** 主星列表 */
@@ -87,8 +89,16 @@ export interface ScoringContext {
   motherGan?: TianGan
   /** 母亲太岁宫地支（可选） */
   motherTaiSuiZhi?: DiZhi
-  /** 格局匹配结果 */
+  /**
+   * 格局匹配结果 — 每个宫位独立的格局列表
+   * patterns[palaceIndex] = 该宫位作为锚定宫位时匹配到的格局
+   */
   patterns: PatternMatch[]
+  /**
+   * 每宫格局 — 按宫位索引存储的格局列表
+   * palacePatterns[palaceIndex] = 该宫位作为锚定宫位时匹配到的格局
+   */
+  palacePatterns?: PatternMatch[][]
 }
 
 /** 步骤2子步骤详情 */
@@ -219,18 +229,18 @@ function getAllFlankingPairs(
     let forward = false
     let reverse = false
 
-    if (pair.left === '化禄' && pair.right === '化禄') {
-      // 双禄夹：检查左右夹宫是否各有一个化禄（sihua属性）
-      const leftHasLu = leftPalace.stars.some(s => s.sihua === '化禄')
-      const rightHasLu = rightPalace.stars.some(s => s.sihua === '化禄')
-      forward = leftHasLu && rightHasLu
-    } else if (pair.left === '化忌' && pair.right === '化忌') {
-      // 双忌夹：检查左右夹宫是否各有一个化忌（sihua属性）
-      const leftHasJi = leftPalace.stars.some(s => s.sihua === '化忌')
-      const rightHasJi = rightPalace.stars.some(s => s.sihua === '化忌')
-      forward = leftHasJi && rightHasJi
+    if (isSihuaType(pair.left) || isSihuaType(pair.right)) {
+      // 四化夹：left/right 为化禄/化权/化科/化忌，通过 star.sihua 属性匹配
+      // 支持双同夹（双禄夹、双忌夹）和混合夹（科权夹、禄权夹等）
+      // 正向：左侧夹宫有 left 对应四化，右侧夹宫有 right 对应四化
+      forward = leftPalace.stars.some(s => s.sihua === pair.left)
+        && rightPalace.stars.some(s => s.sihua === pair.right)
+      // 反向：左侧夹宫有 right 对应四化，右侧夹宫有 left 对应四化
+      reverse = leftPalace.stars.some(s => s.sihua === pair.right)
+        && rightPalace.stars.some(s => s.sihua === pair.left)
     } else {
-      // 普通星曜夹：正向检查：leftStar在左夹宫，rightStar在右夹宫
+      // 普通星曜夹：通过星曜名称匹配
+      // 正向检查：leftStar在左夹宫，rightStar在右夹宫
       forward = leftStars.has(pair.left) && rightStars.has(pair.right)
       // 反向检查：rightStar在左夹宫，leftStar在右夹宫（互换也算夹）
       reverse = leftStars.has(pair.right) && rightStars.has(pair.left)
@@ -253,6 +263,12 @@ function getAllFlankingPairs(
   }
 
   return result
+}
+
+/** 判断值是否为四化类型（化禄/化权/化科/化忌） */
+const SIHUA_TYPES = new Set(['化禄', '化权', '化科', '化忌'])
+function isSihuaType(value: string): boolean {
+  return SIHUA_TYPES.has(value)
 }
 
 /** 取两个亮度中较弱的一个 */
@@ -291,12 +307,12 @@ function getIntensityFactor(brightness: WarmCoolLabel): number {
 }
 
 function getLuCunDeltaByLabel(label: WarmCoolLabel): number {
-  // 从 scoring.json params 加载 luCunDelta
+  // 从 scoring.json params 加载 luCunDelta（旺 0.5 / 平 0.3 / 陷 0.1）
   const params = getScoringParams()
   let delta: number
-  if (label === '旺') delta = params?.luCunDelta?.['旺'] ?? 0.3
-  else if (label === '平' || label === '旺偏磨炼') delta = params?.luCunDelta?.['平'] ?? 0
-  else delta = params?.luCunDelta?.['陷'] ?? -0.3
+  if (label === '旺') delta = params?.luCunDelta?.['旺'] ?? 0.5
+  else if (label === '平' || label === '旺偏磨炼') delta = params?.luCunDelta?.['平'] ?? 0.3
+  else delta = params?.luCunDelta?.['陷'] ?? 0.1 // 虚浮、凶危
   return round2(delta)
 }
 
@@ -436,18 +452,21 @@ function step2_bonus(palaceIdx: number, ctx: ScoringContext, state: ScoringState
     }
   }
 
-  // 2.8 吉格倍率
-  const patternConfig = getPatternConfig() as Record<string, { stage: string; scope: string; multiplier: number; category?: string }>
-  const applicablePatterns = ctx.patterns.filter(p => {
-    const config = patternConfig[p.name]
-    if (!config) return false
-    return config.stage === 'bonus' && isCorePalace(p, palaceIdx, ctx)
+  // 2.8 吉格倍率 — 从 pattern_library.json 按格局名称查找定义
+  // 使用当前宫位作为锚定宫位时的格局列表
+  const palacePatternList = ctx.palacePatterns?.[palaceIdx] ?? ctx.patterns
+  const applicablePatterns = palacePatternList.filter(p => {
+    const def = getPatternDefinition(p.name)
+    if (!def) return false
+    // 锚定模型：palacePatterns[palaceIdx] 已是该宫作锚定时的成格列表，直接应用倍率
+    return def.stage === 'bonus'
   })
 
   const G = applicablePatterns.length > 0
     ? Math.max(...applicablePatterns.map(p => {
-        const config = patternConfig[p.name]
-        return config?.multiplier ?? 1.0
+        const def = getPatternDefinition(p.name)
+        // 优先使用定义中的 multiplier，否则按级别查表
+        return def?.multiplier ?? getPatternMultiplierByLevel(p.level) ?? 1.0
       }))
     : 1.0
 
@@ -590,18 +609,20 @@ function step4_penalty(palaceIdx: number, ctx: ScoringContext, state: ScoringSta
     }
   }
 
-  // 4.8 凶格倍率
-  const patternConfig = getPatternConfig() as Record<string, { stage: string; scope: string; multiplier: number }>
-  const applicablePatterns = ctx.patterns.filter(p => {
-    const config = patternConfig[p.name]
-    if (!config) return false
-    return config.stage === 'penalty' && isCorePalace(p, palaceIdx, ctx)
+  // 4.8 凶格倍率 — 从 pattern_library.json 按格局名称查找定义
+  // 使用当前宫位作为锚定宫位时的格局列表
+  const palacePatternListPenalty = ctx.palacePatterns?.[palaceIdx] ?? ctx.patterns
+  const inapplicablePatterns = palacePatternListPenalty.filter(p => {
+    const def = getPatternDefinition(p.name)
+    if (!def) return false
+    return def.stage === 'penalty'
   })
 
-  const H = applicablePatterns.length > 0
-    ? Math.min(...applicablePatterns.map(p => {
-        const config = patternConfig[p.name]
-        return config?.multiplier ?? 1.0
+  const H = inapplicablePatterns.length > 0
+    ? Math.min(...inapplicablePatterns.map(p => {
+        const def = getPatternDefinition(p.name)
+        // 优先使用定义中的 multiplier，否则按级别查表
+        return def?.multiplier ?? getPatternMultiplierByLevel(p.level) ?? 1.0
       }))
     : 1.0
 
@@ -725,21 +746,6 @@ function detectAbsoluteFail(palaceIdx: number, ctx: ScoringContext): { isAbsolut
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 辅助：判断宫位是否为格局的核心宫位
-// ═══════════════════════════════════════════════════════════════════
-
-function isCorePalace(pattern: PatternMatch, palaceIdx: number, ctx: ScoringContext): boolean {
-  // 简化实现：格局的核心宫位包括构成星曜所在宫位 + 引动条件所在宫位
-  // 实际应由格局判定模块提供核心宫位列表
-  // 这里使用 pattern 中可能包含的 palaceIndices 字段
-  if ('palaceIndices' in pattern && Array.isArray((pattern as Record<string, unknown>).palaceIndices)) {
-    return ((pattern as Record<string, unknown>).palaceIndices as number[]).includes(palaceIdx)
-  }
-  // 默认：如果格局触发，应用到所有宫位（保守策略）
-  return true
-}
-
-// ═══════════════════════════════════════════════════════════════════
 // 制煞能力
 // ═══════════════════════════════════════════════════════════════════
 
@@ -821,7 +827,7 @@ export function evaluateSinglePalace(palaceIndex: number, ctx: ScoringContext): 
     finalScore,
     tone: isAbsoluteFail ? '绝败' : tone,
     subdueLevel,
-    patterns: ctx.patterns,
+    patterns: ctx.palacePatterns?.[palaceIndex] ?? ctx.patterns,
     patternMultiplier: G,
     criticalStatus,
     isAbsoluteFail,

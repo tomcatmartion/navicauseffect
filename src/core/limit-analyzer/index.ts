@@ -10,6 +10,8 @@ export {
   extractAllDaXianMappings,
   buildThreeLayerTable,
   calculateDirectionMatrix,
+  resolveLiuNianGan,
+  resolveLiuNianGanZhi,
 } from './fortune-engine'
 
 // ── 运限格局识别引擎导出 ────────────────────────────────

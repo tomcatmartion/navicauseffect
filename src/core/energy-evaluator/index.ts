@@ -16,3 +16,7 @@ export {
   getTrineIndices,
   getFlankingIndices,
 } from './scoring-flow'
+export {
+  evaluatePalacePatternsOnly,
+  buildChartAccessor,
+} from './pattern-scoring'

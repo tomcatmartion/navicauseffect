@@ -87,12 +87,12 @@ export function getPalaceMeaning(palace: PalaceName): PalaceMeaning | null {
 
 /** 六吉星列表 */
 export function getAuspiciousStars(): AuspiciousStar[] {
-  return getScoringParams().jiStarNames as AuspiciousStar[]
+  return (getScoringParams().jiStarNames ?? []) as AuspiciousStar[]
 }
 
 /** 六煞星列表 */
 export function getInauspiciousStars(): InauspiciousStar[] {
-  return getScoringParams().shaStarNames as InauspiciousStar[]
+  return (getScoringParams().shaStarNames ?? []) as InauspiciousStar[]
 }
 
 /**
@@ -113,14 +113,14 @@ export function isInauspicious(star: string): boolean {
  * 获取吉星分值（固定 +0.5）
  */
 export function getAuspiciousScore(): number {
-  return getScoringParams().jiStarScore
+  return getScoringParams().jiStarScore ?? 0.5
 }
 
 /**
  * 获取煞星分值（固定 -0.5）
  */
 export function getInauspiciousScore(): number {
-  return getScoringParams().shaStarScore
+  return getScoringParams().shaStarScore ?? -0.5
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -132,9 +132,10 @@ export function getInauspiciousScore(): number {
  */
 export function getSubdueLevel(star: MajorStar, brightness: PalaceBrightness): '强制煞' | '中制煞' | '弱制煞' | '无' {
   const params = getScoringParams()
-  if (params.subdueLevel.strong.includes(star)) return '强制煞'
-  if (params.subdueLevel.medium.includes(star) && (brightness === '旺' || brightness === '极旺')) return '中制煞'
-  if (params.subdueLevel.weak.includes(star)) return '弱制煞'
+  const subdue = params.subdueLevel ?? { strong: [], medium: [], weak: [] }
+  if (subdue.strong?.includes(star)) return '强制煞'
+  if (subdue.medium?.includes(star) && (brightness === '旺' || brightness === '极旺')) return '中制煞'
+  if (subdue.weak?.includes(star)) return '弱制煞'
   return '无'
 }
 
@@ -181,13 +182,13 @@ function loadFlankingDecayTable(): FlankingDecayTable {
 
 const FLANKING_DECAY_TABLE = loadFlankingDecayTable()
 
-const fixedCfg = getScoringParams().fixedDecay
+const fixedCfg = getScoringParams().fixedDecay ?? { opposite: 0.8, trine: 0.7 }
 
 /** 对宫衰减系数（来自 scoring.json，可配置） */
-export const OPPOSITE_DECAY = typeof fixedCfg?.opposite === 'number' ? fixedCfg.opposite : 0.8
+export const OPPOSITE_DECAY = typeof fixedCfg.opposite === 'number' ? fixedCfg.opposite : 0.8
 
 /** 三合宫衰减系数（来自 scoring.json，可配置） */
-export const TRINE_DECAY = typeof fixedCfg?.trine === 'number' ? fixedCfg.trine : 0.7
+export const TRINE_DECAY = typeof fixedCfg.trine === 'number' ? fixedCfg.trine : 0.7
 
 /**
  * 获取夹宫动态衰减系数
@@ -213,7 +214,7 @@ export function getFlankingDecay(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 禄存加减分（从 scoring_params.json 加载）
+// 禄存加减分（从 data/scoring.json params.luCunDelta 加载）
 // ═══════════════════════════════════════════════════════════════════
 
 /**
@@ -221,7 +222,8 @@ export function getFlankingDecay(
  */
 export function getLuCunDelta(brightness: PalaceBrightness): number {
   const params = getScoringParams()
-  if (brightness === '极旺' || brightness === '旺') return params.luCunDelta['旺'] ?? 0.3
-  if (brightness === '平') return params.luCunDelta['平'] ?? 0
-  return params.luCunDelta['陷'] ?? -0.3 // 陷、极弱、空
+  const delta = params.luCunDelta ?? { '旺': 0.5, '平': 0.3, '陷': 0.1 }
+  if (brightness === '极旺' || brightness === '旺') return delta['旺'] ?? 0.5
+  if (brightness === '平') return delta['平'] ?? 0.3
+  return delta['陷'] ?? 0.1 // 陷、极弱、空
 }

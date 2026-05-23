@@ -125,6 +125,12 @@ export const PALACE_NAMES = [
 /** 宫位名称 */
 export type PalaceName = typeof PALACE_NAMES[number]
 
+/** 宫位名称 → 索引映射（统一入口，避免多处重复定义） */
+export const PALACE_NAME_TO_INDEX: Record<PalaceName, number> = {
+  '命宫': 0, '父母': 1, '福德': 2, '田宅': 3, '官禄': 4, '仆役': 5,
+  '迁移': 6, '疾厄': 7, '财帛': 8, '子女': 9, '夫妻': 10, '兄弟': 11,
+}
+
 /** 宫位旺弱等级 */
 export type PalaceBrightness = '极旺' | '旺' | '平' | '陷' | '极弱' | '空'
 
@@ -313,6 +319,45 @@ export interface MatterRouteResult {
 // IR 中间表示（计算层 → LLM 层）
 // ═══════════════════════════════════════════════════════════════════
 
+/** 命盘快照（用于注入 Prompt 的完整命盘信息） */
+export interface ChartSnapshot {
+  /** 生年干支 */
+  birthGanZhi: string
+  /** 生肖 */
+  zodiac: string
+  /** 五行局 */
+  fiveElementsClass: string
+  /** 命主 */
+  soul: string
+  /** 身主 */
+  body: string
+  /** 阳历 */
+  solarDate: string
+  /** 农历 */
+  lunarDate: string
+  /** 命宫 */
+  mingGong: { name: string; diZhi: string; majorStars: string[]; minorStars: string[]; adjectiveStars: string[] }
+  /** 身宫 */
+  shenGong: { name: string; diZhi: string; majorStars: string[]; minorStars: string[]; adjectiveStars: string[] }
+  /** 太岁宫 */
+  taiSuiGong: { name: string; diZhi: string; majorStars: string[]; minorStars: string[]; adjectiveStars: string[] }
+  /** 全部十二宫 */
+  allPalaces: Array<{
+    name: string
+    diZhi: string
+    heavenlyStem: string
+    majorStars: string[]
+    minorStars: string[]
+    adjectiveStars: string[]
+    isBodyPalace: boolean
+    decadal?: { gan: string; range: string }
+  }>
+  /** 原局四化文本 */
+  sihuaText: string
+  /** 大限信息文本 */
+  decadalText: string
+}
+
 /** IR：阶段一宫位评分结果 */
 export interface IRStage1 {
   stage: 1
@@ -324,6 +369,8 @@ export interface IRStage1 {
   mergedSihua: MergedSihua
   /** 是否有父母生年 */
   hasParentInfo: boolean
+  /** 命盘快照（完整命盘信息，供 AI 参考） */
+  chartSnapshot: ChartSnapshot
 }
 
 /** IR：阶段二性格定性结果 */
@@ -343,6 +390,14 @@ export interface IRStage2 {
   shenGongIndex?: number
   /** 太岁宫索引 */
   taiSuiIndex?: number
+  /** 十二宫评分（从 Stage1 复制，供 AI 参考） */
+  palaceScores: PalaceScore[]
+  /** 匹配到的格局（从 Stage1 复制） */
+  allPatterns: PatternMatch[]
+  /** 原局四化（从 Stage1 复制） */
+  mergedSihua: MergedSihua
+  /** 命盘快照（完整命盘信息，供 AI 参考） */
+  chartSnapshot: ChartSnapshot
 }
 
 /** 四维合参标签 */
@@ -386,6 +441,14 @@ export interface IRStage3or4 {
   daXianAnalysis: DaXianAnalysis[]
   /** 流年分析 */
   liuNianAnalysis: LiuNianAnalysis
+  /** 十二宫评分（从 Stage1 复制，供 AI 参考） */
+  palaceScores: PalaceScore[]
+  /** 匹配到的格局（从 Stage1 复制） */
+  allPatterns: PatternMatch[]
+  /** 原局四化（从 Stage1 复制） */
+  mergedSihua: MergedSihua
+  /** 命盘快照（完整命盘信息，供 AI 参考） */
+  chartSnapshot: ChartSnapshot
 }
 
 /** 事项宫位分析 */
@@ -490,7 +553,9 @@ export interface DaXianPalaceMapping {
   mutagen: string[]
   /** 大限下的十二宫评分（可选，调用 M2 后填入） */
   scores?: PalaceScore[]
-  /** 大限格局识别结果（可选，调用运限格局模块后填入） */
+  /** 十二锚定宫格局矩阵（可选） */
+  palacePatterns?: PatternMatch[][]
+  /** 大限命宫作锚定时的格局（兼容旧字段） */
   patterns?: PatternMatch[]
 }
 
@@ -513,8 +578,10 @@ export interface LimitPatternResult {
   mingPalaceZhi: DiZhi
   /** 运限天干 */
   limitGan: TianGan
-  /** 匹配到的格局 */
+  /** 匹配到的格局（运限命宫作锚定，兼容） */
   patterns: PatternMatch[]
+  /** 十二锚定宫格局矩阵 */
+  palacePatterns?: PatternMatch[][]
   /** 格局与原局格局的对比分析 */
   comparisonWithNatal?: {
     /** 原局格局数量 */
@@ -532,8 +599,10 @@ export interface LimitPatternResult {
 
 /** 全量运限格局识别输出 */
 export interface LimitPatternsOutput {
-  /** 原局格局（参考基准） */
+  /** 原局格局（命宫锚定，参考基准） */
   natalPatterns: PatternMatch[]
+  /** 原局十二锚定宫格局矩阵 */
+  natalPalacePatterns?: PatternMatch[][]
   /** 十大限格局识别结果 */
   decadalPatterns: LimitPatternResult[]
   /** 指定流年格局识别结果 */

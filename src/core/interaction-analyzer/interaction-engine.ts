@@ -12,7 +12,7 @@ import 'server-only'
 import type {
   Stage4Input, Stage4Output, TianGan, DiZhi,
   InteractionAnalysis, ThreeDimensionAnalysis,
-  SihuaType, KnowledgeSnippet,
+  SihuaType, KnowledgeSnippet, MatterType, PalaceName,
 } from '@/core/types'
 import { buildVirtualChart, groupIncomingByTarget } from '@/core/tai-sui-rua-gua/virtual-chart'
 import type { VirtualChart, IncomingStar } from '@/core/tai-sui-rua-gua/virtual-chart'
@@ -31,7 +31,7 @@ export interface InteractionInput {
   partnerBirthYear: number | null
   chartData: Record<string, unknown>
   targetYear?: number
-  focusContext?: { matterType: string; primaryPalace: string }
+  focusContext?: { matterType: MatterType; primaryPalace: PalaceName }
 }
 
 export interface InteractionResult {

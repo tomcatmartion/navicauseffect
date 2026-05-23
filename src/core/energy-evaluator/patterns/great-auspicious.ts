@@ -24,7 +24,7 @@ const junChenQingHui: PatternPredicate = {
   category: '紫微',
   evaluate(chart) {
     // 锚定命宫：紫微或天府必须在命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     const hasZiWei = chart.hasStarInPalace(mingIdx, '紫微')
     const hasTianFu = chart.hasStarInPalace(mingIdx, '天府')
     if (!hasZiWei && !hasTianFu) return false
@@ -55,7 +55,7 @@ const ziFuTongGong: PatternPredicate = {
   category: '紫微',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '紫微') || !chart.hasStarInPalace(mingIdx, '天府')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     // 寅申同宫
@@ -80,7 +80,7 @@ const ziWeiJuWu: PatternPredicate = {
   category: '紫微',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '紫微')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '午') return false
 
@@ -103,7 +103,7 @@ const yaoJinYiZi: PatternPredicate = {
   category: '廉贞',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '廉贞') || !chart.hasStarInPalace(mingIdx, '天府')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '戌') return false
 
@@ -128,7 +128,7 @@ const xianZhiTengDa: PatternPredicate = {
   category: '武曲',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '武曲')) return false
 
     const sf = getSanFangSiZheng(chart, mingIdx)
@@ -162,7 +162,7 @@ const guanFengSanDai: PatternPredicate = {
   category: '巨门',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '巨门') || !chart.hasStarInPalace(mingIdx, '太阳')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '寅') return false
 
@@ -190,7 +190,7 @@ const chiMingShiLu: PatternPredicate = {
   category: '巨门',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     const mingZhi = chart.getPalaceDiZhi(mingIdx)
     let matched = false
 
@@ -251,7 +251,7 @@ const yangLiangChangLu: PatternPredicate = {
   category: '日月',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阳')) return false
 
     // 太阳天梁同宫于卯最吉
@@ -312,7 +312,7 @@ const yingXingRuMiao: PatternPredicate = {
   category: '杀破狼',
   evaluate(chart) {
     // 锚定命宫
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '破军')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '子' && zhi !== '午') return false

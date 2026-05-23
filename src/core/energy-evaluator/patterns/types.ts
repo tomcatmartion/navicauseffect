@@ -64,6 +64,8 @@ export interface ChartAccessor {
   mingGongIndex: number
   /** 身宫索引 */
   shenGongIndex: number
+  /** 锚定宫位索引 — 格局判定时的目标宫位（可以是任意宫位） */
+  anchorPalaceIndex: number
   /** 生年天干 */
   birthGan: string
   /** 生年地支 */
@@ -161,6 +163,57 @@ export function isMiaoWang(brightness: PalaceBrightness): boolean {
  */
 export function isLuoXian(brightness: PalaceBrightness): boolean {
   return brightness === '陷' || brightness === '极弱' || brightness === '空'
+}
+
+/**
+ * 检查夹宫条件：左右邻宫是否分别包含指定星曜
+ * 用于昌曲夹命、左右夹命、羊陀夹命等格局
+ */
+export function hasClampStars(
+  chart: ChartAccessor,
+  palaceIndex: number,
+  leftStar: string,
+  rightStar: string,
+): boolean {
+  const [leftIdx, rightIdx] = chart.getFlankingIndices(palaceIndex)
+  return chart.hasStarInPalace(leftIdx, leftStar) && chart.hasStarInPalace(rightIdx, rightStar)
+}
+
+/**
+ * 检查三方四正中煞星数量是否 >= 指定值
+ * 用于梁马飘荡、命无正曜、极居卯酉等格局
+ */
+export function countInauspiciousInSanFang(
+  chart: ChartAccessor,
+  palaceIndex: number,
+): number {
+  const sf = getSanFangSiZheng(chart, palaceIndex)
+  return chart.countInauspiciousInPalaces(sf)
+}
+
+/**
+ * 检查三方四正中是否同时包含多颗指定星曜（至少min颗）
+ * 用于梁马飘荡、命无正曜等格局的煞星计数
+ */
+export function hasMinStarsInSanFang(
+  chart: ChartAccessor,
+  palaceIndex: number,
+  stars: string[],
+  min: number,
+): boolean {
+  const sf = getSanFangSiZheng(chart, palaceIndex)
+  let count = 0
+  for (const star of stars) {
+    if (sf.some((idx) => chart.hasStarInPalace(idx, star))) count++
+  }
+  return count >= min
+}
+
+/**
+ * 检查锚定宫位是否无主星（用于命无正曜、梁马飘荡等格局）
+ */
+export function isAnchorPalaceEmpty(chart: ChartAccessor): boolean {
+  return chart.getStarsInPalace(chart.anchorPalaceIndex).length === 0
 }
 
 /**

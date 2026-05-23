@@ -56,17 +56,117 @@ interface RouterTreeData {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 路由解析
+// 安全表达式解析器（替代 new Function，防止代码注入）
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * 解析并求值条件表达式。
+ * 支持的语法：
+ *   - 比较：answers['key'] === 'value' 或 answers['key'] !== 'value'
+ *   - 逻辑与：cond1 && cond2
+ *   - 逻辑或：cond1 || cond2
+ *   - 括号分组：(cond1 && cond2) || cond3
+ * 不支持：函数调用、属性访问（除 answers['x'] 外）、赋值、new 等
+ */
 function evaluateCondition(condition: string, answers: Record<string, string>): boolean {
   try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function('answers', `return (${condition})`)
-    return fn(answers)
-  } catch {
+    return parseExpression(condition.trim(), answers)
+  } catch (err) {
+    console.error('[decision-tree] Condition parse error:', condition, err)
     return false
   }
+}
+
+/** 递归下降解析表达式 */
+function parseExpression(expr: string, answers: Record<string, string>): boolean {
+  expr = expr.trim()
+  if (!expr) return true
+
+  // 处理括号分组
+  if (expr.startsWith('(') && expr.endsWith(')')) {
+    // 检查是否是最外层的一对括号
+    let depth = 0
+    let isOuterParens = true
+    for (let i = 0; i < expr.length; i++) {
+      if (expr[i] === '(') depth++
+      else if (expr[i] === ')') depth--
+      if (depth === 0 && i < expr.length - 1) {
+        isOuterParens = false
+        break
+      }
+    }
+    if (isOuterParens) {
+      return parseExpression(expr.slice(1, -1), answers)
+    }
+  }
+
+  // 按 || 分割（最低优先级）
+  const orParts = splitByOperator(expr, '||')
+  if (orParts.length > 1) {
+    return orParts.some(part => parseExpression(part, answers))
+  }
+
+  // 按 && 分割
+  const andParts = splitByOperator(expr, '&&')
+  if (andParts.length > 1) {
+    return andParts.every(part => parseExpression(part, answers))
+  }
+
+  // 原子表达式：answers['key'] === 'value' 或 answers['key'] !== 'value'
+  return evaluateAtom(expr, answers)
+}
+
+/** 按运算符分割，尊重括号层级 */
+function splitByOperator(expr: string, op: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let current = ''
+  let i = 0
+
+  while (i < expr.length) {
+    if (expr[i] === '(') depth++
+    else if (expr[i] === ')') depth--
+
+    if (depth === 0 && expr.slice(i, i + op.length) === op) {
+      parts.push(current.trim())
+      current = ''
+      i += op.length
+      continue
+    }
+
+    current += expr[i]
+    i++
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim())
+  }
+
+  return parts
+}
+
+/** 求值原子比较表达式 */
+function evaluateAtom(expr: string, answers: Record<string, string>): boolean {
+  expr = expr.trim()
+
+  // 支持 === 和 !==
+  const eqMatch = expr.match(/^answers\[(['"`])(.+?)\1\]\s*===\s*(['"`])(.*?)\3$/)
+  if (eqMatch) {
+    const key = eqMatch[2]
+    const expected = eqMatch[4]
+    return answers[key] === expected
+  }
+
+  const neMatch = expr.match(/^answers\[(['"`])(.+?)\1\]\s*!==\s*(['"`])(.*?)\3$/)
+  if (neMatch) {
+    const key = neMatch[2]
+    const expected = neMatch[4]
+    return answers[key] !== expected
+  }
+
+  // 如果无法解析，记录警告并返回 false
+  console.warn('[decision-tree] Unrecognized atom expression:', expr)
+  return false
 }
 
 function resolveBranch(matterType: MatterType, answers: Record<string, string>): RouteResult {

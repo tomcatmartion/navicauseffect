@@ -91,9 +91,9 @@ describe('M6: 知识字典', () => {
   })
 
   describe('getLuCunDelta', () => {
-    it('旺宫 +0.3', () => expect(getLuCunDelta('旺')).toBe(0.3))
-    it('平宫 0', () => expect(getLuCunDelta('平')).toBe(0))
-    it('陷宫 -0.3', () => expect(getLuCunDelta('陷')).toBe(-0.3))
-    it('空宫 -0.3', () => expect(getLuCunDelta('空')).toBe(-0.3))
+    it('旺宫 +0.5', () => expect(getLuCunDelta('旺')).toBe(0.5))
+    it('平宫 +0.3', () => expect(getLuCunDelta('平')).toBe(0.3))
+    it('陷宫 +0.1', () => expect(getLuCunDelta('陷')).toBe(0.1))
+    it('空宫 +0.1', () => expect(getLuCunDelta('空')).toBe(0.1))
   })
 })

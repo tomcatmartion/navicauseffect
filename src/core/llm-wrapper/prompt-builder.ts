@@ -367,6 +367,10 @@ function buildStage1Context(ir: IRStage1): string {
     .join('；')
 
   return `阶段一：宫位评分结果
+
+【命盘快照】
+${formatChartSnapshot(ir.chartSnapshot)}
+
 十二宫评分：
 ${scores}
 格局：${patterns || '无'}
@@ -376,7 +380,28 @@ ${scores}
 }
 
 function buildStage2Context(ir: IRStage2): string {
+  const scores = ir.palaceScores
+    .map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`)
+    .join('\n')
+
+  const patterns = ir.allPatterns
+    .map(p => `${p.name}(${p.level})`)
+    .join('、')
+
+  const sihua = ir.mergedSihua.entries
+    .map(e => `${e.type}${e.star}(${e.source})`)
+    .join('；')
+
   return `阶段二：性格定性结果
+
+【命盘快照】
+${formatChartSnapshot(ir.chartSnapshot)}
+
+十二宫评分：
+${scores}
+格局：${patterns || '无'}
+原局四化：${sihua}
+
 命宫标签：${ir.mingGongTags.summary}
 身宫标签：${ir.shenGongTags.summary}
 太岁宫标签：${ir.taiSuiTags.summary}
@@ -393,7 +418,28 @@ function buildStage3or4Context(ir: IRStage3or4): string {
   const ln = ir.liuNianAnalysis
   const yearlyBlock = `- 流年干${ln.liuNianGan}；流年四化 ${ln.sihuaPositions.join('、') || '—'}；方向 ${ln.direction}；与大限关系 ${ln.daXianRelation}；时间窗口 ${ln.window}`
 
+  const scores = ir.palaceScores
+    .map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`)
+    .join('\n')
+
+  const patterns = ir.allPatterns
+    .map(p => `${p.name}(${p.level})`)
+    .join('、')
+
+  const sihua = ir.mergedSihua.entries
+    .map(e => `${e.type}${e.star}(${e.source})`)
+    .join('；')
+
   return `阶段${ir.stage}：${ir.matterType}分析结果（摘要，非全量 JSON）
+
+【命盘快照】
+${formatChartSnapshot(ir.chartSnapshot)}
+
+十二宫评分：
+${scores}
+格局：${patterns || '无'}
+原局四化：${sihua}
+
 主看宫：${p.palace}
 四维合参：${p.fourDimensionResult}
 命宫调节：${p.mingGongRegulation}
@@ -405,22 +451,219 @@ ${decadalLines.length ? decadalLines.join('\n') : '—'}
 ${yearlyBlock}`
 }
 
+function formatChartSnapshot(snapshot: import('../types').ChartSnapshot): string {
+  const palaceLines = snapshot.allPalaces.map(p => {
+    const major = p.majorStars.join('、') || '空'
+    const minor = p.minorStars.join('、')
+    const adj = p.adjectiveStars.join('、')
+    const extra = [minor, adj].filter(Boolean).join('、')
+    const bodyMark = p.isBodyPalace ? ' [身宫]' : ''
+    return `  ${p.name.padStart(4)}(${p.diZhi}): ${major}${extra ? '；' + extra : ''}${bodyMark}`
+  }).join('\n')
+
+  return `命主信息：${snapshot.birthGanZhi}（${snapshot.zodiac}），${snapshot.fiveElementsClass}，命主${snapshot.soul}，身主${snapshot.body}
+命宫(${snapshot.mingGong.diZhi})：${snapshot.mingGong.majorStars.join('、') || '空'}
+身宫(${snapshot.shenGong.diZhi})：${snapshot.shenGong.majorStars.join('、') || '空'} [身宫]
+太岁宫(${snapshot.taiSuiGong.diZhi})：${snapshot.taiSuiGong.majorStars.join('、') || '空'} → ${snapshot.taiSuiGong.name}
+十二宫：
+${palaceLines}
+四化：${snapshot.sihuaText}
+大限：${snapshot.decadalText.split('\n')[0] || '见详表'}`
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 用户 Prompt 模板函数（从 JSON 加载模板）
 // ═══════════════════════════════════════════════════════════════════
 
 /**
+ * 从 chartData 提取生年干支和太岁宫地支
+ * 优先从 iztro rawDates 读取，禁止自行计算
+ */
+function extractBirthGanZhi(chartData: Record<string, unknown>): { gan: string; zhi: string } {
+  // 优先从 iztro rawDates 提取（最可靠的数据源）
+  const rawDates = chartData?.rawDates as Record<string, unknown> | undefined
+  const rawChineseDate = rawDates?.chineseDate as Record<string, unknown> | undefined
+  const yearly = rawChineseDate?.yearly as string[] | undefined
+  if (yearly && yearly.length === 2) {
+    return { gan: yearly[0], zhi: yearly[1] }
+  }
+
+  // 回退1：从 zodiac（生肖）转换
+  const zodiac = chartData?.zodiac as string | undefined
+  if (zodiac) {
+    const ZODIAC_TO_ZHI: Record<string, string> = {
+      '鼠': '子', '牛': '丑', '虎': '寅', '兔': '卯',
+      '龙': '辰', '蛇': '巳', '马': '午', '羊': '未',
+      '猴': '申', '鸡': '酉', '狗': '戌', '猪': '亥',
+    }
+    const zhi = ZODIAC_TO_ZHI[zodiac]
+    if (zhi) return { gan: '未知', zhi }
+  }
+
+  // 回退2：从 chineseDate 字符串解析
+  const chineseDateStr = chartData?.chineseDate as string | undefined
+  if (chineseDateStr) {
+    const match = chineseDateStr.match(/^([甲乙丙丁戊己庚辛壬癸])([子丑寅卯辰巳午未申酉戌亥])/)
+    if (match) {
+      return { gan: match[1], zhi: match[2] }
+    }
+  }
+
+  return { gan: '未知', zhi: '未知' }
+}
+
+/**
+ * 构建命盘快照对象（结构化数据，用于 IR）
+ */
+export function buildChartSnapshotObject(chartData: Record<string, unknown>): import('../types').ChartSnapshot {
+  const palaces = (chartData?.palaces as Array<Record<string, unknown>>) || []
+  const { gan: birthGan, zhi: birthZhi } = extractBirthGanZhi(chartData)
+
+  // 命宫
+  const ming = palaces.find(p => p.name === '命宫')
+  // 身宫
+  const shen = palaces.find(p => p.isBodyPalace)
+  // 太岁宫
+  const taiSui = birthZhi !== '未知' ? palaces.find(p => p.earthlyBranch === birthZhi) : undefined
+
+  // 收集所有四化
+  const allSihua: string[] = []
+  for (const p of palaces) {
+    const majorStars = (p.majorStars as Array<Record<string, unknown>>) || []
+    const minorStars = (p.minorStars as Array<Record<string, unknown>>) || []
+    for (const s of majorStars) {
+      if (s.mutagen) allSihua.push(`${s.mutagen}${s.name}(${p.name})`)
+    }
+    for (const s of minorStars) {
+      if (s.mutagen) allSihua.push(`${s.mutagen}${s.name}(${p.name})`)
+    }
+  }
+
+  // 大限信息
+  const decadalLines: string[] = []
+  for (const p of palaces) {
+    const decadal = p.decadal as { range: [number, number]; heavenlyStem: string } | undefined
+    if (decadal && decadal.range[0] > 0) {
+      decadalLines.push(`${p.name}(${p.earthlyBranch}): ${decadal.heavenlyStem}干，${decadal.range[0]}~${decadal.range[1]}岁`)
+    }
+  }
+
+  // 农历日期
+  const rawDates = chartData?.rawDates as Record<string, unknown> | undefined
+  const lunarDate = rawDates?.lunarDate as Record<string, unknown> | undefined
+  const lunarDateStr = lunarDate
+    ? `${lunarDate.lunarYear}年${lunarDate.lunarMonth}月${lunarDate.lunarDay}日${lunarDate.isLeap ? '(闰)' : ''}`
+    : '未知'
+
+  return {
+    birthGanZhi: birthGan + birthZhi,
+    zodiac: (chartData?.zodiac as string) || '未知',
+    fiveElementsClass: (chartData?.fiveElementsClass as string) || '未知',
+    soul: (chartData?.soul as string) || '未知',
+    body: (chartData?.body as string) || '未知',
+    solarDate: (chartData?.solarDate as string) || '未知',
+    lunarDate: lunarDateStr,
+    mingGong: {
+      name: (ming?.name as string) || '命宫',
+      diZhi: (ming?.earthlyBranch as string) || '未知',
+      majorStars: ((ming?.majorStars as Array<Record<string, unknown>>) || []).map(s => `${s.name}(${s.brightness})${s.mutagen ? `[${s.mutagen}]` : ''}`),
+      minorStars: ((ming?.minorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+      adjectiveStars: ((ming?.adjectiveStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+    },
+    shenGong: {
+      name: (shen?.name as string) || '未知',
+      diZhi: (shen?.earthlyBranch as string) || '未知',
+      majorStars: ((shen?.majorStars as Array<Record<string, unknown>>) || []).map(s => `${s.name}(${s.brightness})${s.mutagen ? `[${s.mutagen}]` : ''}`),
+      minorStars: ((shen?.minorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+      adjectiveStars: ((shen?.adjectiveStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+    },
+    taiSuiGong: {
+      name: (taiSui?.name as string) || '未知',
+      diZhi: (taiSui?.earthlyBranch as string) || '未知',
+      majorStars: ((taiSui?.majorStars as Array<Record<string, unknown>>) || []).map(s => `${s.name}(${s.brightness})${s.mutagen ? `[${s.mutagen}]` : ''}`),
+      minorStars: ((taiSui?.minorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+      adjectiveStars: ((taiSui?.adjectiveStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+    },
+    allPalaces: palaces.map(p => {
+      const decadal = p.decadal as { range: [number, number]; heavenlyStem: string } | undefined
+      return {
+        name: (p.name as string) || '',
+        diZhi: (p.earthlyBranch as string) || '',
+        heavenlyStem: (p.heavenlyStem as string) || '',
+        majorStars: ((p.majorStars as Array<Record<string, unknown>>) || []).map(s => `${s.name}(${s.brightness})${s.mutagen ? `[${s.mutagen}]` : ''}`),
+        minorStars: ((p.minorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+        adjectiveStars: ((p.adjectiveStars as Array<Record<string, unknown>>) || []).map(s => s.name as string),
+        isBodyPalace: !!p.isBodyPalace,
+        decadal: decadal && decadal.range[0] > 0
+          ? { gan: decadal.heavenlyStem, range: `${decadal.range[0]}~${decadal.range[1]}岁` }
+          : undefined,
+      }
+    }),
+    sihuaText: allSihua.join('、') || '无',
+    decadalText: decadalLines.join('\n') || '无',
+  }
+}
+
+/**
  * 构建命盘速览文本（用于阶段二性格分析）
+ *
+ * 从 chartData.palaces 中动态提取身宫和太岁宫，
+ * 并输出完整的十二宫星曜表和四化信息，防止 AI 幻觉。
  */
 export function buildChartSnapshot(chartData: {
-  palaces: Array<{ name: string; major?: string; brightness?: string }>
-  shenPalace?: { major?: string; brightness?: string }
-  taiSuiPalace?: { major?: string; brightness?: string }
+  palaces: Array<{
+    name: string
+    earthlyBranch?: string
+    heavenlyStem?: string
+    majorStars?: Array<{ name?: string; brightness?: string; mutagen?: string }>
+    minorStars?: Array<{ name?: string; brightness?: string; mutagen?: string }>
+    adjectiveStars?: Array<{ name?: string; brightness?: string; mutagen?: string }>
+    isBodyPalace?: boolean
+    decadal?: { range: [number, number]; heavenlyStem: string; earthlyBranch: string }
+  }>
+  chineseDate?: string
+  rawDates?: { chineseDate?: { yearly?: string[]; monthly?: string[]; daily?: string[]; hourly?: string[] }; lunarDate?: { lunarYear: number; lunarMonth: number; lunarDay: number; isLeap: boolean } }
+  fiveElementsClass?: string
+  soul?: string
+  body?: string
+  zodiac?: string
+  solarDate?: string
 }): string {
-  const ming = chartData.palaces.find((p: { name: string; major?: string; brightness?: string }) => p.name === '命宫')
-  const shen = chartData.shenPalace
-  const taiSui = chartData.taiSuiPalace
-  return `命宫：${ming?.major || '空'}（${ming?.brightness || '平'}）\n身宫：${shen?.major || '空'}（${shen?.brightness || '平'}）\n太岁宫：${taiSui?.major || '空'}（${taiSui?.brightness || '平'}）`
+  const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>)
+
+  const palaceLines = snapshot.allPalaces.map(p => {
+    const major = p.majorStars.join('、') || '空'
+    const minor = p.minorStars.join('、')
+    const adj = p.adjectiveStars.join('、')
+    const extra = [minor, adj].filter(Boolean).join('、')
+    const bodyMark = p.isBodyPalace ? ' [身宫]' : ''
+    return `  ${p.name.padStart(4)}(${p.diZhi}): ${major}${extra ? '；' + extra : ''}${bodyMark}`
+  }).join('\n')
+
+  return `【命主信息】
+阳历：${snapshot.solarDate}
+农历：${snapshot.lunarDate}
+生年干支：${snapshot.birthGanZhi}（生肖：${snapshot.zodiac}）
+五行局：${snapshot.fiveElementsClass}
+命主：${snapshot.soul}
+身主：${snapshot.body}
+
+【三宫定位】
+命宫(${snapshot.mingGong.diZhi})：${snapshot.mingGong.majorStars.join('、') || '空'}
+身宫(${snapshot.shenGong.diZhi})：${snapshot.shenGong.majorStars.join('、') || '空'} [身宫]
+太岁宫(${snapshot.taiSuiGong.diZhi})：${snapshot.taiSuiGong.majorStars.join('、') || '空'}
+【重要】太岁宫地支：${snapshot.taiSuiGong.diZhi}，对应宫位：${snapshot.taiSuiGong.name}
+
+【十二宫星曜表】
+${palaceLines}
+
+【原局四化】
+${snapshot.sihuaText}
+
+【大限信息】
+${snapshot.decadalText}
+
+【约束】以上数据100%来自 iztro 排盘结果，是确定性数据，不可修改。分析时必须以这些数据为准，不得编造未列出的星曜或宫位信息。`
 }
 
 /**

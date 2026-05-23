@@ -20,7 +20,7 @@ const tuoSuZhiSeng: PatternPredicate = {
   level: '小吉',
   category: '紫微',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '紫微') || !chart.hasStarInPalace(mingIdx, '贪狼')) return false
     const zhi = chart.getPalaceDiZhi(mingIdx)
     if (zhi !== '卯' && zhi !== '酉') return false
@@ -41,7 +41,7 @@ const jiFuZhiRen: PatternPredicate = {
   level: '小吉',
   category: '廉贞',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '廉贞') || !chart.hasStarInPalace(mingIdx, '七杀')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '未') return false
 
@@ -59,7 +59,7 @@ const liYueBingShi: PatternPredicate = {
   level: '小吉',
   category: '廉贞',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '廉贞')) return false
     const hasChang = chart.hasStarInPalace(mingIdx, '文昌')
     const hasQu = chart.hasStarInPalace(mingIdx, '文曲')
@@ -83,7 +83,7 @@ const riChuFuSang: PatternPredicate = {
   level: '小吉',
   category: '日月',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '太阳') || !chart.hasStarInPalace(mingIdx, '天梁')) return false
     if (chart.getPalaceDiZhi(mingIdx) !== '卯') return false
 
@@ -103,11 +103,11 @@ const riChuFuSang: PatternPredicate = {
 // ─── 5. 马头带剑(杀破狼) ──────────────────────────────────────
 // 擎羊贪狼在命宫午宫 + 最好贪狼化禄 + 见吉多 + 加吉格引动
 const maTouDaiJianShaPoLang: PatternPredicate = {
-  name: '马头带剑',
+  name: '马头带剑(杀破狼)',
   level: '小吉',
   category: '杀破狼',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (chart.getPalaceDiZhi(mingIdx) !== '午') return false
     if (!chart.hasStarInPalace(mingIdx, '擎羊') || !chart.hasStarInPalace(mingIdx, '贪狼')) return false
 
@@ -120,11 +120,11 @@ const maTouDaiJianShaPoLang: PatternPredicate = {
 // ─── 6. 寿星入庙(杀破狼) ──────────────────────────────────────
 // 贪狼旺宫 + 贪狼同宫无羊陀空劫 + 见多吉星 + 化禄 + 加吉格引动
 const shouXingRuMiaoShaPoLang: PatternPredicate = {
-  name: '寿星入庙',
+  name: '寿星入庙(杀破狼)',
   level: '小吉',
   category: '杀破狼',
   evaluate(chart) {
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (!chart.hasStarInPalace(mingIdx, '贪狼')) return false
 
     const stars = chart.getStarsInPalace(mingIdx)
@@ -152,7 +152,7 @@ const jiLiangJiaHuiShanTanBing: PatternPredicate = {
   category: '机梁同',
   evaluate(chart) {
     // 天机天梁同宫（命宫）
-    const mingIdx = chart.mingGongIndex
+    const mingIdx = chart.anchorPalaceIndex
     if (chart.hasStarInPalace(mingIdx, '天机') && chart.hasStarInPalace(mingIdx, '天梁')) {
       if (isJiGeYinDong(chart, mingIdx)) return true
     }

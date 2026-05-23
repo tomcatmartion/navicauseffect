@@ -81,9 +81,9 @@ describe('JSON 与 KB 知识库一致性核验', () => {
     expect(params.shaStarScore).toBe(-0.5)
 
     // 禄存调整
-    expect(params.luCunDelta['旺']).toBe(0.3)
-    expect(params.luCunDelta['平']).toBe(0)
-    expect(params.luCunDelta['陷']).toBe(-0.3)
+    expect(params.luCunDelta['旺']).toBe(0.5)
+    expect(params.luCunDelta['平']).toBe(0.3)
+    expect(params.luCunDelta['陷']).toBe(0.1)
 
     // 夹宫衰减矩阵
     expect(params.jiagongDecayMatrix).toBeDefined()

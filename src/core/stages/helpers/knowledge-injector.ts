@@ -20,6 +20,7 @@ import type {
   SihuaType,
 } from '@/core/types'
 import { getStarAttr, getStarTraitByBrightness, getPalaceMeaning } from '@/core/knowledge-dict/query'
+import { getInteractionQuXiang } from '@/core/knowledge-dict/loader'
 
 /** 构建"星曜赋性"片段 */
 function starSnippet(star: string, brightness?: string): KnowledgeSnippet | null {
@@ -210,6 +211,24 @@ export function injectStage4Knowledge(
         content: `${ls.star}化禄带来的正面能量：${attr.positiveTrait}。在互动中表现为给予和支持。`,
       })
     }
+  }
+
+  const rules = getInteractionQuXiang()
+  const advice = rules.adjustableAdvice as Record<string, { trigger?: string; text?: string }> | undefined
+  const defaultAdvice = advice?.default?.text
+  if (defaultAdvice) {
+    snippets.push({
+      source: '互动取象',
+      key: 'adjustableAdvice_default',
+      content: defaultAdvice,
+    })
+  }
+  if (jiStars.length >= 2 && advice?.doubleJi?.text) {
+    snippets.push({
+      source: '互动取象',
+      key: 'adjustableAdvice_doubleJi',
+      content: advice.doubleJi.text,
+    })
   }
 
   return snippets
