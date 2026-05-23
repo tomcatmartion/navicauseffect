@@ -6,15 +6,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { MatterType } from '@/core/types'
 import { buildChartPipelineDebugSnapshot } from '@/lib/ziwei/chart-pipeline-debug'
+import { guardZiweiDebugApi } from '@/lib/ziwei/debug-api-guard'
+import { hasValidChartPalaces } from '@/lib/ziwei/chart-data-validation'
 
 const AFFAIRS = new Set<string>(['求学', '求爱', '求财', '求职', '求健康', '求名'])
 
 export async function POST(request: NextRequest) {
+  const guard = await guardZiweiDebugApi()
+  if (guard) return guard
+
   try {
     const body = await request.json()
     const chartData = body?.chartData as Record<string, unknown> | undefined
-    if (!chartData || typeof chartData !== 'object' || !Array.isArray(chartData.palaces)) {
-      return NextResponse.json({ error: '缺少有效的 chartData（须含 palaces）' }, { status: 400 })
+    if (!hasValidChartPalaces(chartData)) {
+      return NextResponse.json({ error: '缺少有效的 chartData（须含至少 12 宫 palaces）' }, { status: 400 })
     }
 
     const affairType = (body?.affairType as string) || '求财'

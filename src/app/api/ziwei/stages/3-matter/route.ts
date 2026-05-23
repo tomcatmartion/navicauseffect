@@ -13,8 +13,13 @@ import { executeStage2 } from '@/core/stages/stage2-personality'
 import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
 import { routeMatter } from '@/core/router/decision-tree'
 import type { MatterType } from '@/core/types'
+import { guardZiweiDebugApi } from '@/lib/ziwei/debug-api-guard'
+import { hasValidChartPalaces } from '@/lib/ziwei/chart-data-validation'
 
 export async function POST(request: Request) {
+  const guard = await guardZiweiDebugApi()
+  if (guard) return guard
+
   try {
     const body = await request.json() as {
       chartData?: Record<string, unknown>
@@ -23,9 +28,9 @@ export async function POST(request: Request) {
       targetYear?: number
     }
 
-    if (!body.chartData) {
+    if (!hasValidChartPalaces(body.chartData)) {
       return NextResponse.json(
-        { error: '缺少 chartData 参数' },
+        { error: '缺少有效的 chartData.palaces（至少 12 宫）' },
         { status: 400 },
       )
     }

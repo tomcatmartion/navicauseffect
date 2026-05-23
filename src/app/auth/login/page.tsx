@@ -107,8 +107,17 @@ function LoginForm() {
       setError("请输入正确的手机号");
       return;
     }
+    const smsEnabled = process.env.NEXT_PUBLIC_SMS_ENABLED === 'true';
+    if (smsEnabled) {
+      // TODO: 接入 SMS API 发送验证码
+      console.warn('[login] SMS API not implemented yet');
+      setError("短信服务暂未开通");
+      setSmsSent(false);
+      return;
+    }
+    // 开发环境：模拟发送成功，提示用户输入任意 6 位数字
     setSmsSent(true);
-    // TODO: call SMS API
+    setError("开发模式：请输入任意 6 位数字作为验证码");
   };
 
   const handleRegister = async (e: React.FormEvent) => {

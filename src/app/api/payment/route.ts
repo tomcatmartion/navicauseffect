@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
+function getPriceMap(): Record<string, number> {
+  return {
+    PER_QUERY: Number(process.env.PRICE_PER_QUERY ?? 0.5),
+    MONTHLY: Number(process.env.PRICE_MONTHLY ?? 10),
+    QUARTERLY: Number(process.env.PRICE_QUARTERLY ?? 25),
+    YEARLY: Number(process.env.PRICE_YEARLY ?? 99),
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -11,12 +20,7 @@ export async function POST(request: NextRequest) {
 
     const { type, plan, channel } = await request.json();
 
-    const priceMap: Record<string, number> = {
-      PER_QUERY: 0.5,
-      MONTHLY: 10,
-      QUARTERLY: 25,
-      YEARLY: 99,
-    };
+    const priceMap = getPriceMap();
 
     const amount = type === "PER_QUERY" ? priceMap.PER_QUERY : priceMap[plan];
     if (!amount) {
@@ -34,7 +38,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // TODO: integrate with actual WeChat Pay / Alipay SDK
+    const paymentEnabled = process.env.PAYMENT_ENABLED === 'true';
+    if (!paymentEnabled) {
+      return NextResponse.json({
+        orderId: order.id,
+        amount,
+        message: "支付功能开发中，当前为演示模式",
+        mock: true,
+      });
+    }
+
+    // TODO: 接入 WeChat Pay / Alipay SDK
+    console.warn('[payment] Payment SDK not integrated yet');
     return NextResponse.json({
       orderId: order.id,
       amount,

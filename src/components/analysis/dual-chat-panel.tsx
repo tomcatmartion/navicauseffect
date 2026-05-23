@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Bug, MessageCircle, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { HybridDebugInfo } from "@/orchestration/hybrid";
+import type { HybridDebugInfo } from "@/types/hybrid-debug";
 import { HybridDebugPanel } from "./hybrid-debug-panel";
-import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -17,32 +16,16 @@ interface ChatMessage {
 }
 
 interface DualChatPanelProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  astrolabeData: any;
-  birthData?: {
-    gender: string;
-    year: number;
-    month: number;
-    day: number;
-    hour: number;
-    solar?: boolean;
-  } | null;
+  /**
+   * 序列化后的命盘数据（由父组件统一生成，确保含 horoscope 与 birthInfo）
+   *
+   * 注意：此数据应与 ZiweiAnalysisPanel 使用的 chartData 同源，
+   * 避免对话侧与分析侧因序列化参数不同导致结果不一致。
+   */
+  chartData: Record<string, unknown> | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializeAstrolabe(astrolabe: any, birthDataParam?: DualChatPanelProps["birthData"]): Record<string, unknown> {
-  if (!birthDataParam) return serializeAstrolabeForReading(astrolabe);
-  return serializeAstrolabeForReading(astrolabe, {
-    year: birthDataParam.year,
-    month: birthDataParam.month,
-    day: birthDataParam.day,
-    hour: birthDataParam.hour,
-    gender: birthDataParam.gender,
-    solar: birthDataParam.solar ?? true,
-  });
-}
-
-export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) {
+export function DualChatPanel({ chartData }: DualChatPanelProps) {
   const { data: session } = useSession();
 
   // ── Hybrid（程序模型混合）状态 ─────────────────────────
@@ -92,13 +75,11 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
     setStreamContent("");
     setUserScrolled(false);
 
-    const chartPayload = astrolabeData ? serializeAstrolabe(astrolabeData, birthData) : null;
-
     const body: Record<string, unknown> = { question: text, stream: true };
     if (sessionId) {
       body.sessionId = sessionId;
-    } else if (chartPayload) {
-      body.chartData = chartPayload;
+    } else if (chartData) {
+      body.chartData = chartData;
     }
 
     try {
@@ -136,8 +117,7 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
       const decoder = new TextDecoder();
       let accumulated = "";
       let sseCarry = "";
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let currentDebugInfo: any;
+      let currentDebugInfo: HybridDebugInfo | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -153,15 +133,14 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
           if (payload === "[DONE]") continue;
 
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const parsed = JSON.parse(payload) as any;
+            const parsed = JSON.parse(payload) as Record<string, unknown>;
 
             if (parsed.sessionId && !sessionId) {
-              setSessionId(parsed.sessionId);
+              setSessionId(String(parsed.sessionId));
             }
 
             if (parsed.type === "debug" && parsed.debugInfo) {
-              currentDebugInfo = parsed.debugInfo;
+              currentDebugInfo = parsed.debugInfo as HybridDebugInfo;
               continue;
             }
 
@@ -186,6 +165,12 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
           ...prev,
           { role: "assistant", content: accumulated, debugInfo: currentDebugInfo },
         ]);
+      } else if (currentDebugInfo) {
+        // 有调试信息但无内容，可能是 AI 返回空或流中断
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "AI 未返回有效内容，请查看调试信息或重试。", debugInfo: currentDebugInfo },
+        ]);
       } else {
         setMessages((prev) => [...prev, { role: "assistant", content: "未收到回复内容，请重试。" }]);
       }
@@ -197,7 +182,7 @@ export function DualChatPanel({ astrolabeData, birthData }: DualChatPanelProps) 
       setStreaming(false);
       setUserScrolled(false);
     }
-  }, [streaming, astrolabeData, birthData, sessionId]);
+  }, [streaming, chartData, sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

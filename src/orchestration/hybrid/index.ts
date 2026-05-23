@@ -11,6 +11,6 @@ export {
   cleanupExpiredSessions,
   type RunHybridPipelineParams,
   type RunHybridPipelineResult,
-  type PipelineDebugInfo,
-  type PipelineDebugInfo as HybridDebugInfo,
 } from './orchestrator'
+
+export type { HybridDebugInfo, PipelineDebugInfo } from '@/types/hybrid-debug'

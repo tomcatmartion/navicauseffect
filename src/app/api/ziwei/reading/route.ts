@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
 import { runHybridPipeline, appendAssistantReply } from '@/orchestration/hybrid'
-import type { HybridDebugInfo } from '@/orchestration/hybrid'
+import type { HybridDebugInfo } from '@/types/hybrid-debug'
 import { ReadingRequestSchema } from '@/lib/ziwei/session/types'
 import { parseOpenAiSseEventBlock } from '@/lib/ai/openai-sse'
 import { parseHybridAssistantPayload } from '@/core/adapters/iztro/ai-parse'
@@ -199,10 +199,18 @@ function createSseStream(
 
         const { narrative } = parseHybridAssistantPayload(fullReply)
 
-        const alreadySent = fullReply.length - tailBuffer.length
-        const remaining = narrative.length - alreadySent
-        if (remaining > 0) {
-          emitText(tailBuffer.slice(0, remaining))
+        // 如果 AI 返回空内容，发送错误提示
+        if (!narrative || narrative.length === 0) {
+          console.warn('[SSE] AI 返回空内容，fullReply 长度:', fullReply.length)
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: 'AI 返回空内容，请重试' })}\n\n`),
+          )
+        } else {
+          const alreadySent = fullReply.length - tailBuffer.length
+          const remaining = narrative.length - alreadySent
+          if (remaining > 0) {
+            emitText(tailBuffer.slice(0, remaining))
+          }
         }
 
         if (!debugSent && debugInfo) {

@@ -80,15 +80,23 @@ export default function ChartPage() {
 
   const chartDataForPipeline = useMemo(() => {
     if (!astrolabe || !birthData) return null;
-    return serializeAstrolabeForReading(astrolabe, {
-      year: birthData.year,
-      month: birthData.month,
-      day: birthData.day,
-      hour: birthData.hour,
-      gender: birthData.gender === "MALE" ? "男" : "女",
-      solar: birthData.solar,
-    }) as Record<string, unknown>;
-  }, [astrolabe, birthData]);
+    // referenceYear 与 UI 所选流年对齐：优先用 horoscope 中的年份，否则当前年
+    const referenceYear = horoscope?.yearly?.index ?? new Date().getFullYear();
+    return serializeAstrolabeForReading(
+      astrolabe as unknown as Record<string, unknown>,
+      {
+        year: birthData.year,
+        month: birthData.month,
+        day: birthData.day,
+        hour: birthData.hour,
+        gender: birthData.gender === "MALE" ? "男" : "女",
+        solar: birthData.solar,
+      },
+      horoscope
+        ? { horoscope: horoscope as unknown as Record<string, unknown>, referenceYear }
+        : undefined,
+    ) as Record<string, unknown>;
+  }, [astrolabe, birthData, horoscope]);
 
   // 命盘缩放：必须在组件顶层调用（Rules of Hooks）
   const chartWrapperRef = useRef<HTMLDivElement>(null);
@@ -221,7 +229,13 @@ export default function ChartPage() {
   };
 
   const handleHoroscopeHourChange = (hour: number) => {
-    setHoroscopeTimeIndex(Math.max(0, Math.min(12, hour)));
+    const clampedHour = Math.max(0, Math.min(12, hour));
+    setHoroscopeTimeIndex(clampedHour);
+    // 运限时间变化时，重新生成 horoscope 并更新 chartData
+    if (astrolabe) {
+      const newHoroscope = astrolabe.horoscope(new Date(), clampedHour);
+      setHoroscope(newHoroscope);
+    }
   };
 
   const handleReenter = () => {
@@ -325,8 +339,7 @@ export default function ChartPage() {
           {/* AI 对话区 */}
           <div className="flex-1 min-h-0">
             <DualChatPanel
-              astrolabeData={astrolabe}
-              birthData={birthData}
+              chartData={chartDataForPipeline}
             />
           </div>
         </div>

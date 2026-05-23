@@ -12,15 +12,12 @@ import type {
   Stage3Output,
   Stage4Output,
 } from '@/core/types'
-import { executeStage1 } from '@/core/stages/stage1-palace-scoring'
-import { executeStage2 } from '@/core/stages/stage2-personality'
-import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
-import { executeStage4 } from '@/core/stages/stage4-interaction'
-import { routeMatter } from '@/core/router/decision-tree'
+import { runCoreChartStages } from '@/core/pipeline/run-chart-stages'
 import { evaluateJsonPatterns } from '@/core/adapters/iztro/patterns-dsl'
 import { getPatternDefinition, getPatternMultiplier } from '@/core/energy-evaluator/patterns'
 import {
   buildPrompt,
+  buildChartSnapshotObject,
   STAGE1_HINT,
   STAGE2_HINT,
   STAGE3_HINT,
@@ -33,6 +30,7 @@ import type { VirtualChart } from '@/core/tai-sui-rua-gua/virtual-chart'
 import { getWeakerBrightness } from '@/core/energy-evaluator/scoring-flow'
 import { getFlankingDecay } from '@/core/knowledge-dict/query'
 import { evaluateLimitPatterns } from '@/core/limit-analyzer/limit-pattern-evaluator'
+import { resolveLiuNianGan } from '@/core/limit-analyzer/fortune-engine'
 import type { LimitPatternsOutput, LimitPatternResult } from '@/core/types'
 
 export interface ChartPipelineDebugOptions {
@@ -112,6 +110,8 @@ export interface UiPalaceRow {
     formula: string
     /** 参与计算的宫位（三方四正+夹宫） */
     relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>
+    /** 锚定宫格局（以该宫为 anchor 时成格列表） */
+    anchorPatterns?: Array<{ name: string; level: string; multiplier: number }>
     /** 六步评分流程（基于 scoring.json formula 部分） */
     sixSteps?: {
       /** 步骤0：空宫借对宫 */
@@ -140,6 +140,10 @@ export interface UiPalaceRow {
           '2.7_母亲遁干化禄': number
           '2.8_吉格倍率': number
         }
+        /** 2.1-2.7 原始总和（不含倍率） */
+        sumBonus: number
+        /** 吉格倍率 G（同 details['2.8_吉格倍率']） */
+        G: number
       }
       /** 步骤3：重新定性 */
       step3_warmCool: {
@@ -159,6 +163,10 @@ export interface UiPalaceRow {
           '4.8_凶格倍率': number
         }
         intensityFactor: number
+        /** 4.1-4.7 原始总和（不含倍率） */
+        sumPenalty: number
+        /** 凶格倍率 H（同 details['4.8_凶格倍率']） */
+        H: number
       }
       /** 步骤5：禄存调整 */
       step5_luCun: {
@@ -304,7 +312,12 @@ function joinPromptPreview(
   return msgs.map(m => `【${m.role}】\n${m.content}`).join('\n\n—\n\n')
 }
 
-function buildStage3Ir(output: Stage3Output): IRStage3or4 {
+function buildStage3Ir(
+  output: Stage3Output,
+  chartData: Record<string, unknown>,
+  targetYear: number,
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua },
+): IRStage3or4 {
   return {
     stage: 3,
     matterType: output.matterType,
@@ -318,16 +331,25 @@ function buildStage3Ir(output: Stage3Output): IRStage3or4 {
       isCurrent: false,
     })),
     liuNianAnalysis: {
-      liuNianGan: '甲',
+      liuNianGan: resolveLiuNianGan(chartData, targetYear),
       sihuaPositions: [],
       direction: output.directionMatrix[1] === '吉' ? '吉' : '凶',
       daXianRelation: output.directionMatrix,
       window: output.directionWindow,
     },
+    palaceScores: stage1Ref.palaceScores,
+    allPatterns: stage1Ref.allPatterns,
+    mergedSihua: stage1Ref.mergedSihua,
+    chartSnapshot: buildChartSnapshotObject(chartData),
   }
 }
 
-function buildStage4Ir(output: Stage4Output): IRStage3or4 {
+function buildStage4Ir(
+  output: Stage4Output,
+  chartData: Record<string, unknown>,
+  targetYear: number,
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua },
+): IRStage3or4 {
   return {
     stage: 4,
     matterType: '互动关系',
@@ -340,12 +362,16 @@ function buildStage4Ir(output: Stage4Output): IRStage3or4 {
     },
     daXianAnalysis: [],
     liuNianAnalysis: {
-      liuNianGan: output.interaction.partnerGan === ('—' as TianGan) ? '甲' : output.interaction.partnerGan,
+      liuNianGan: resolveLiuNianGan(chartData, targetYear),
       sihuaPositions: [],
       direction: '吉',
       daXianRelation: '吉吉',
       window: '推进窗口',
     },
+    palaceScores: stage1Ref.palaceScores,
+    allPatterns: stage1Ref.allPatterns,
+    mergedSihua: stage1Ref.mergedSihua,
+    chartSnapshot: buildChartSnapshotObject(chartData),
   }
 }
 
@@ -356,8 +382,12 @@ export function buildChartPipelineDebugSnapshot(
   chartData: Record<string, unknown>,
   opts: ChartPipelineDebugOptions,
 ): ChartPipelineDebugSnapshot {
-  const stage1 = executeStage1({ chartData })
-  const stage2 = executeStage2({ stage1, question: opts.affair || '性格与事项调试' })
+  const { stage1, stage2, stage3, stage4, route } = runCoreChartStages(chartData, {
+    question: opts.affair || '性格与事项调试',
+    matterType: opts.affairType,
+    targetYear: opts.targetYear,
+    partnerBirthYear: opts.partnerBirthYear,
+  })
 
   // ═══════════════════════════════════════════════════════════════════
   // 运限格局识别
@@ -531,6 +561,12 @@ export function buildChartPipelineDebugSnapshot(
     const bonusBreakdown: Array<{ source: string; value: number; detail: string }> = []
     const penaltyBreakdown: Array<{ source: string; value: number; detail: string }> = []
 
+    // 减分阶段使用 intensityFactor（与 scoring-flow.ts step4 一致）
+    const intensityFactor = (() => {
+      const map: Record<string, number> = { '旺': 0.3, '旺偏磨炼': 0.5, '平': 0.7, '虚浮': 1.0, '凶危': 1.5 }
+      return map[ps.warmCoolLabel] ?? 0.7
+    })()
+
     if (palaceCtx) {
       // 扫描三方四正相关宫位（本宫+对宫+三合）
       const sanfangIndices = [palaceIndex, (palaceIndex + 6) % 12, (palaceIndex + 4) % 12, (palaceIndex + 8) % 12]
@@ -554,11 +590,12 @@ export function buildChartPipelineDebugSnapshot(
               detail: `${star.name}（${star.name === '化禄' ? '四化' : '吉星'}）× ${sanfangCoeffs[i]}衰减 = +${val.toFixed(2)}`,
             })
           } else if (isSha) {
-            const val = -0.5 * sanfangCoeffs[i]
+            const baseVal = -0.5 * sanfangCoeffs[i]
+            const val = baseVal * intensityFactor
             penaltyBreakdown.push({
               source: `${sanfangRoles[i]}·${p.diZhi}`,
               value: val,
-              detail: `${star.name}（煞星）× ${sanfangCoeffs[i]}衰减 = ${val.toFixed(2)}`,
+              detail: `${star.name}（煞星）× ${sanfangCoeffs[i]}衰减 × ${intensityFactor}强度 = ${val.toFixed(2)}`,
             })
           }
         }
@@ -613,11 +650,12 @@ export function buildChartPipelineDebugSnapshot(
           const forward = leftStars.has(pair.left) && rightStars.has(pair.right)
           const reverse = leftStars.has(pair.right) && rightStars.has(pair.left)
           if (forward || reverse) {
-            const val = -0.5 * decay // 使用动态衰减系数
+            const baseVal = -0.5 * decay // 使用动态衰减系数
+            const val = baseVal * intensityFactor
             penaltyBreakdown.push({
               source: `夹宫·${leftPalace.diZhi}-${rightPalace.diZhi}`,
               value: val,
-              detail: `${pair.name}（${forward ? pair.left + '·' + pair.right : pair.right + '·' + pair.left}）× ${decay}衰减 = ${val.toFixed(2)}`,
+              detail: `${pair.name}（${forward ? pair.left + '·' + pair.right : pair.right + '·' + pair.left}）× ${decay}衰减 × ${intensityFactor}强度 = ${val.toFixed(2)}`,
             })
           }
         }
@@ -626,9 +664,12 @@ export function buildChartPipelineDebugSnapshot(
 
     // 构建禄存加分说明
     if (ps.luCunDelta !== 0) {
-      const luCunDesc = ps.luCunDelta > 0
-        ? `禄存在旺宫/极旺：+${ps.luCunDelta.toFixed(1)}（SKILL_V3.0 第五步：旺宫+0.3）`
-        : `禄存在陷宫/空宫：${ps.luCunDelta.toFixed(1)}（SKILL_V3.0 第五步：陷宫-0.3）`
+      const luCunTier = ps.luCunDelta >= 0.5
+        ? '旺宫'
+        : ps.luCunDelta >= 0.3
+          ? '平宫/旺偏磨炼'
+          : '陷宫/虚浮/凶危'
+      const luCunDesc = `禄存专项（${luCunTier}）：+${ps.luCunDelta.toFixed(1)}（第五步：旺+0.5/平+0.3/陷+0.1）`
       bonusBreakdown.push({
         source: '禄存专项',
         value: ps.luCunDelta,
@@ -636,40 +677,36 @@ export function buildChartPipelineDebugSnapshot(
       })
     }
 
-    // 构建格局倍率来源说明
-    // 注意：pattern.category 是格局分类（如"紫微"），不是宫位名称
-    // 正确的匹配逻辑：检查该宫位是否参与了格局的成格条件
-    const palaceName = ps.palace
-    const palaceDiZhi = ps.diZhi
-    
-    // 从 stage1.scoringCtx 查找与该宫位相关的格局
-    // 一个宫位如果包含格局所需的星曜，则认为该格局影响此宫
-    const relatedPatterns = stage1.allPatterns.filter(pat => {
-      const def = getPatternDefinition(pat.name)
-      if (!def) return false
-      
-      // 从 description 中提取星曜名称
-      const desc = String(def.description || '')
-      const starNameRegex = /紫微|天机|太阳|武曲|天同|廉贞|天府|太阴|贪狼|巨门|天相|天梁|七杀|破军|左辅|右弼|文昌|文曲|天魁|天钺|禄存|擎羊|陀罗|火星|铃星|地空|地劫|化禄|化权|化科|化忌/g
-      const requiredStars = Array.from(new Set(desc.match(starNameRegex) || []))
-      
-      // 检查该宫位是否包含格局所需的任何星曜
-      const palaceCtx = stage1.scoringCtx.palaces.find(p => p.diZhi === palaceDiZhi)
-      if (!palaceCtx) return false
-      
-      const palaceStars = palaceCtx.stars.map(s => s.name)
-      const palaceMajorStars = palaceCtx.majorStars.map(ms => String(ms.star))
-      const allPalaceStars = [...palaceStars, ...palaceMajorStars]
-      
-      return requiredStars.some(star => allPalaceStars.includes(star))
-    })
-    
-    const patternMultiplierSource = relatedPatterns.length > 0
-      ? `格局加成：${relatedPatterns.map(pat => `${pat.name}（${pat.level}×${pat.multiplier}）`).join('、')}｜来源：data/pattern_library.json multipliers + SKILL_宫位原生能级评估_V3.0.md 格局库「${relatedPatterns.map(p => p.name).join('、')}」条`
-      : '无格局加成（倍率×1.0）｜来源：data/pattern_library.json multipliers 默认值为1.0'
+    // 锚定宫格局：以该宫为 anchor 时匹配到的格局列表
+    const anchorPatterns = palaceIndex >= 0
+      ? (stage1.scoringCtx.palacePatterns?.[palaceIndex] ?? [])
+      : []
 
-    // 构建公式说明（SKILL_V3.0：骨架分 + 加分×倍率 + 减分 + 禄存）
-    const formula = `最终分 = min(${ps.skeletonScore.toFixed(1)} + (${ps.bonusTotal.toFixed(2)} × ${ps.patternMultiplier.toFixed(1)}) + ${ps.penaltyTotal.toFixed(2)} + ${ps.luCunDelta.toFixed(1)}, ${ps.ceiling.toFixed(1)}) = ${ps.finalScore.toFixed(2)}`
+    const patternMultiplierSource = anchorPatterns.length > 0
+      ? `锚定宫格局：${anchorPatterns.map(pat => `${pat.name}（${pat.level}×${pat.multiplier}）`).join('、')}｜来源：data/pattern_library.json multipliers + SKILL_宫位原生能级评估_V3.0.md`
+      : '无锚定宫格局加成（倍率×1.0）｜来源：data/pattern_library.json multipliers 默认值为1.0'
+
+    // 构建公式说明（SKILL_V3.0：反映实际计算链）
+    // 实际计算：scoreStep2 = (S0 + sumBonus) × G；scoreStep4 = (scoreStep2 + sumPenalty) × H
+    const sumBonus = Math.round(
+      Object.entries(ps.bonusDetails)
+        .filter(([k]) => k !== '2.8_吉格倍率')
+        .reduce((sum, [, v]) => sum + v, 0) * 100,
+    ) / 100
+    const sumPenalty = Math.round(
+      Object.entries(ps.penaltyDetails)
+        .filter(([k]) => k !== '4.8_凶格倍率')
+        .reduce((sum, [, v]) => sum + v, 0) * 100,
+    ) / 100
+    const G = ps.bonusDetails['2.8_吉格倍率']
+    const H = ps.penaltyDetails['4.8_凶格倍率']
+
+    const formula = [
+      `加分后 = (${ps.skeletonScore.toFixed(1)} + ${sumBonus.toFixed(2)}) × ${G.toFixed(1)} = ${ps.scoreAfterBonus.toFixed(2)}`,
+      `减分后 = (${ps.scoreAfterBonus.toFixed(2)} + ${sumPenalty.toFixed(2)}) × ${H.toFixed(1)} = ${ps.scoreAfterPenalty.toFixed(2)}`,
+      `禄存后 = ${ps.scoreAfterPenalty.toFixed(2)} + ${ps.luCunDelta.toFixed(1)} = ${ps.scoreAfterLuCun.toFixed(2)}`,
+      `最终分 = min(${ps.scoreAfterLuCun.toFixed(2)}, ${ps.ceiling.toFixed(1)}) = ${ps.finalScore.toFixed(2)}`,
+    ].join('\n')
 
     // 构建六步评分流程数据
     const sixSteps = {
@@ -687,6 +724,14 @@ export function buildChartPipelineDebugSnapshot(
       step2_bonus: {
         scoreAfterBonus: ps.scoreAfterBonus,
         details: ps.bonusDetails,
+        sumBonus,
+        G,
+        starList: bonusBreakdown.map(b => ({
+          source: b.source,
+          starName: b.detail.split('（')[0]?.trim() || b.source,
+          value: b.value,
+          detail: b.detail,
+        })),
       },
       step3_warmCool: {
         label: ps.warmCoolLabel,
@@ -698,6 +743,14 @@ export function buildChartPipelineDebugSnapshot(
           const map: Record<string, number> = { '旺': 0.3, '旺偏磨炼': 0.5, '平': 0.7, '虚浮': 1.0, '凶危': 1.5 }
           return map[ps.warmCoolLabel] ?? 0.7
         })(),
+        sumPenalty,
+        H,
+        starList: penaltyBreakdown.map(p => ({
+          source: p.source,
+          starName: p.detail.split('（')[0]?.trim() || p.source,
+          value: p.value,
+          detail: p.detail,
+        })),
       },
       step5_luCun: {
         scoreAfterLuCun: ps.scoreAfterLuCun,
@@ -737,6 +790,11 @@ export function buildChartPipelineDebugSnapshot(
         })) ?? [],
         formula,
         relatedPalaces,
+        anchorPatterns: anchorPatterns.map(p => ({
+          name: p.name,
+          level: p.level,
+          multiplier: p.multiplier,
+        })),
         sixSteps,
       },
     }
@@ -795,18 +853,8 @@ export function buildChartPipelineDebugSnapshot(
           ? `三宫均弱（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 易受外界影响，性格显化程度低，需借助后天努力`
           : `三宫混杂（命宫${mingGongScore.toFixed(1)} / 身宫${shenGongScore.toFixed(1)} / 太岁宫${taiSuiScore.toFixed(1)}）— 逐宫分析，内外层存在落差`
 
-  // 2. 命宫成格格局 → 性格底色影响
-  const mingGongPatterns = stage1.allPatterns.filter(p => {
-    const def = getPatternDefinition(p.name)
-    if (!def) return false
-    const desc = String(def.description || '')
-    const starRegex = /紫微|天机|太阳|武曲|天同|廉贞|天府|太阴|贪狼|巨门|天相|天梁|七杀|破军|左辅|右弼|文昌|文曲|天魁|天钺|禄存|擎羊|陀罗|火星|铃星|地空|地劫|化禄|化权|化科|化忌/g
-    const requiredStars = Array.from(new Set(desc.match(starRegex) || []))
-    const mingGongCtx = stage1.scoringCtx.palaces[mingIdx]
-    const mingStars = mingGongCtx.stars.map(s => s.name)
-    const mingMajorStars = mingGongCtx.majorStars.map(ms => String(ms.star))
-    return requiredStars.some(star => mingStars.includes(star) || mingMajorStars.includes(star))
-  })
+  // 2. 命宫成格格局 → 性格底色影响（命宫锚定格局）
+  const mingGongPatterns = stage1.scoringCtx.palacePatterns?.[mingIdx] ?? stage1.allPatterns
 
   const patternInfluences = mingGongPatterns.length > 0
     ? mingGongPatterns.map(p => {
@@ -1082,16 +1130,6 @@ export function buildChartPipelineDebugSnapshot(
     } : undefined,
   }
 
-  const route = routeMatter(opts.affairType, {})
-  const stage3 = executeStage3({
-    stage1,
-    stage2,
-    matterType: opts.affairType,
-    routeResult: route,
-    chartData,
-    targetYear: opts.targetYear,
-  })
-
   const affair = {
     overview: [
       `事项：${opts.affair}（${opts.affairType}）`,
@@ -1123,14 +1161,8 @@ export function buildChartPipelineDebugSnapshot(
   const dunGanStem = getDunGan(birthGan, taiSuiZhi)
 
   const partnerYear = opts.partnerBirthYear ?? null
-  const stage4 = executeStage4({
-    stage1,
-    stage2,
-    partnerBirthYear: partnerYear,
-    chartData,
-    targetYear: opts.targetYear,
-    focusContext: { matterType: opts.affairType, primaryPalace: route.primaryPalace },
-  })
+
+  const chartSnapshot = buildChartSnapshotObject(chartData)
 
   const ir1: IRStage1 = {
     stage: 1,
@@ -1138,6 +1170,7 @@ export function buildChartPipelineDebugSnapshot(
     allPatterns: stage1.allPatterns,
     mergedSihua: stage1.mergedSihua,
     hasParentInfo: stage1.hasParentInfo,
+    chartSnapshot,
   }
   const ir2: IRStage2 = {
     stage: 2,
@@ -1146,19 +1179,29 @@ export function buildChartPipelineDebugSnapshot(
     taiSuiTags: stage2.taiSuiTags,
     overallTone: stage2.overallTone,
     mingGongHolographic: stage2.mingGongHolographic,
+    palaceScores: stage1.palaceScores,
+    allPatterns: stage1.allPatterns,
+    mergedSihua: stage1.mergedSihua,
+    chartSnapshot,
+  }
+
+  const stage1Ref = {
+    palaceScores: stage1.palaceScores,
+    allPatterns: stage1.allPatterns,
+    mergedSihua: stage1.mergedSihua,
   }
 
   const prompts = {
     stage1: joinPromptPreview(ir1, stage1.knowledgeSnippets.map(s => s.content), '（排盘页调试）', STAGE1_HINT),
     stage2: joinPromptPreview(ir2, stage2.knowledgeSnippets.map(s => s.content), '（排盘页调试）', STAGE2_HINT),
     stage3: joinPromptPreview(
-      buildStage3Ir(stage3),
+      buildStage3Ir(stage3, chartData, opts.targetYear, stage1Ref),
       stage3.knowledgeSnippets.map(s => s.content),
       `（排盘页调试）${opts.affair}`,
       STAGE3_HINT,
     ),
     stage4: joinPromptPreview(
-      buildStage4Ir(stage4),
+      buildStage4Ir(stage4, chartData, opts.targetYear, stage1Ref),
       stage4.knowledgeSnippets.map(s => s.content),
       partnerYear ? `（排盘页调试）对方${partnerYear}年生` : '（排盘页调试）单方关系宫',
       STAGE4_HINT,

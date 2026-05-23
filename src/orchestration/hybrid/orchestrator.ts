@@ -23,21 +23,23 @@ import { executeStage2 } from '@/core/stages/stage2-personality'
 import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
 import { executeStage4 } from '@/core/stages/stage4-interaction'
 import { routeMatter, detectMatterIntent } from '@/core/router/decision-tree'
+import { resolveLiuNianGan } from '@/core/limit-analyzer/fortune-engine'
 
 import {
   buildPrompt,
   buildChartSnapshot,
+  buildChartSnapshotObject,
   buildPersonalityData,
   buildStage2UserPrompt,
   buildStage3UserPrompt,
   buildStage4UserPrompt,
-  getPhrase,
   STAGE1_HINT,
   STAGE2_HINT,
   STAGE3_HINT,
   STAGE4_HINT,
 } from '@/core/llm-wrapper/prompt-builder'
 import type { IRStage1, IRStage2, IRStage3or4, MatterType } from '@/core/types'
+import type { PipelineDebugInfo } from '@/types/hybrid-debug'
 
 import {
   createEmptyHybridPersisted,
@@ -87,20 +89,7 @@ export interface RunHybridPipelineResult {
   debugInfo?: PipelineDebugInfo
 }
 
-export interface PipelineDebugInfo {
-  architecture: 'hybrid'
-  stage: number
-  question: string
-  matterType?: string
-  palaceCount?: number
-  patternCount?: number
-  intentDetected?: string
-  knowledgeSnippetCount?: number
-  fullPromptLength?: number
-  timing: Record<string, number>
-  baseIRCached?: boolean
-  dslPatternHits?: string[]
-}
+export type { PipelineDebugInfo } from '@/types/hybrid-debug'
 
 /**
  * 运行 Hybrid 管线
@@ -182,10 +171,39 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
   debugInfo.palaceCount = stage1Output.palaceScores.length
   debugInfo.patternCount = stage1Output.allPatterns.length
 
+  // 将组装后的 Prompt 消息列表加入调试信息（用于前端结构化展示）
+  debugInfo.promptMessages = allMessages.map((m, index) => {
+    let label: string | undefined
+    const role = m.role as 'system' | 'user' | 'assistant'
+    if (role === 'system') {
+      if (index === 0) label = 'System Prompt（系统指令）'
+      else if (m.content?.startsWith('【计算结果 IR】')) label = 'IR 数据注入（计算结果）'
+      else if (m.content?.startsWith('【知识库片段】')) label = '知识库片段'
+      else if (m.content?.startsWith('【当前阶段指令】')) label = '当前阶段指令'
+      else label = 'System 消息'
+    } else if (role === 'user') {
+      if (m.content?.startsWith('【命盘速览】') || m.content?.startsWith('【事项类型】') || m.content?.startsWith('【入卦数据')) {
+        label = '用户 Prompt（结构化数据）'
+      } else {
+        label = '用户问题'
+      }
+    } else if (role === 'assistant') {
+      label = '历史助手回复'
+    }
+    return {
+      role,
+      content: m.content ?? '',
+      label,
+    }
+  })
+
   tick('AI调用')
 
   // 调用 AI 流式输出
-  const aiStream = await callAIStream({ messages: allMessages, temperature: 0.7, max_tokens: 4000 })
+  // 阶段 1/2（性格分析）token 需求较低；阶段 3/4（事项/互动分析）可适当放宽
+  const stage = hp.sessionState.currentStage
+  const maxTokens = stage <= 2 ? 2000 : 3500
+  const aiStream = await callAIStream({ messages: allMessages, temperature: 0.7, max_tokens: maxTokens })
 
   // 更新会话状态（阶段推进）
   const nextStage = advanceStage(hp.sessionState.currentStage, question)
@@ -212,6 +230,9 @@ function buildMessagesForStage(
   chartData: Record<string, unknown>,
   _hp: SessionPersisted,
 ): { messages: ChatMessage[]; stageHint: string; ir: IRStage1 | IRStage2 | IRStage3or4 } {
+  // 预计算命盘快照（所有阶段共用）
+  const chartSnapshot = buildChartSnapshotObject(chartData)
+
   switch (stage) {
     case 1: {
       const ir: IRStage1 = {
@@ -220,6 +241,7 @@ function buildMessagesForStage(
         allPatterns: stage1.allPatterns,
         mergedSihua: stage1.mergedSihua,
         hasParentInfo: stage1.hasParentInfo,
+        chartSnapshot,
       }
       const msgs = buildPrompt(
         ir,
@@ -238,12 +260,16 @@ function buildMessagesForStage(
         taiSuiTags: stage2.taiSuiTags,
         overallTone: stage2.overallTone,
         mingGongHolographic: stage2.mingGongHolographic,
+        palaceScores: stage1.palaceScores,
+        allPatterns: stage1.allPatterns,
+        mergedSihua: stage1.mergedSihua,
+        chartSnapshot,
       }
 
       // 使用 prompt-builder 词令风格的用户 Prompt
-      const chartSnapshot = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0])
+      const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0])
       const personalityData = buildPersonalityData(stage2)
-      const userPrompt = buildStage2UserPrompt(chartSnapshot, personalityData, question)
+      const userPrompt = buildStage2UserPrompt(chartSnapshotText, personalityData, question)
 
       const msgs = buildPrompt(
         ir,
@@ -258,13 +284,14 @@ function buildMessagesForStage(
       // 阶段 3：事项分析
       const matterType = detectMatterType(question) as MatterType
       const route = routeMatter(matterType, {})
+      const targetYear = new Date().getFullYear()
       const stage3 = executeStage3({
         stage1,
         stage2,
         matterType,
         routeResult: route,
         chartData,
-        targetYear: new Date().getFullYear(),
+        targetYear,
       })
 
       // 缓存 stage3 输出
@@ -283,12 +310,16 @@ function buildMessagesForStage(
           isCurrent: false,
         })),
         liuNianAnalysis: {
-          liuNianGan: '甲',
+          liuNianGan: resolveLiuNianGan(chartData, targetYear),
           sihuaPositions: [],
           direction: stage3.directionMatrix[1] === '吉' ? '吉' : '凶',
           daXianRelation: stage3.directionMatrix,
           window: stage3.directionWindow,
         },
+        palaceScores: stage1.palaceScores,
+        allPatterns: stage1.allPatterns,
+        mergedSihua: stage1.mergedSihua,
+        chartSnapshot,
       }
 
       // 使用模板构建用户 Prompt
@@ -320,12 +351,13 @@ function buildMessagesForStage(
     case 4: {
       // 阶段 4：互动关系分析
       const partnerYear = extractYearFromQuestion(question)
+      const targetYearStage4 = new Date().getFullYear()
       const stage4 = executeStage4({
         stage1,
         stage2,
         partnerBirthYear: partnerYear,
         chartData,
-        targetYear: new Date().getFullYear(),
+        targetYear: targetYearStage4,
       })
 
       // 缓存 stage4 输出
@@ -343,12 +375,16 @@ function buildMessagesForStage(
         },
         daXianAnalysis: [],
         liuNianAnalysis: {
-          liuNianGan: stage4.interaction.partnerGan === ('—' as string) ? '甲' : stage4.interaction.partnerGan,
+          liuNianGan: resolveLiuNianGan(chartData, targetYearStage4),
           sihuaPositions: [],
           direction: '吉',
           daXianRelation: '吉吉',
           window: '推进窗口',
         },
+        palaceScores: stage1.palaceScores,
+        allPatterns: stage1.allPatterns,
+        mergedSihua: stage1.mergedSihua,
+        chartSnapshot,
       }
 
       // 使用模板构建用户 Prompt
@@ -381,6 +417,10 @@ function buildMessagesForStage(
         taiSuiTags: stage2.taiSuiTags,
         overallTone: stage2.overallTone,
         mingGongHolographic: stage2.mingGongHolographic,
+        palaceScores: stage1.palaceScores,
+        allPatterns: stage1.allPatterns,
+        mergedSihua: stage1.mergedSihua,
+        chartSnapshot,
       }
       const msgs = buildPrompt(
         ir,

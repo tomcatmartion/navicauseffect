@@ -7,19 +7,6 @@
  * - 知识库：项目根 data/*.json
  */
 
-export * from './types'
-export * from './data'
-export * from './utils'
-
-export {
-  runHybridPipeline,
-  appendAssistantReply,
-  cleanupExpiredSessions,
-  type RunHybridPipelineParams,
-  type RunHybridPipelineResult,
-  type PipelineDebugInfo,
-} from '@/orchestration/hybrid'
-
 export type {
   BaseIR,
   BaseIRPalace,

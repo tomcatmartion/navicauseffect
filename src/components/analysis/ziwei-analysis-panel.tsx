@@ -148,6 +148,17 @@ interface PipelineSnapshot {
             '2.7_母亲遁干化禄': number;
             '2.8_吉格倍率': number;
           };
+          /** 2.1-2.7 原始总和（不含倍率） */
+          sumBonus?: number;
+          /** 吉格倍率 G */
+          G?: number;
+          /** 具体加分星曜列表 */
+          starList?: Array<{
+            source: string;
+            starName: string;
+            value: number;
+            detail: string;
+          }>;
         };
         step3_warmCool: {
           label: string;
@@ -165,6 +176,17 @@ interface PipelineSnapshot {
             '4.8_凶格倍率': number;
           };
           intensityFactor: number;
+          /** 4.1-4.7 原始总和（不含倍率） */
+          sumPenalty?: number;
+          /** 凶格倍率 H */
+          H?: number;
+          /** 具体减分星曜列表 */
+          starList?: Array<{
+            source: string;
+            starName: string;
+            value: number;
+            detail: string;
+          }>;
         };
         step5_luCun: {
           scoreAfterLuCun: number;
@@ -766,7 +788,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                       {/* 步骤1：初始基础分 */}
                       <div className="flex justify-between items-center">
                         <span className="text-primary/70">步骤1 骨架基础分：</span>
-                        <span>{debug.sixSteps.step1_skeleton.baseScore.toFixed(1)}（天花板 {debug.sixSteps.step1_skeleton.ceiling.toFixed(1)}）</span>
+                        <span>{debug.sixSteps.step1_skeleton.baseScore.toFixed(1)}（天花板 {debug.sixSteps.step1_skeleton.ceiling.toFixed(1)}）<Badge variant="outline" className="text-[9px] px-1 py-0 ml-1">{debug.sixSteps.step1_skeleton.brightness}</Badge></span>
                       </div>
 
                       {/* 步骤2：加分阶段 */}
@@ -775,6 +797,12 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <span className="font-medium text-green-700">步骤2 加分阶段</span>
                           <span>加分后：{debug.sixSteps.step2_bonus.scoreAfterBonus.toFixed(2)}</span>
                         </div>
+                        {debug.sixSteps.step2_bonus.sumBonus !== undefined && debug.sixSteps.step2_bonus.G !== undefined && (
+                          <div className="text-[10px] text-muted-foreground mb-0.5 pl-2">
+                            Σ加分(2.1~2.7) = {debug.sixSteps.step2_bonus.sumBonus.toFixed(2)}，G = {debug.sixSteps.step2_bonus.G.toFixed(1)}
+                            → ({debug.sixSteps.step1_skeleton.baseScore.toFixed(1)} + {debug.sixSteps.step2_bonus.sumBonus.toFixed(2)}) × {debug.sixSteps.step2_bonus.G.toFixed(1)} = {debug.sixSteps.step2_bonus.scoreAfterBonus.toFixed(2)}
+                          </div>
+                        )}
                         <div className="space-y-0.5 pl-2">
                           <div className="flex justify-between"><span>2.1 三方四正吉星：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.1_三方四正吉星'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.2 命主生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.2_命主生年化禄'].toFixed(2)}</span></div>
@@ -785,6 +813,20 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <div className="flex justify-between"><span>2.7 母亲遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.7_母亲遁干化禄'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.8 吉格倍率：</span><span className="text-green-600">×{debug.sixSteps.step2_bonus.details['2.8_吉格倍率'].toFixed(1)}</span></div>
                         </div>
+                        {/* 具体加分星曜列表 */}
+                        {debug.sixSteps.step2_bonus.starList && debug.sixSteps.step2_bonus.starList.length > 0 && (
+                          <div className="mt-1.5 pt-1.5 border-t border-dashed border-green-300/50">
+                            <div className="text-[10px] text-green-700 font-medium mb-1">具体加分星曜：</div>
+                            <div className="space-y-0.5">
+                              {debug.sixSteps.step2_bonus.starList.map((star, idx) => (
+                                <div key={idx} className="flex justify-between text-[10px]">
+                                  <span className="text-muted-foreground">{star.starName}（{star.source}）</span>
+                                  <span className="text-green-600 font-medium">+{star.value.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* 步骤3：重新定性 */}
@@ -799,6 +841,12 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <span className="font-medium text-red-700">步骤4 减分阶段</span>
                           <span>减分后：{debug.sixSteps.step4_penalty.scoreAfterPenalty.toFixed(2)}</span>
                         </div>
+                        {debug.sixSteps.step4_penalty.sumPenalty !== undefined && debug.sixSteps.step4_penalty.H !== undefined && (
+                          <div className="text-[10px] text-muted-foreground mb-0.5 pl-2">
+                            Σ减分(4.1~4.7) = {debug.sixSteps.step4_penalty.sumPenalty.toFixed(2)}，H = {debug.sixSteps.step4_penalty.H.toFixed(1)}
+                            → ({debug.sixSteps.step2_bonus.scoreAfterBonus.toFixed(2)} + {debug.sixSteps.step4_penalty.sumPenalty.toFixed(2)}) × {debug.sixSteps.step4_penalty.H.toFixed(1)} = {debug.sixSteps.step4_penalty.scoreAfterPenalty.toFixed(2)}
+                          </div>
+                        )}
                         <div className="space-y-0.5 pl-2">
                           <div className="flex justify-between"><span>4.1 三方四正煞星：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.1_三方四正煞星'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>4.2 命主生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.2_命主生年化忌'].toFixed(2)}</span></div>
@@ -810,6 +858,20 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <div className="flex justify-between"><span>4.8 凶格倍率：</span><span className="text-red-600">×{debug.sixSteps.step4_penalty.details['4.8_凶格倍率'].toFixed(1)}</span></div>
                           <div className="flex justify-between text-[10px] text-muted-foreground"><span>intensity_factor：</span><span>{debug.sixSteps.step4_penalty.intensityFactor}</span></div>
                         </div>
+                        {/* 具体减分星曜列表 */}
+                        {debug.sixSteps.step4_penalty.starList && debug.sixSteps.step4_penalty.starList.length > 0 && (
+                          <div className="mt-1.5 pt-1.5 border-t border-dashed border-red-300/50">
+                            <div className="text-[10px] text-red-700 font-medium mb-1">具体减分星曜：</div>
+                            <div className="space-y-0.5">
+                              {debug.sixSteps.step4_penalty.starList.map((star, idx) => (
+                                <div key={idx} className="flex justify-between text-[10px]">
+                                  <span className="text-muted-foreground">{star.starName}（{star.source}）</span>
+                                  <span className="text-red-600 font-medium">{star.value.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* 步骤5：禄存调整 */}
@@ -819,9 +881,18 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                       </div>
 
                       {/* 步骤6：天花板截断 */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-primary/70">步骤6 天花板截断：</span>
-                        <span>{debug.sixSteps.step6_ceiling.finalScore.toFixed(2)}</span>
+                      <div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-primary/70">步骤6 天花板截断：</span>
+                          <span>{debug.sixSteps.step5_luCun.scoreAfterLuCun.toFixed(2)} → min(·, {debug.sixSteps.step1_skeleton.ceiling.toFixed(1)}) = {debug.sixSteps.step6_ceiling.finalScore.toFixed(2)}</span>
+                        </div>
+                        {debug.sixSteps.step6_ceiling.specialFlags && debug.sixSteps.step6_ceiling.specialFlags.length > 0 && (
+                          <div className="flex gap-1 mt-0.5">
+                            {debug.sixSteps.step6_ceiling.specialFlags.map((f: string, i: number) => (
+                              <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-amber-600">{f}</Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

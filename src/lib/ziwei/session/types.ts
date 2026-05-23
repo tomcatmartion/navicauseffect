@@ -54,5 +54,9 @@ export interface ZiweiSessionData {
 export const ReadingRequestSchema = z.object({
   sessionId: z.string().optional(),
   question: z.string().min(1).max(500),
-  chartData: z.record(z.string(), z.unknown()).optional(),
+  chartData: z.object({
+    palaces: z.array(z.record(z.string(), z.unknown())).min(12),
+    birthInfo: z.record(z.string(), z.unknown()).optional(),
+    horoscope: z.record(z.string(), z.unknown()).optional(),
+  }).optional(),
 })

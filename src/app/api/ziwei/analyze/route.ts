@@ -4,16 +4,21 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { readChartFromData, normalizedChartToScoringContext } from "@/core/data-reader/iztro-reader";
-import { evaluateSinglePalace, evaluateAllPalaces } from "@/core/energy-evaluator/scoring-flow";
+import { evaluateSinglePalace } from "@/core/energy-evaluator/scoring-flow";
 import { executeStage1 } from "@/core/stages/stage1-palace-scoring";
 import { executeStage2 } from "@/core/stages/stage2-personality";
-import type { PalaceScore, Stage1Input } from "@/core/types";
+import type { Stage1Input } from "@/core/types";
+import { PALACE_NAME_TO_INDEX } from "@/core/types";
+import { guardZiweiDebugApi } from "@/lib/ziwei/debug-api-guard";
+import { hasValidChartPalaces } from "@/lib/ziwei/chart-data-validation";
 
 export async function POST(request: NextRequest) {
+  const guard = await guardZiweiDebugApi();
+  if (guard) return guard;
+
   try {
     const body = await request.json();
-    const { type, birthData, chartData, currentAge, targetYear, affair, relationType } = body;
+    const { type, birthData, chartData } = body;
 
     if (!birthData && !chartData) {
       return NextResponse.json(
@@ -30,6 +35,13 @@ export async function POST(request: NextRequest) {
         solarDate: `${birthData.year}-${String(birthData.month).padStart(2, '0')}-${String(birthData.day).padStart(2, '0')}`,
         gender: birthData.gender === 'male' ? '男' : '女',
       };
+    }
+
+    if (!hasValidChartPalaces(effectiveChartData)) {
+      return NextResponse.json(
+        { error: "缺少有效的 chartData.palaces（须为 serializeAstrolabeForReading 完整快照，至少 12 宫）" },
+        { status: 400 },
+      );
     }
 
     // 根据分析类型调用不同的分析方法
@@ -158,21 +170,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 宫位名称到索引的映射
-const PALACE_NAME_TO_INDEX = {
-  "命宫": 0,
-  "兄弟": 1,
-  "夫妻": 2,
-  "子女": 3,
-  "财帛": 4,
-  "疾厄": 5,
-  "迁移": 6,
-  "仆役": 7,
-  "官禄": 8,
-  "田宅": 9,
-  "福德": 10,
-  "父母": 11,
-};
+
 
 // GET 请求支持获取支持的宫位列表和分析类型
 export async function GET() {

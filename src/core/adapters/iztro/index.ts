@@ -9,7 +9,6 @@ export { extractAuxiliaryStarsFromChart, lookupExtraStarsForTaiSui } from './ext
 export { adaptIztroChartData } from './iztro-adapter'
 export { mergeSihuaFromChartData } from './sihua-merger'
 export { evaluateJsonPatterns, evaluateCondition } from './patterns-dsl'
-export { buildFinalIRFromStages } from './final-ir-builder'
 export { parseHybridAssistantPayload, mergeCollected } from './ai-parse'
 
 export type {

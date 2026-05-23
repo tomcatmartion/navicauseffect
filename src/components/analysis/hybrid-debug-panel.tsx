@@ -4,7 +4,13 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, X, Cpu, Layers, Timer, Target, Zap } from "lucide-react";
+import { ChevronDown, ChevronRight, X, Cpu, Layers, Timer, MessageSquare } from "lucide-react";
+
+type PromptMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+  label?: string;
+};
 
 type Props = {
   open: boolean;
@@ -19,6 +25,7 @@ type Props = {
     intentDetected?: string;
     fullPromptLength?: number;
     timing: Record<string, number>;
+    promptMessages?: PromptMessage[];
   };
 };
 
@@ -76,6 +83,77 @@ const STAGE_NAMES: Record<number, string> = {
   4: "互动关系分析",
 };
 
+/** 角色颜色映射 */
+const ROLE_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  system: {
+    bg: "bg-amber-50 dark:bg-amber-950/20",
+    border: "border-amber-200 dark:border-amber-800",
+    text: "text-amber-900 dark:text-amber-100",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
+  },
+  user: {
+    bg: "bg-blue-50 dark:bg-blue-950/20",
+    border: "border-blue-200 dark:border-blue-800",
+    text: "text-blue-900 dark:text-blue-100",
+    badge: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  },
+  assistant: {
+    bg: "bg-emerald-50 dark:bg-emerald-950/20",
+    border: "border-emerald-200 dark:border-emerald-800",
+    text: "text-emerald-900 dark:text-emerald-100",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+  },
+};
+
+/** 单条 Prompt 消息卡片 */
+function PromptMessageCard({ message, index }: { message: PromptMessage; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const colors = ROLE_COLORS[message.role] ?? ROLE_COLORS.system;
+  const displayLabel = message.label ?? message.role;
+  const contentPreview = message.content.slice(0, 200);
+  const hasMore = message.content.length > 200;
+
+  return (
+    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+      {/* 头部：角色标签 + 序号 */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40">
+        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${colors.badge}`}>
+          #{index + 1}
+        </span>
+        <span className={`text-xs font-medium ${colors.text}`}>
+          {displayLabel}
+        </span>
+        <span className="ml-auto text-[10px] text-muted-foreground font-mono">
+          {message.content.length} 字符
+        </span>
+      </div>
+
+      {/* 内容区 */}
+      <div className="px-3 py-2">
+        <pre
+          className={`text-[11px] leading-relaxed whitespace-pre-wrap font-mono ${colors.text} ${
+            expanded ? "" : "line-clamp-6"
+          }`}
+          style={{ wordBreak: "break-word" }}
+        >
+          {expanded ? message.content : contentPreview}
+          {!expanded && hasMore && "…"}
+        </pre>
+
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1.5 text-[10px] text-muted-foreground hover:text-foreground underline"
+          >
+            {expanded ? "收起" : `展开全部 (${message.content.length} 字符)`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
   if (!open) return null;
 
@@ -88,6 +166,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
     intentDetected,
     fullPromptLength,
     timing,
+    promptMessages,
   } = debugInfo;
 
   // 计算总耗时
@@ -206,6 +285,22 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
                   ))}
                 </div>
               </Section>
+
+              {/* 组装后的 Prompt 消息 */}
+              {promptMessages && promptMessages.length > 0 && (
+                <Section
+                  label="组装后的 Prompt 消息"
+                  icon={MessageSquare}
+                  badge={`${promptMessages.length} 条`}
+                  defaultOpen={false}
+                >
+                  <div className="space-y-2">
+                    {promptMessages.map((msg, index) => (
+                      <PromptMessageCard key={index} message={msg} index={index} />
+                    ))}
+                  </div>
+                </Section>
+              )}
             </div>
           </div>
 

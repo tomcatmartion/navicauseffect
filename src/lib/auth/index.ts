@@ -47,7 +47,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.phone || !credentials?.code) return null;
         const phone = credentials.phone as string;
-        // TODO: verify SMS code from Redis
+        const code = credentials.code as string;
+        // SMS 验证码校验（开发环境跳过，生产环境需接入 Redis + SMS API）
+        const smsEnabled = process.env.SMS_ENABLED === 'true';
+        if (smsEnabled) {
+          // TODO: 接入 Redis 校验验证码
+          console.warn('[auth] SMS verification not implemented yet');
+        } else {
+          // 开发环境：验证码为 6 位数字时直接通过
+          if (!/^\d{6}$/.test(code)) {
+            console.warn('[auth] Invalid SMS code format (dev mode allows 6-digit numbers)');
+            return null;
+          }
+        }
         let user = await prisma.user.findUnique({ where: { phone } });
         if (!user) {
           user = await prisma.user.create({
