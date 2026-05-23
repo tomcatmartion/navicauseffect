@@ -619,8 +619,8 @@ export function buildChartSnapshot(chartData: {
   body?: string
   zodiac?: string
   solarDate?: string
-}): string {
-  const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>)
+}, taiSuiZhi?: string): string {
+  const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>, taiSuiZhi)
 
   const palaceLines = snapshot.allPalaces.map(p => {
     const major = p.majorStars.join('、') || '空'

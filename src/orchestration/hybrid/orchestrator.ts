@@ -267,7 +267,7 @@ function buildMessagesForStage(
       }
 
       // 使用 prompt-builder 词令风格的用户 Prompt
-      const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0])
+      const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0], stage1.scoringCtx?.taiSuiZhi)
       const personalityData = buildPersonalityData(stage2)
       const userPrompt = buildStage2UserPrompt(chartSnapshotText, personalityData, question)
 
