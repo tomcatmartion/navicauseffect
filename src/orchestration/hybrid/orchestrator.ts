@@ -231,7 +231,7 @@ function buildMessagesForStage(
   _hp: SessionPersisted,
 ): { messages: ChatMessage[]; stageHint: string; ir: IRStage1 | IRStage2 | IRStage3or4 } {
   // 预计算命盘快照（所有阶段共用，传入已算好的太岁宫地支）
-  const chartSnapshot = buildChartSnapshotObject(chartData, stage1.scoringCtx?.taiSuiZhi)
+  const chartSnapshot = buildChartSnapshotObject(chartData, { birthGan: stage1.scoringCtx?.birthGan, taiSuiZhi: stage1.scoringCtx?.taiSuiZhi })
 
   switch (stage) {
     case 1: {
@@ -267,7 +267,7 @@ function buildMessagesForStage(
       }
 
       // 使用 prompt-builder 词令风格的用户 Prompt
-      const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0], stage1.scoringCtx?.taiSuiZhi)
+      const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0], { birthGan: stage1.scoringCtx?.birthGan, taiSuiZhi: stage1.scoringCtx?.taiSuiZhi })
       const personalityData = buildPersonalityData(stage2)
       const userPrompt = buildStage2UserPrompt(chartSnapshotText, personalityData, question)
 

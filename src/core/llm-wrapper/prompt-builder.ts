@@ -476,39 +476,15 @@ ${palaceLines}
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * 从 chartData 提取生年天干
- *
- * 数据源统一原则：地支（taiSuiZhi）由 iztro-reader 计算，通过 scoringCtx 传递；
- * 此处仅提取天干（birthGan），用于 buildChartSnapshotObject 中的遁干四化。
- */
-function extractBirthGan(chartData: Record<string, unknown>): string {
-  // 优先从 iztro-reader 写入的字段直接读取（经过完整测试的权威数据源）
-  const directGan = chartData?.birthGan as string | undefined
-  if (directGan && directGan !== '未知') return directGan
-
-  // 回退：从 rawDates 提取（iztro 原始数据）
-  const rawDates = chartData?.rawDates as Record<string, unknown> | undefined
-  const rawChineseDate = rawDates?.chineseDate as Record<string, unknown> | undefined
-  const yearly = rawChineseDate?.yearly as string[] | undefined
-  if (yearly && yearly.length >= 1 && yearly[0]) {
-    return yearly[0]
-  }
-
-  return '未知'
-}
-
-/**
  * 构建命盘快照对象（结构化数据，用于 IR）
  * @param chartData 前端序列化的命盘数据
- * @param taiSuiZhi 已算好的太岁宫地支（来自 scoringCtx，优先使用）
+ * @param ctx 生年干支（来自 scoringCtx，与 debug 面板「生年太岁」模块同源）
  */
-export function buildChartSnapshotObject(chartData: Record<string, unknown>, taiSuiZhi?: string): import('../types').ChartSnapshot {
+export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx?: { birthGan?: string; taiSuiZhi?: string }): import('../types').ChartSnapshot {
   const palaces = (chartData?.palaces as Array<Record<string, unknown>>) || []
-  const birthGan = extractBirthGan(chartData)
-
-  // 太岁宫地支：必须由调用方从 scoringCtx.taiSuiZhi 传入（权威数据源：iztro-reader）
-  // 回退到 chartData 上的字段（serializeAstrolabeForReading 已从 rawDates 提取写入）
-  const birthZhi = taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
+  // 与 chart-pipeline-debug.ts 一致：直接从 scoringCtx 取值
+  const birthGan = ctx?.birthGan ?? (chartData?.birthGan as string | undefined) ?? '未知'
+  const birthZhi = ctx?.taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
 
   // 命宫
   const ming = palaces.find(p => p.name === '命宫')
@@ -619,8 +595,8 @@ export function buildChartSnapshot(chartData: {
   body?: string
   zodiac?: string
   solarDate?: string
-}, taiSuiZhi?: string): string {
-  const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>, taiSuiZhi)
+}, ctx?: { birthGan?: string; taiSuiZhi?: string }): string {
+  const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>, ctx)
 
   const palaceLines = snapshot.allPalaces.map(p => {
     const major = p.majorStars.join('、') || '空'
