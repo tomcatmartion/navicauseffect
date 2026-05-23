@@ -507,7 +507,7 @@ export function buildChartSnapshotObject(chartData: Record<string, unknown>, tai
   const birthGan = extractBirthGan(chartData)
 
   // 太岁宫地支：必须由调用方从 scoringCtx.taiSuiZhi 传入（权威数据源：iztro-reader）
-  // 回退到 chartData 上的字段（iztro-reader 序列化时已写入）
+  // 回退到 chartData 上的字段（serializeAstrolabeForReading 已从 rawDates 提取写入）
   const birthZhi = taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
 
   // 命宫

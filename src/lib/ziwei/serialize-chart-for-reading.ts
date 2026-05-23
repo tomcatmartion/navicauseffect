@@ -223,6 +223,12 @@ export function serializeAstrolabeForReading(
     result.rawDates = {
       chineseDate: rawDates.chineseDate,
     }
+    // 直接从 iztro rawDates 提取生年干支，写入顶层字段（权威数据源，已处理农历跨年）
+    const yearly = (rawDates.chineseDate as Record<string, unknown>)?.yearly as string[] | undefined
+    if (yearly && yearly.length === 2) {
+      result.birthGan = yearly[0]
+      result.taiSuiZhi = yearly[1]
+    }
   }
 
   if (birthDataParam) {
