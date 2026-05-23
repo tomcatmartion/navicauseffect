@@ -460,7 +460,7 @@ export function buildChartPipelineDebugSnapshot(
     const def = getPatternDefinition(p.name)
     const multiplierFromJson = getPatternMultiplier(p.level)
 
-    // 从 pattern_library.json definitions[name].description 提取星曜名称
+    // 从 pattern_library.json patterns[name].description 提取星曜名称
     const description = def && 'description' in def ? String(def.description) : ''
     const triggerFromJson = def && 'trigger' in def ? String(def.trigger) : ''
 
@@ -491,7 +491,7 @@ export function buildChartPipelineDebugSnapshot(
     const triggerCondition = triggerFromJson || '详见 SKILL_宫位原生能级评估_V3.0.md 格局库章节'
 
     // 吉凶依据：明确说明来源
-    const judgmentBasis = `${p.level}（${p.category}类）｜来源：data/pattern_library.json definitions["${p.name}"].level="${p.level}"，category="${p.category}"｜SKILL_宫位原生能级评估_V3.0.md 格局库「${p.name}」条`
+    const judgmentBasis = `${p.level}（${p.category}类）｜来源：data/pattern_library.json patterns["${p.name}"]｜SKILL_宫位原生能级评估_V3.0.md 格局库「${p.name}」条`
 
     // 倍率来源：明确说明来源
     const multiplierSource = `data/pattern_library.json → multipliers["${p.level}"] = ${multiplierFromJson}｜SKILL_宫位原生能级评估_V3.0.md：${p.level}格局倍率×${multiplierFromJson}`

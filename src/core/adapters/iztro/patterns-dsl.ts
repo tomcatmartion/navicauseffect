@@ -39,18 +39,9 @@ export function evaluateCondition(cond: Record<string, unknown>, ctx: PatternEva
 function getRules(): PatternRuleJson[] {
   const cfg = getPatternConfig()
   if (Array.isArray(cfg)) return cfg as PatternRuleJson[]
-  // data/pattern_library.json 是对象格式：{ multipliers, categories, definitions }
-  // 规则定义在 definitions 下，但当前 JSON 格式与 PatternRuleJson 不匹配
-  // 先安全地返回空数组，避免 'all' in undefined 错误
-  const defs = cfg && typeof cfg === 'object' && 'definitions' in cfg
-    ? (cfg as Record<string, unknown>).definitions
-    : null
-  if (defs && typeof defs === 'object') {
-    return Object.values(defs).filter(
-      (v): v is PatternRuleJson =>
-        v !== null && typeof v === 'object' && 'when' in (v as Record<string, unknown>),
-    )
-  }
+  // data/pattern_library.json 格式：{ multipliers, categories, patterns[] }
+  // patterns[] 中条目使用 condition 字段（非 when），与 PatternRuleJson 格式不匹配
+  // 此模块为旧版 DSL，主引擎已迁移到 json-evaluator.ts，此处安全返回空数组
   return []
 }
 
