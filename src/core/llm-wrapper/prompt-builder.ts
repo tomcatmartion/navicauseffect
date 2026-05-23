@@ -476,48 +476,39 @@ ${palaceLines}
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * 从 chartData 提取生年干支和太岁宫地支
- * 优先从 iztro rawDates 读取，禁止自行计算
+ * 从 chartData 提取生年天干
+ *
+ * 数据源统一原则：地支（taiSuiZhi）由 iztro-reader 计算，通过 scoringCtx 传递；
+ * 此处仅提取天干（birthGan），用于 buildChartSnapshotObject 中的遁干四化。
  */
-function extractBirthGanZhi(chartData: Record<string, unknown>): { gan: string; zhi: string } {
-  // 优先从 iztro rawDates 提取（最可靠的数据源）
+function extractBirthGan(chartData: Record<string, unknown>): string {
+  // 优先从 iztro-reader 写入的字段直接读取（经过完整测试的权威数据源）
+  const directGan = chartData?.birthGan as string | undefined
+  if (directGan && directGan !== '未知') return directGan
+
+  // 回退：从 rawDates 提取（iztro 原始数据）
   const rawDates = chartData?.rawDates as Record<string, unknown> | undefined
   const rawChineseDate = rawDates?.chineseDate as Record<string, unknown> | undefined
   const yearly = rawChineseDate?.yearly as string[] | undefined
-  if (yearly && yearly.length === 2) {
-    return { gan: yearly[0], zhi: yearly[1] }
+  if (yearly && yearly.length >= 1 && yearly[0]) {
+    return yearly[0]
   }
 
-  // 回退1：从 zodiac（生肖）转换
-  const zodiac = chartData?.zodiac as string | undefined
-  if (zodiac) {
-    const ZODIAC_TO_ZHI: Record<string, string> = {
-      '鼠': '子', '牛': '丑', '虎': '寅', '兔': '卯',
-      '龙': '辰', '蛇': '巳', '马': '午', '羊': '未',
-      '猴': '申', '鸡': '酉', '狗': '戌', '猪': '亥',
-    }
-    const zhi = ZODIAC_TO_ZHI[zodiac]
-    if (zhi) return { gan: '未知', zhi }
-  }
-
-  // 回退2：从 chineseDate 字符串解析
-  const chineseDateStr = chartData?.chineseDate as string | undefined
-  if (chineseDateStr) {
-    const match = chineseDateStr.match(/^([甲乙丙丁戊己庚辛壬癸])([子丑寅卯辰巳午未申酉戌亥])/)
-    if (match) {
-      return { gan: match[1], zhi: match[2] }
-    }
-  }
-
-  return { gan: '未知', zhi: '未知' }
+  return '未知'
 }
 
 /**
  * 构建命盘快照对象（结构化数据，用于 IR）
+ * @param chartData 前端序列化的命盘数据
+ * @param taiSuiZhi 已算好的太岁宫地支（来自 scoringCtx，优先使用）
  */
-export function buildChartSnapshotObject(chartData: Record<string, unknown>): import('../types').ChartSnapshot {
+export function buildChartSnapshotObject(chartData: Record<string, unknown>, taiSuiZhi?: string): import('../types').ChartSnapshot {
   const palaces = (chartData?.palaces as Array<Record<string, unknown>>) || []
-  const { gan: birthGan, zhi: birthZhi } = extractBirthGanZhi(chartData)
+  const birthGan = extractBirthGan(chartData)
+
+  // 太岁宫地支：必须由调用方从 scoringCtx.taiSuiZhi 传入（权威数据源：iztro-reader）
+  // 回退到 chartData 上的字段（iztro-reader 序列化时已写入）
+  const birthZhi = taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
 
   // 命宫
   const ming = palaces.find(p => p.name === '命宫')

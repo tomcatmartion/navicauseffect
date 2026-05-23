@@ -256,7 +256,8 @@ export function extractKeyDataForDebug(chartData: Record<string, unknown>): {
   const chineseDate = rawDates?.chineseDate as Record<string, unknown> | undefined
   const yearly = chineseDate?.yearly as string[] | undefined
   const birthGanZhi = yearly?.join('') ?? '未知'
-  const taiSuiZhi = yearly?.[1] ?? '未知'
+  // 太岁宫地支：优先从 iztro-reader 序列化字段读取（权威数据源，已处理农历跨年）
+  const taiSuiZhi = (chartData.taiSuiZhi as string | undefined) ?? yearly?.[1] ?? '未知'
 
   const palaces = (chartData.palaces ?? []) as Array<Record<string, unknown>>
 

@@ -230,8 +230,8 @@ function buildMessagesForStage(
   chartData: Record<string, unknown>,
   _hp: SessionPersisted,
 ): { messages: ChatMessage[]; stageHint: string; ir: IRStage1 | IRStage2 | IRStage3or4 } {
-  // 预计算命盘快照（所有阶段共用）
-  const chartSnapshot = buildChartSnapshotObject(chartData)
+  // 预计算命盘快照（所有阶段共用，传入已算好的太岁宫地支）
+  const chartSnapshot = buildChartSnapshotObject(chartData, stage1.scoringCtx?.taiSuiZhi)
 
   switch (stage) {
     case 1: {

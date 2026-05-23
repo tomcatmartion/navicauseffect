@@ -316,7 +316,7 @@ function buildStage3Ir(
   output: Stage3Output,
   chartData: Record<string, unknown>,
   targetYear: number,
-  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua },
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: { taiSuiZhi?: string } },
 ): IRStage3or4 {
   return {
     stage: 3,
@@ -340,7 +340,7 @@ function buildStage3Ir(
     palaceScores: stage1Ref.palaceScores,
     allPatterns: stage1Ref.allPatterns,
     mergedSihua: stage1Ref.mergedSihua,
-    chartSnapshot: buildChartSnapshotObject(chartData),
+    chartSnapshot: buildChartSnapshotObject(chartData, stage1Ref.scoringCtx?.taiSuiZhi),
   }
 }
 
@@ -348,7 +348,7 @@ function buildStage4Ir(
   output: Stage4Output,
   chartData: Record<string, unknown>,
   targetYear: number,
-  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua },
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: { taiSuiZhi?: string } },
 ): IRStage3or4 {
   return {
     stage: 4,
@@ -371,7 +371,7 @@ function buildStage4Ir(
     palaceScores: stage1Ref.palaceScores,
     allPatterns: stage1Ref.allPatterns,
     mergedSihua: stage1Ref.mergedSihua,
-    chartSnapshot: buildChartSnapshotObject(chartData),
+    chartSnapshot: buildChartSnapshotObject(chartData, stage1Ref.scoringCtx?.taiSuiZhi),
   }
 }
 
@@ -1162,7 +1162,7 @@ export function buildChartPipelineDebugSnapshot(
 
   const partnerYear = opts.partnerBirthYear ?? null
 
-  const chartSnapshot = buildChartSnapshotObject(chartData)
+  const chartSnapshot = buildChartSnapshotObject(chartData, taiSuiZhi)
 
   const ir1: IRStage1 = {
     stage: 1,
@@ -1189,6 +1189,7 @@ export function buildChartPipelineDebugSnapshot(
     palaceScores: stage1.palaceScores,
     allPatterns: stage1.allPatterns,
     mergedSihua: stage1.mergedSihua,
+    scoringCtx: stage1.scoringCtx,
   }
 
   const prompts = {
