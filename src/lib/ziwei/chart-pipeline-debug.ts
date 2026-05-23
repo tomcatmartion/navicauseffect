@@ -316,7 +316,7 @@ function buildStage3Ir(
   output: Stage3Output,
   chartData: Record<string, unknown>,
   targetYear: number,
-  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: { birthGan?: string; taiSuiZhi?: string } },
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: import('@/core/llm-wrapper/prompt-builder').ChartSnapshotCtx & { taiSuiZhi?: string; birthGan?: string } },
 ): IRStage3or4 {
   return {
     stage: 3,
@@ -348,7 +348,7 @@ function buildStage4Ir(
   output: Stage4Output,
   chartData: Record<string, unknown>,
   targetYear: number,
-  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: { birthGan?: string; taiSuiZhi?: string } },
+  stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: import('@/core/llm-wrapper/prompt-builder').ChartSnapshotCtx & { taiSuiZhi?: string; birthGan?: string } },
 ): IRStage3or4 {
   return {
     stage: 4,

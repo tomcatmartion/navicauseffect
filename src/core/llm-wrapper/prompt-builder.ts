@@ -480,9 +480,16 @@ ${palaceLines}
  * @param chartData 前端序列化的命盘数据
  * @param ctx 生年干支（来自 scoringCtx，与 debug 面板「生年太岁」模块同源）
  */
-export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx?: { birthGan?: string; taiSuiZhi?: string }): import('../types').ChartSnapshot {
+export interface ChartSnapshotCtx {
+  /** 生年天干（scoringCtx.birthGan） */
+  birthGan?: string
+  /** 太岁宫地支（scoringCtx.taiSuiZhi） */
+  taiSuiZhi?: string
+}
+
+export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx?: ChartSnapshotCtx): import('../types').ChartSnapshot {
   const palaces = (chartData?.palaces as Array<Record<string, unknown>>) || []
-  // 与 chart-pipeline-debug.ts 一致：直接从 scoringCtx 取值
+  // 与 chart-pipeline-debug.ts「生年太岁」模块一致：全部从 scoringCtx 取值
   const birthGan = ctx?.birthGan ?? (chartData?.birthGan as string | undefined) ?? '未知'
   const birthZhi = ctx?.taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
 
@@ -524,11 +531,11 @@ export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx
 
   return {
     birthGanZhi: birthGan + birthZhi,
-    zodiac: (chartData?.zodiac as string) || '未知',
-    fiveElementsClass: (chartData?.fiveElementsClass as string) || '未知',
-    soul: (chartData?.soul as string) || '未知',
-    body: (chartData?.body as string) || '未知',
-    solarDate: (chartData?.solarDate as string) || '未知',
+    zodiac: (chartData?.zodiac as string | undefined) ?? '未知',
+    fiveElementsClass: (chartData?.fiveElementsClass as string | undefined) ?? '未知',
+    soul: (chartData?.soul as string | undefined) ?? '未知',
+    body: (chartData?.body as string | undefined) ?? '未知',
+    solarDate: (chartData?.solarDate as string | undefined) ?? '未知',
     lunarDate: lunarDateStr,
     mingGong: {
       name: (ming?.name as string) || '命宫',
@@ -595,7 +602,7 @@ export function buildChartSnapshot(chartData: {
   body?: string
   zodiac?: string
   solarDate?: string
-}, ctx?: { birthGan?: string; taiSuiZhi?: string }): string {
+}, ctx?: ChartSnapshotCtx): string {
   const snapshot = buildChartSnapshotObject(chartData as unknown as Record<string, unknown>, ctx)
 
   const palaceLines = snapshot.allPalaces.map(p => {
