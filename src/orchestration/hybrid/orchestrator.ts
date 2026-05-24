@@ -81,6 +81,7 @@ export interface RunHybridPipelineParams {
   userId: string
   question: string
   chartData?: Record<string, unknown>
+  parentBirthYears?: { father?: number; mother?: number }
 }
 
 export interface RunHybridPipelineResult {
@@ -125,7 +126,7 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
   // 阶段 1：宫位评分（如果尚未执行）
   let stage1Output = hp.stage1Output
   if (!stage1Output) {
-    stage1Output = executeStage1({ chartData: effectiveChartData })
+    stage1Output = executeStage1({ chartData: effectiveChartData, parentBirthYears: params.parentBirthYears })
     hp.stage1Output = stage1Output
     hp.sessionState.stage1Completed = true
   }
@@ -148,6 +149,7 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
     question,
     effectiveChartData,
     hp,
+    params.parentBirthYears,
   )
 
   // 添加历史对话上下文（最近 MAX_HISTORY_MESSAGES 条）
@@ -229,6 +231,7 @@ function buildMessagesForStage(
   question: string,
   chartData: Record<string, unknown>,
   _hp: SessionPersisted,
+  parentBirthYears?: { father?: number; mother?: number },
 ): { messages: ChatMessage[]; stageHint: string; ir: IRStage1 | IRStage2 | IRStage3or4 } {
   // 预计算命盘快照（所有阶段共用，传入已算好的太岁宫地支）
   const chartSnapshot = buildChartSnapshotObject(chartData, {
@@ -244,6 +247,7 @@ function buildMessagesForStage(
         allPatterns: stage1.allPatterns,
         mergedSihua: stage1.mergedSihua,
         hasParentInfo: stage1.hasParentInfo,
+        parentBirthYears: parentBirthYears,
         chartSnapshot,
       }
       const msgs = buildPrompt(

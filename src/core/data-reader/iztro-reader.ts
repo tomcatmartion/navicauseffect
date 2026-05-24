@@ -22,6 +22,7 @@ import type {
   IztroBrightness,
 } from './types-iztro'
 import { STANDARD_DI_ZHI_ORDER } from './types-iztro'
+import { yearToGan, yearToZhi } from '../utils/gan-zhi'
 import { classifyStar } from './star-classifier'
 
 /** 十天干 */
@@ -320,6 +321,7 @@ function normalizePalace(raw: IztroPalace | undefined, palaceName: string): Norm
  */
 export function normalizedChartToScoringContext(
   chart: NormalizedChart,
+  parentBirthYears?: { father?: number; mother?: number },
 ): import('../energy-evaluator/scoring-flow').ScoringContext {
   const { palaces } = chart
 
@@ -356,6 +358,10 @@ export function normalizedChartToScoringContext(
     birthGan: chart.birthGan,
     taiSuiZhi: chart.taiSuiZhi,  // 正确：= 生年地支 (birthZhi)
     shenGongIndex,
+    fatherGan: parentBirthYears?.father ? yearToGan(parentBirthYears.father) : undefined,
+    fatherTaiSuiZhi: parentBirthYears?.father ? yearToZhi(parentBirthYears.father) : undefined,
+    motherGan: parentBirthYears?.mother ? yearToGan(parentBirthYears.mother) : undefined,
+    motherTaiSuiZhi: parentBirthYears?.mother ? yearToZhi(parentBirthYears.mother) : undefined,
     patterns: [],
   }
 }

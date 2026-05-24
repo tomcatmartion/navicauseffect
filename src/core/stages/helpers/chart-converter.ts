@@ -23,9 +23,12 @@ export { extractBirthGan } from '@/core/data-reader/iztro-reader'
  *
  * 使用 data-reader/iztro-reader 的标准化流程。
  */
-export function convertIztroToScoringContext(chartData: Record<string, unknown>): ScoringContext {
+export function convertIztroToScoringContext(
+  chartData: Record<string, unknown>,
+  parentBirthYears?: { father?: number; mother?: number },
+): ScoringContext {
   const chart = readChartFromData(chartData)
-  return normalizedChartToScoringContext(chart)
+  return normalizedChartToScoringContext(chart, parentBirthYears)
 }
 
 /** 从 chartData 获取身宫索引（重排后 PALACE_NAMES 顺序） */

@@ -369,6 +369,8 @@ export interface IRStage1 {
   mergedSihua: MergedSihua
   /** 是否有父母生年 */
   hasParentInfo: boolean
+  /** 父母出生年份（用于 IR 文本展示） */
+  parentBirthYears?: { father?: number; mother?: number }
   /** 命盘快照（完整命盘信息，供 AI 参考） */
   chartSnapshot: ChartSnapshot
 }

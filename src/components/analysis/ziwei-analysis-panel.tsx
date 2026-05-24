@@ -63,6 +63,8 @@ interface ZiweiAnalysisPanelProps {
   currentAge?: number;
   /** 与 Hybrid 一致的 iztro 序列化命盘；有则四项分析走 Stage1–4，否则回退旧 /api/ziwei/analyze */
   chartData?: Record<string, unknown> | null;
+  /** 父母出生年份（可选，影响父母四化评分） */
+  parentBirthYears?: { father?: number; mother?: number };
 }
 
 const ANALYSIS_OPTIONS = [
@@ -264,6 +266,11 @@ interface PipelineSnapshot {
     };
     prompts: { stage1: string; stage2: string; stage3: string; stage4: string };
   };
+  /** 父母四化元数据（干支 + 化禄/化忌/遁干星名） */
+  parentSihuaMeta?: {
+    father?: { year: number; gan: string; zhi: string; zodiac: string; luStar: string; jiStar: string; dunGan: string; dunLuStar: string; dunJiStar: string };
+    mother?: { year: number; gan: string; zhi: string; zodiac: string; luStar: string; jiStar: string; dunGan: string; dunLuStar: string; dunJiStar: string };
+  };
 }
 
 /** 格局列表项（管线与旧 analyze 返回兼容） */
@@ -408,7 +415,7 @@ interface DebugExpandedState {
   palaces: Record<string, boolean>;
 }
 
-export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAnalysisPanelProps) {
+export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBirthYears }: ZiweiAnalysisPanelProps) {
   const [activeType, setActiveType] = useState<AnalysisType | null>(null);
   const [loading, setLoading] = useState(false);
   const [legacyResult, setLegacyResult] = useState<unknown>(null);
@@ -452,13 +459,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
           affair: opts?.affair ?? affairInput,
           targetYear: opts?.targetYear ?? targetYear,
           partnerBirthYear: partnerNorm,
+          parentBirthYears,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "调试接口失败");
       return json.data as PipelineSnapshot;
     },
-    [chartData, selectedAffair, affairInput, targetYear, partnerDebugYear],
+    [chartData, selectedAffair, affairInput, targetYear, partnerDebugYear, parentBirthYears],
   );
 
   const fetchLegacyAnalyze = async (type: AnalysisType) => {
@@ -807,10 +815,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <div className="flex justify-between"><span>2.1 三方四正吉星：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.1_三方四正吉星'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.2 命主生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.2_命主生年化禄'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.3 命主遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.3_命主遁干化禄'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>2.4 父亲生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.4_父亲生年化禄'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>2.5 父亲遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.5_父亲遁干化禄'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>2.6 母亲生年化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.6_母亲生年化禄'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>2.7 母亲遁干化禄：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.7_母亲遁干化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.4 父亲生年化禄{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.gan}干·${pipelineSnapshot.parentSihuaMeta.father.luStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.4_父亲生年化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.5 父亲遁干化禄{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.dunGan}干·${pipelineSnapshot.parentSihuaMeta.father.dunLuStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.5_父亲遁干化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.6 母亲生年化禄{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.gan}干·${pipelineSnapshot.parentSihuaMeta.mother.luStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.6_母亲生年化禄'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.7 母亲遁干化禄{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.dunGan}干·${pipelineSnapshot.parentSihuaMeta.mother.dunLuStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.7_母亲遁干化禄'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.8 吉格倍率：</span><span className="text-green-600">×{debug.sixSteps.step2_bonus.details['2.8_吉格倍率'].toFixed(1)}</span></div>
                         </div>
                         {/* 具体加分星曜列表 */}
@@ -851,10 +859,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData }: ZiweiAn
                           <div className="flex justify-between"><span>4.1 三方四正煞星：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.1_三方四正煞星'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>4.2 命主生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.2_命主生年化忌'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>4.3 命主遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.3_命主遁干化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.4 父亲生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.4_父亲生年化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.5 父亲遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.5_父亲遁干化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.6 母亲生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.6_母亲生年化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.7 母亲遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.7_母亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.4 父亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.gan}干·${pipelineSnapshot.parentSihuaMeta.father.jiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.4_父亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.5 父亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.dunGan}干·${pipelineSnapshot.parentSihuaMeta.father.dunJiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.5_父亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.6 母亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.gan}干·${pipelineSnapshot.parentSihuaMeta.mother.jiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.6_母亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.7 母亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.dunGan}干·${pipelineSnapshot.parentSihuaMeta.mother.dunJiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.7_母亲遁干化忌'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>4.8 凶格倍率：</span><span className="text-red-600">×{debug.sixSteps.step4_penalty.details['4.8_凶格倍率'].toFixed(1)}</span></div>
                           <div className="flex justify-between text-[10px] text-muted-foreground"><span>intensity_factor：</span><span>{debug.sixSteps.step4_penalty.intensityFactor}</span></div>
                         </div>

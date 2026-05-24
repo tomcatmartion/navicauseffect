@@ -21,6 +21,7 @@ export interface RunChartStagesOptions {
   matterType?: MatterType
   targetYear?: number
   partnerBirthYear?: number | null
+  parentBirthYears?: { father?: number; mother?: number }
   focusContext?: { matterType: MatterType; primaryPalace: PalaceName }
 }
 
@@ -42,7 +43,7 @@ export function runCoreChartStages(
   const targetYear = opts.targetYear ?? new Date().getFullYear()
   const question = opts.question ?? '请分析命盘'
 
-  const stage1 = executeStage1({ chartData })
+  const stage1 = executeStage1({ chartData, parentBirthYears: opts.parentBirthYears })
   const stage2 = executeStage2({ stage1, question })
   const route = routeMatter(matterType, {})
   const stage3 = executeStage3({

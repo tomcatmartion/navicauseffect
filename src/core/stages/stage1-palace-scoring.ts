@@ -25,7 +25,7 @@ import { injectStage1Knowledge } from './helpers/knowledge-injector'
  */
 export function executeStage1(input: Stage1Input): Stage1Output {
   // 1. iztro 命盘 → ScoringContext
-  const scoringCtx = convertIztroToScoringContext(input.chartData)
+  const scoringCtx = convertIztroToScoringContext(input.chartData, input.parentBirthYears)
 
   // 2. 计算原局四化（生年 + 太岁宫宫干四化，宫干来自五虎遁）
   const rawSihua = calculateOriginalSihua(scoringCtx.birthGan, scoringCtx.taiSuiZhi)

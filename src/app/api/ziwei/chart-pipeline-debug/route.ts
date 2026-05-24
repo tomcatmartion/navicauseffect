@@ -41,11 +41,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'partnerBirthYear 须在 1900–2100 或 null' }, { status: 400 })
     }
 
+    // 解析父母出生年份（可选）
+    const rawParent = body?.parentBirthYears as { father?: number; mother?: number } | undefined
+    let parentBirthYears: { father?: number; mother?: number } | undefined
+    if (rawParent) {
+      const validate = (v: unknown): number | undefined => {
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < 1900 || v > 2100) return undefined
+        return v
+      }
+      const father = validate(rawParent.father)
+      const mother = validate(rawParent.mother)
+      if (father !== undefined || mother !== undefined) {
+        parentBirthYears = { father, mother }
+      }
+    }
+
     const snapshot = buildChartPipelineDebugSnapshot(chartData, {
       affairType: affairType as MatterType,
       affair,
       targetYear,
       partnerBirthYear: partnerBirthYear ?? null,
+      parentBirthYears,
     })
 
     return NextResponse.json({ ok: true, data: snapshot })

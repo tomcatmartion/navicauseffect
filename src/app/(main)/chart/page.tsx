@@ -77,6 +77,7 @@ export default function ChartPage() {
     solar?: boolean;
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
 
   const chartDataForPipeline = useMemo(() => {
     if (!astrolabe || !birthData) return null;
@@ -152,6 +153,7 @@ export default function ChartPage() {
           setHoroscope(horo);
           setTrueSolarTimeInfo(saved.trueSolarTimeInfo ?? "");
         }
+          setParentBirthYears(saved.parentBirthYears);
       } catch {
         // 恢复失败则忽略
       }
@@ -169,6 +171,8 @@ export default function ChartPage() {
     isLeapMonth?: boolean;
     city: string;
     trueSolarTimeInfo: string;
+    parentBirthYears?: { father?: number; mother?: number };
+    parentZodiacs?: { father?: string; mother?: string };
   }) => {
     setIsGenerating(true);
     try {
@@ -208,6 +212,7 @@ export default function ChartPage() {
 
       // 必须先 setBirthData，再渲染 AI 分析面板（否则显示"暂无出生数据"）
       setBirthData(birthInfo);
+      setParentBirthYears(data.parentBirthYears);
 
       setAstrolabe(result);
       setTrueSolarTimeInfo(data.trueSolarTimeInfo);
@@ -220,6 +225,8 @@ export default function ChartPage() {
       sessionStorage.setItem(CHART_STATE_KEY, JSON.stringify({
         ...birthInfo,
         trueSolarTimeInfo: data.trueSolarTimeInfo,
+        parentBirthYears: data.parentBirthYears,
+        parentZodiacs: data.parentZodiacs,
       }));
     } catch (err) {
       console.error("排盘错误:", err);
@@ -328,7 +335,7 @@ export default function ChartPage() {
           {/* 规则解析 */}
           <div className="w-full flex-none">
             {birthData ? (
-              <ZiweiAnalysisPanel birthData={birthData} chartData={chartDataForPipeline} />
+              <ZiweiAnalysisPanel birthData={birthData} chartData={chartDataForPipeline} parentBirthYears={parentBirthYears} />
             ) : (
               <div className="p-8 text-center text-muted-foreground">
                 暂无出生数据，请重新排盘
@@ -340,6 +347,7 @@ export default function ChartPage() {
           <div className="flex-1 min-h-0">
             <DualChatPanel
               chartData={chartDataForPipeline}
+              parentBirthYears={parentBirthYears}
             />
           </div>
         </div>

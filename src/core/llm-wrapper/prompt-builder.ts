@@ -7,6 +7,7 @@
 
 import type { IR, IRStage1, IRStage2, IRStage3or4 } from '../types'
 import { isIRStage1, isIRStage2, isIRStage3or4 } from './ir-schema'
+import { yearToGan, yearToZhi, yearToZodiac } from '../utils/gan-zhi'
 import { loadPromptTemplates, type PromptTemplates } from './prompt-config-loader'
 
 // ═══════════════════════════════════════════════════════════════════
@@ -376,7 +377,9 @@ ${scores}
 格局：${patterns || '无'}
 原局四化：${sihua}
 特殊叠加：${overlaps || '无'}
-父母信息：${ir.hasParentInfo ? '有' : '无'}`
+父母信息：${ir.hasParentInfo
+    ? `父亲${ir.parentBirthYears?.father ? `${ir.parentBirthYears.father}年（${yearToZodiac(ir.parentBirthYears.father)}）生年干${yearToGan(ir.parentBirthYears.father)}太岁${yearToZhi(ir.parentBirthYears.father)}` : '未提供'}；母亲${ir.parentBirthYears?.mother ? `${ir.parentBirthYears.mother}年（${yearToZodiac(ir.parentBirthYears.mother)}）生年干${yearToGan(ir.parentBirthYears.mother)}太岁${yearToZhi(ir.parentBirthYears.mother)}` : '未提供'}`
+    : '无'}`
 }
 
 function buildStage2Context(ir: IRStage2): string {

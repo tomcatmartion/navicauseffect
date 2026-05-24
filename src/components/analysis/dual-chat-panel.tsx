@@ -23,9 +23,11 @@ interface DualChatPanelProps {
    * 避免对话侧与分析侧因序列化参数不同导致结果不一致。
    */
   chartData: Record<string, unknown> | null;
+  /** 父母出生年份（可选，影响父母四化评分） */
+  parentBirthYears?: { father?: number; mother?: number };
 }
 
-export function DualChatPanel({ chartData }: DualChatPanelProps) {
+export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProps) {
   const { data: session } = useSession();
 
   // ── Hybrid（程序模型混合）状态 ─────────────────────────
@@ -80,6 +82,9 @@ export function DualChatPanel({ chartData }: DualChatPanelProps) {
       body.sessionId = sessionId;
     } else if (chartData) {
       body.chartData = chartData;
+    }
+    if (parentBirthYears) {
+      body.parentBirthYears = parentBirthYears;
     }
 
     try {
@@ -182,7 +187,7 @@ export function DualChatPanel({ chartData }: DualChatPanelProps) {
       setStreaming(false);
       setUserScrolled(false);
     }
-  }, [streaming, chartData, sessionId]);
+  }, [streaming, chartData, sessionId, parentBirthYears]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

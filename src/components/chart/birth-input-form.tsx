@@ -54,6 +54,8 @@ interface BirthInputFormProps {
     isLeapMonth?: boolean;
     city: string;
     trueSolarTimeInfo: string;
+    parentBirthYears?: { father?: number; mother?: number };
+    parentZodiacs?: { father?: string; mother?: string };
   }) => void;
   isLoading?: boolean;
 }
@@ -89,6 +91,19 @@ function getDaysInMonth(year: number, month: number): number {
 
 const thisYear = new Date().getFullYear();
 
+// 生肖计算
+const ZODIAC_ANIMALS = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+function yearToZodiac(year: number): string {
+  return ZODIAC_ANIMALS[((year - 4) % 12 + 12) % 12];
+}
+
+// 父母出生年份选项（1930 到 当前年-15）
+const parentYearOptions = (() => {
+  const years: number[] = [];
+  for (let y = thisYear - 15; y >= 1930; y--) years.push(y);
+  return years;
+})();
+
 export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
   const [solarYear, setSolarYear] = useState("2000");
   const [solarMonth, setSolarMonth] = useState("1");
@@ -103,7 +118,28 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
   const [birthMinute, setBirthMinute] = useState("0");
   const [gender, setGender] = useState("男");
   const [city, setCity] = useState("北京");
+  const [showParentInfo, setShowParentInfo] = useState(false);
+  const [fatherBirthYear, setFatherBirthYear] = useState("1970");
+  const [motherBirthYear, setMotherBirthYear] = useState("1973");
+  const [fatherZodiac, setFatherZodiac] = useState(() => yearToZodiac(1970)); // 狗
+  const [motherZodiac, setMotherZodiac] = useState(() => yearToZodiac(1973)); // 牛
   const [isLunar, setIsLunar] = useState(false);
+
+  // 年份变化时自动重置生肖为当年生肖
+  const handleFatherYearChange = (val: string) => {
+    setFatherBirthYear(val);
+    setFatherZodiac(yearToZodiac(parseInt(val, 10)));
+  };
+  const handleMotherYearChange = (val: string) => {
+    setMotherBirthYear(val);
+    setMotherZodiac(yearToZodiac(parseInt(val, 10)));
+  };
+
+  // 根据选中生肖修正农历年份：选中当年生肖→阳历年=农历年；选中前一年生肖→农历年=阳历年-1
+  const adjustYear = (solarYear: number, zodiac: string): number => {
+    if (zodiac === yearToZodiac(solarYear)) return solarYear;
+    return solarYear - 1;
+  };
   const [useTrueSolar, setUseTrueSolar] = useState(true);
 
   const birthDateSolar = useMemo(() => {
@@ -192,6 +228,14 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
         isLeapMonth,
         city,
         trueSolarTimeInfo,
+        parentBirthYears: showParentInfo ? {
+          father: adjustYear(parseInt(fatherBirthYear, 10), fatherZodiac),
+          mother: adjustYear(parseInt(motherBirthYear, 10), motherZodiac),
+        } : undefined,
+        parentZodiacs: showParentInfo ? {
+          father: fatherZodiac,
+          mother: motherZodiac,
+        } : undefined,
       });
     } else {
       onSubmit({
@@ -201,6 +245,14 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
         isLunar: false,
         city,
         trueSolarTimeInfo,
+        parentBirthYears: showParentInfo ? {
+          father: adjustYear(parseInt(fatherBirthYear, 10), fatherZodiac),
+          mother: adjustYear(parseInt(motherBirthYear, 10), motherZodiac),
+        } : undefined,
+        parentZodiacs: showParentInfo ? {
+          father: fatherZodiac,
+          mother: motherZodiac,
+        } : undefined,
       });
     }
   };
@@ -315,6 +367,81 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
               <option value="男">男</option>
               <option value="女">女</option>
             </NativeSelect>
+          </div>
+
+          {/* 父母出生年份（可选） */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">父母出生年份（可选）</Label>
+              <Switch checked={showParentInfo} onCheckedChange={setShowParentInfo} />
+            </div>
+            {showParentInfo && (
+              <>
+                <p className="text-[11px] text-muted-foreground">输入父母的生年生肖，会提升准确率。请根据实际生肖点选。</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 父亲 */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">父亲</Label>
+                    <NativeSelect value={fatherBirthYear} onChange={handleFatherYearChange}>
+                      {parentYearOptions.map((y) => (
+                        <option key={y} value={String(y)}>{y}年</option>
+                      ))}
+                    </NativeSelect>
+                    <div className="flex gap-1">
+                      {(() => {
+                        const fy = parseInt(fatherBirthYear, 10);
+                        const cur = yearToZodiac(fy);
+                        const prev = yearToZodiac(fy - 1);
+                        return [cur, prev].map((z) => (
+                          <button
+                            key={z}
+                            type="button"
+                            onClick={() => setFatherZodiac(z)}
+                            className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
+                              fatherZodiac === z
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-muted-foreground border-muted-foreground/20 hover:border-primary/50"
+                            }`}
+                          >
+                            {z}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                  {/* 母亲 */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">母亲</Label>
+                    <NativeSelect value={motherBirthYear} onChange={handleMotherYearChange}>
+                      {parentYearOptions.map((y) => (
+                        <option key={y} value={String(y)}>{y}年</option>
+                      ))}
+                    </NativeSelect>
+                    <div className="flex gap-1">
+                      {(() => {
+                        const my = parseInt(motherBirthYear, 10);
+                        const cur = yearToZodiac(my);
+                        const prev = yearToZodiac(my - 1);
+                        return [cur, prev].map((z) => (
+                          <button
+                            key={z}
+                            type="button"
+                            onClick={() => setMotherZodiac(z)}
+                            className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
+                              motherZodiac === z
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-muted-foreground border-muted-foreground/20 hover:border-primary/50"
+                            }`}
+                          >
+                            {z}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {!isLunar && (

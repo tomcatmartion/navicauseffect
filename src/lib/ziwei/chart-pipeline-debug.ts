@@ -23,13 +23,16 @@ import {
   STAGE3_HINT,
   STAGE4_HINT,
 } from '@/core/llm-wrapper/prompt-builder'
-import { getDunGan } from '@/core/sihua-calculator/tables'
 import type { TianGan, DiZhi, PalaceBrightness } from '@/core/types'
 import { PALACE_NAMES } from '@/core/types'
 import type { VirtualChart } from '@/core/tai-sui-rua-gua/virtual-chart'
 import { getWeakerBrightness } from '@/core/energy-evaluator/scoring-flow'
 import { getFlankingDecay } from '@/core/knowledge-dict/query'
 import { evaluateLimitPatterns } from '@/core/limit-analyzer/limit-pattern-evaluator'
+import { getShengNianSihua, getDunGanSihua } from '@/core/sihua-calculator'
+import { getDunGan, getSihuaTable } from '@/core/sihua-calculator/tables'
+// getDunGan 也在 sihua-calculator/index 中 re-export，避免重复导入
+import { yearToGan, yearToZhi, yearToZodiac } from '@/core/utils/gan-zhi'
 import { resolveLiuNianGan } from '@/core/limit-analyzer/fortune-engine'
 import type { LimitPatternsOutput, LimitPatternResult } from '@/core/types'
 
@@ -42,6 +45,8 @@ export interface ChartPipelineDebugOptions {
   targetYear: number
   /** 互动调试：对方生年；不传则阶段四走单方分析 */
   partnerBirthYear?: number | null
+  /** 父母出生年份（可选，影响父母四化评分） */
+  parentBirthYears?: { father?: number; mother?: number }
 }
 
 /** 与 `ziwei-analysis-panel` 格局列表展示兼容 */
@@ -282,6 +287,11 @@ export interface ChartPipelineDebugSnapshot {
       stage4: string
     }
   }
+  /** 父母四化元数据（干支 + 化禄/化忌/遁干星名） */
+  parentSihuaMeta?: {
+    father?: { year: number; gan: string; zhi: string; zodiac: string; luStar: string; jiStar: string; dunGan: string; dunLuStar: string; dunJiStar: string }
+    mother?: { year: number; gan: string; zhi: string; zodiac: string; luStar: string; jiStar: string; dunGan: string; dunLuStar: string; dunJiStar: string }
+  }
 }
 
 function patternLevelToEffect(level: PatternLevel): 'positive' | 'negative' | 'mixed' {
@@ -387,6 +397,7 @@ export function buildChartPipelineDebugSnapshot(
     matterType: opts.affairType,
     targetYear: opts.targetYear,
     partnerBirthYear: opts.partnerBirthYear,
+    parentBirthYears: opts.parentBirthYears,
   })
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1170,6 +1181,7 @@ export function buildChartPipelineDebugSnapshot(
     allPatterns: stage1.allPatterns,
     mergedSihua: stage1.mergedSihua,
     hasParentInfo: stage1.hasParentInfo,
+    parentBirthYears: opts.parentBirthYears,
     chartSnapshot,
   }
   const ir2: IRStage2 = {
@@ -1253,5 +1265,40 @@ export function buildChartPipelineDebugSnapshot(
       },
       prompts,
     },
+    // 父母四化元数据（供前端展示具体干支和星曜）
+    parentSihuaMeta: buildParentSihuaMeta(stage1.scoringCtx, opts.parentBirthYears),
+  }
+}
+
+/** 构建父母四化元数据（干支 + 化禄/化忌/遁干星名） */
+function buildParentSihuaMeta(
+  scoringCtx: { fatherGan?: string; fatherTaiSuiZhi?: string; motherGan?: string; motherTaiSuiZhi?: string },
+  parentBirthYears?: { father?: number; mother?: number },
+) {
+  type G = import('@/core/types').TianGan
+  type Z = import('@/core/types').DiZhi
+
+  const build = (year: number, gan: string | undefined, zhi: string | undefined) => {
+    if (!gan || !zhi) return undefined
+    const sn = getShengNianSihua(gan as G)
+    const dg = getDunGan(gan as G, zhi as Z)
+    const dn = getSihuaTable()[dg as G]
+    return {
+      year,
+      gan,
+      zhi,
+      zodiac: yearToZodiac(year),
+      luStar: String(sn.禄),
+      jiStar: String(sn.忌),
+      dunGan: dg,
+      dunLuStar: dn ? String(dn.禄) : '',
+      dunJiStar: dn ? String(dn.忌) : '',
+    }
+  }
+
+  if (!parentBirthYears?.father && !parentBirthYears?.mother) return undefined
+  return {
+    father: parentBirthYears.father ? build(parentBirthYears.father, scoringCtx.fatherGan, scoringCtx.fatherTaiSuiZhi) : undefined,
+    mother: parentBirthYears.mother ? build(parentBirthYears.mother, scoringCtx.motherGan, scoringCtx.motherTaiSuiZhi) : undefined,
   }
 }

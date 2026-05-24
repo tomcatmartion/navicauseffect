@@ -58,5 +58,9 @@ export const ReadingRequestSchema = z.object({
     palaces: z.array(z.record(z.string(), z.unknown())).min(12),
     birthInfo: z.record(z.string(), z.unknown()).optional(),
     horoscope: z.record(z.string(), z.unknown()).optional(),
+  }).passthrough().optional(),
+  parentBirthYears: z.object({
+    father: z.number().int().min(1900).max(2100).optional(),
+    mother: z.number().int().min(1900).max(2100).optional(),
   }).optional(),
 })
