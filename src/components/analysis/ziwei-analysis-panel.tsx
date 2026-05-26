@@ -125,6 +125,15 @@ interface PipelineSnapshot {
       allStars: Array<{ name: string; sihua?: string; sihuaSource?: string }>;
       formula: string;
       relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>;
+      flankingPairs?: Array<{
+        pairName: string;
+        displayName: string;
+        pairType: '吉夹' | '煞夹';
+        leftLabel: string;
+        rightLabel: string;
+        decay: number;
+        sameSourceLabel: string;
+      }>;
       /** 六步评分流程（基于 scoring.json formula 部分） */
       sixSteps?: {
         step0_emptyBorrow?: {
@@ -1000,6 +1009,34 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                                 }>·{s.sihua}</span>
                               )}
                             </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 夹宫成对（含同源判定） */}
+                    {debug.flankingPairs && debug.flankingPairs.length > 0 && (
+                      <div>
+                        <span className="font-medium text-primary/80">夹宫成对：</span>
+                        <div className="mt-1 space-y-1">
+                          {debug.flankingPairs.map((fp, idx) => (
+                            <div
+                              key={`${fp.pairName}-${idx}`}
+                              className={`text-[11px] rounded px-2 py-1 border ${
+                                fp.pairType === '吉夹'
+                                  ? 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/30'
+                                  : 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/30'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <Badge variant="outline" className="text-[9px] px-1 py-0">
+                                  {fp.displayName}
+                                </Badge>
+                                <span className="text-muted-foreground">{fp.leftLabel} ↔ {fp.rightLabel}</span>
+                                <span className="text-muted-foreground">衰减×{fp.decay.toFixed(2)}</span>
+                              </div>
+                              <div className="text-muted-foreground mt-0.5">{fp.sameSourceLabel}</div>
+                            </div>
                           ))}
                         </div>
                       </div>

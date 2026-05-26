@@ -36,6 +36,11 @@ import { getSkeletonBrightness } from './skeleton'
 import { getDunGanSihua, getShengNianSihua } from '../sihua-calculator'
 import type { SihuaMap } from '../types'
 import { getScoringParams, getPatternDefinition, getPatternMultiplierByLevel } from '../knowledge-dict/loader'
+import {
+  getAllFlankingPairs,
+  getFlankingIndices,
+  getWeakerBrightness,
+} from './jiagong-matcher'
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -150,18 +155,9 @@ export function getTrineIndices(idx: number): [number, number] {
 }
 
 /**
- * 获取夹宫索引（左右邻宫）
- *
- * 方向约定（scoring.json params.directionConvention）：
- * - 左 = counterClockwise（逆时针方向为左）= 索引 +1
- * - 右 = clockwise（顺时针方向为右）= 索引 -1
- *
- * 例如：本宫为丑(1)，则 left = 寅(2)（逆时针前一宫），right = 子(0)（顺时针前一宫）
+ * 获取夹宫索引（左右邻宫）—  re-export，实现见 jiagong-matcher
  */
-export function getFlankingIndices(idx: number): [number, number] {
-  // left = idx + 1, right = idx - 1
-  return [(idx + 1) % 12, (idx - 1 + 12) % 12]
-}
+export { getFlankingIndices, getWeakerBrightness } from './jiagong-matcher'
 
 /** 获取三方四正所有宫位索引（本宫 + 对宫 + 两个三合宫） */
 function getSanFangSiZhengIndices(idx: number): number[] {
@@ -170,118 +166,7 @@ function getSanFangSiZhengIndices(idx: number): number[] {
   return [idx, opp, t1, t2]
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 夹宫成对判定
-// ═══════════════════════════════════════════════════════════════════
-
-/** 夹宫成对结果 */
-interface FlankingPair {
-  /** 成对名称（如"昌曲夹"） */
-  pairName: string
-  /** 左侧星曜名称 */
-  leftStar: string
-  /** 右侧星曜名称 */
-  rightStar: string
-  /** 动态衰减系数 */
-  decay: number
-}
-
-/**
- * 获取所有成对的夹宫组合（符合 jiagongValidPairs）
- *
- * 根据 scoring.json params 规定：
- * - 成对星曜必须分居左右两侧一宫，缺一不可
- * - 仅一侧出现 → 不构成夹
- * - 非成对组合的两颗星分处两侧 → 不构成夹
- * - 多对可以同时成立（如左右夹+昌曲夹同时存在）
- *
- * @param palaceIdx 本宫索引
- * @param ctx 评分上下文
- * @param pairType 夹宫类型过滤：'吉夹' | '煞夹' | undefined（不过滤）
- * @returns 所有成对的夹宫组合
- */
-function getAllFlankingPairs(
-  palaceIdx: number,
-  ctx: ScoringContext,
-  pairType?: '吉夹' | '煞夹',
-): FlankingPair[] {
-  const [flankLeftIdx, flankRightIdx] = getFlankingIndices(palaceIdx)
-  const leftPalace = ctx.palaces[flankLeftIdx]
-  const rightPalace = ctx.palaces[flankRightIdx]
-
-  if (!leftPalace || !rightPalace) {
-    return []
-  }
-
-  const leftStars = new Set(leftPalace.stars.map(s => s.name))
-  const rightStars = new Set(rightPalace.stars.map(s => s.name))
-
-  const params = getScoringParams()
-  const pairs = params.jiagongValidPairs?.pairs ?? []
-  const result: FlankingPair[] = []
-
-  for (const pair of pairs) {
-    // 如果指定了类型，过滤匹配
-    if (pairType && pair.type !== pairType) {
-      continue
-    }
-
-    let forward = false
-    let reverse = false
-
-    if (isSihuaType(pair.left) || isSihuaType(pair.right)) {
-      // 四化夹：left/right 为化禄/化权/化科/化忌，通过 star.sihua 属性匹配
-      // 支持双同夹（双禄夹、双忌夹）和混合夹（科权夹、禄权夹等）
-      // 正向：左侧夹宫有 left 对应四化，右侧夹宫有 right 对应四化
-      forward = leftPalace.stars.some(s => s.sihua === pair.left)
-        && rightPalace.stars.some(s => s.sihua === pair.right)
-      // 反向：左侧夹宫有 right 对应四化，右侧夹宫有 left 对应四化
-      reverse = leftPalace.stars.some(s => s.sihua === pair.right)
-        && rightPalace.stars.some(s => s.sihua === pair.left)
-    } else {
-      // 普通星曜夹：通过星曜名称匹配
-      // 正向检查：leftStar在左夹宫，rightStar在右夹宫
-      forward = leftStars.has(pair.left) && rightStars.has(pair.right)
-      // 反向检查：rightStar在左夹宫，leftStar在右夹宫（互换也算夹）
-      reverse = leftStars.has(pair.right) && rightStars.has(pair.left)
-    }
-
-    if (forward || reverse) {
-      const selfBrightness = ctx.palaces[palaceIdx].brightness
-      const leftBrightness = leftPalace.brightness
-      const rightBrightness = rightPalace.brightness
-      // 取左右夹宫中较弱的亮度计算衰减（保守策略）
-      const flankBrightness = getWeakerBrightness(leftBrightness, rightBrightness)
-      const decay = getFlankingDecay(selfBrightness, flankBrightness)
-      result.push({
-        pairName: pair.name,
-        leftStar: forward ? pair.left : pair.right,
-        rightStar: forward ? pair.right : pair.left,
-        decay,
-      })
-    }
-  }
-
-  return result
-}
-
-/** 判断值是否为四化类型（化禄/化权/化科/化忌） */
-const SIHUA_TYPES = new Set(['化禄', '化权', '化科', '化忌'])
-function isSihuaType(value: string): boolean {
-  return SIHUA_TYPES.has(value)
-}
-
-/** 取两个亮度中较弱的一个 */
-export function getWeakerBrightness(a: PalaceBrightness, b: PalaceBrightness): PalaceBrightness {
-  const order: PalaceBrightness[] = ['极旺', '旺', '平', '陷', '极弱', '空']
-  const idxA = order.indexOf(a)
-  const idxB = order.indexOf(b)
-  return idxA >= idxB ? a : b
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 评分参数加载
-// ═══════════════════════════════════════════════════════════════════
+// 夹宫判定见 jiagong-matcher.ts（getAllFlankingPairs / getFlankingIndices / getWeakerBrightness）
 
 /** 四舍五入到2位小数 */
 function round2(n: number): number {
@@ -838,6 +723,10 @@ export function evaluateSinglePalace(palaceIndex: number, ctx: ScoringContext): 
     warmCoolLabel: state.newBrightness,
     bonusDetails,
     penaltyDetails,
+    flankingPairs: [
+      ...getAllFlankingPairs(palaceIndex, ctx, '吉夹'),
+      ...getAllFlankingPairs(palaceIndex, ctx, '煞夹'),
+    ],
   } as PalaceScore
 }
 

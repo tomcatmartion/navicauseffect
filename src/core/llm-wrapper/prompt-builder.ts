@@ -367,6 +367,18 @@ function buildStage1Context(ir: IRStage1): string {
     .map(o => `${o.type}: ${o.star}`)
     .join('；')
 
+  const flankingLines = ir.palaceScores
+    .map(p => {
+      const pairs = p.flankingPairs ?? []
+      if (pairs.length === 0) return null
+      const desc = pairs
+        .map(fp => `${fp.displayName}[${fp.pairType}] ${fp.leftLabel}↔${fp.rightLabel} 衰减×${fp.decay.toFixed(2)}｜${fp.sameSourceLabel}`)
+        .join('；')
+      return `${p.palace}(${p.diZhi})：${desc}`
+    })
+    .filter(Boolean)
+    .join('\n')
+
   return `阶段一：宫位评分结果
 
 【命盘快照】
@@ -377,6 +389,8 @@ ${scores}
 格局：${patterns || '无'}
 原局四化：${sihua}
 特殊叠加：${overlaps || '无'}
+夹宫成对（含同源判定）：
+${flankingLines || '无'}
 父母信息：${ir.hasParentInfo
     ? `父亲${ir.parentBirthYears?.father ? `${ir.parentBirthYears.father}年（${yearToZodiac(ir.parentBirthYears.father)}）生年干${yearToGan(ir.parentBirthYears.father)}太岁${yearToZhi(ir.parentBirthYears.father)}` : '未提供'}；母亲${ir.parentBirthYears?.mother ? `${ir.parentBirthYears.mother}年（${yearToZodiac(ir.parentBirthYears.mother)}）生年干${yearToGan(ir.parentBirthYears.mother)}太岁${yearToZhi(ir.parentBirthYears.mother)}` : '未提供'}`
     : '无'}`

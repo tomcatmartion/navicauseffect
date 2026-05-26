@@ -134,6 +134,9 @@ export interface JiagongValidPair {
   left: string
   right: string
   type: string
+  /** 四化夹是否要求同源（命主：生年+遁干算同源） */
+  sameSourceRequired?: boolean
+  note?: string
 }
 
 /** 四化来源条目 */

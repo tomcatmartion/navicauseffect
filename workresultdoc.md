@@ -6,6 +6,21 @@
 | ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 2026-05-25 | 父母出生年份输入功能 | 1) 新建 gan-zhi.ts 纯工具函数（yearToGan/yearToZhi/yearToZodiac）；2) iztro-reader 接受 parentBirthYears，注入父母干支到 ScoringContext，激活 step 2.4-2.7/4.4-4.7 父母四化加减分；3) 前端表单：年份+生肖拆分选择器，用户选年后点选正确生肖（春节前后跨两生肖年），根据选中生肖自动修正农历年份；4) 宫位能级详情展示父母四化具体干支和星曜名（如「父亲己干化禄·武曲」）；5) chart-pipeline-debug 新增 parentSihuaMeta 元数据；6) IR/Prompt 展示父母生年干支信息；7) ReadingRequestSchema 加 .passthrough() 保留 rawDates，修复太岁宫位错误；8) sessionStorage 持久化父母生肖选择。 | 新增 |
 | 2026-05-24 | AI prompt 太岁宫位修复 | ReadingRequestSchema（Zod）只白名单 palaces/birthInfo/horoscope，strip 了 rawDates/chineseDate/solarDate，导致 iztro-reader 无法从农历数据覆盖生年干支，退回阳历直接算（2000→庚辰，实际己卯）。给 chartData 的 Zod object 加 .passthrough() 修复。 | 修复 |
+| 2026-05-24 | 格局判定系统性 bug 修复 | 修复三大格局判定 bug：1) 四化被当星名处理导致误匹配；2) AND/OR 条件语义错误（要求所有子条件同宫才算满足）；3) 吉煞引动条件过于宽松。修正后格局识别准确率显著提升。 | 修复 |
+| 2026-05-24 | 宫位能级展示修复 + API 清理 | 1) 宫位能级详情页展示修复，对齐评分引擎实际输出；2) 清理遗留 API 路由和冗余模块；3) 删除 pattern_library.json 冗余 definitions 段。 | 修复 |
+| 2026-05-20 | config 层迁移入 src/core | 将 config 配置层从根目录迁移入 src/core，增强性格分析管线，清理遗留调试脚本，统一项目目录结构。 | 重构 |
+| 2026-05-19 | 清理遗留 RAG/分析模块 | 清理遗留的 RAG/skills/hybrid/zvec/analysis 模块及关联管理页面，精简代码库，减少维护负担。 | 重构 |
+| 2026-05-15 | 流式输出 JSON 过滤与 AI 超时 | 1) 流式输出过滤尾部 JSON 块（intent/memory_update），避免 AI 回复中显示原始数据；2) 延迟缓冲方案可靠过滤；3) AI 请求超时从 30s 提升到 120s，避免 Hybrid 长回复中断。 | 修复 |
+| 2026-05-14 | Hybrid RAG 管道 + 分析面板重构 | 1) Hybrid RAG 管道实现（知识库检索 + AI 生成）；2) AI 模型管理后台增强；3) 分析面板重构（统一分析入口）；4) 主题系统支持。 | 新增 |
+| 2026-05-14 | 评分/路由配置数据驱动化 | 1) 评分权重和路由规则从硬编码改为数据驱动（配置文件/数据库）；2) 会话管理增强（历史记录、上下文保持）。 | 重构 |
+| 2026-05-14 | 构建问题修复 | 1) 添加 lunar-lite 依赖和 .npmrc 配置；2) 修复 TS 严格模式类型错误；3) pnpm 提升配置修复；4) 修复 rebase 导致的缩进错乱。 | 修复 |
+| 2026-05-04 | 情感分析功能 | 1) 情感分析功能开发（文本情感检测与分类）；2) 多 AI Provider 优化（统一接口、错误处理、降级策略）。 | 新增 |
+| 2026-05-02 | ICP 备案信息 | 添加 ICP 备案信息到页面底部，满足合规要求。 | 新增 |
+| 2026-05-01 | step4 优化 + 产品改名 | 1) 参照 v2 优化解盘 SYSTEM_PROMPT 和 assembleContext，提升 AI 回复质量；2) 产品从"紫微心理"改名为"微著"，"紫微命理排盘"改为"微著排盘"。 | 优化 |
+| 2026-04-30 | 方案C 部署脚本与生产部署 | 1) 方案C 部署脚本（pnpm + 服务器构建）；2) 修复 pnpm 在腾讯云无法安装问题（改用 npm 优先）；3) 改用 nohup 直接启动替代 PM2；4) 完善部署指南文档。 | 部署 |
+| 2026-04-29 | RAG 意图识别 + ChatPanel UX 优化 | 1) RAG 意图识别功能（分析类型自动分类）；2) ChatPanel UX 优化；3) 排盘默认时间修复；4) 移除非流式自动聚焦；5) suppressHydrationWarning 修复。 | 新增 |
+| 2026-04-28 | 生产部署工具链 + RAG 管道增强 | 1) 生产部署工具链完善；2) RAG 管道增加年份/运限数据支持；3) 调试面板增强；4) imemory 教训补录。 | 优化 |
+| 2026-04-27 | 四步 RAG 精准召回管道 | 1) 四步 RAG 精准召回管道实现（查询→检索→重排→生成）；2) ChatPanel 接入 RAG；3) 向量化修复；4) Bug 修复。 | 新增 |
 | 2026-04-25 | 首页性能优化 | 1) JWT 回调优化：仅登录时查库，后续从 token 读取，消除每次页面加载的 DB 查询；2) 字体子集化：4.4MB→1.3MB（覆盖 3900+ 字符），减少 70% 带宽；3) Suspense 包裹 Header/MobileNav + 骨架屏；4) 新建 (main) 路由组 loading.tsx | 优化 |
 | 2026-04-25 | 上下文优化与 Skills 管理 | 1) claude-mem 注入量 50→15 条观察、会话数 10→3；2) 移除 23 个不相关 skill 到 _disabled 备份；3) 项目/全局 CLAUDE.md 精简；4) 新安装 prisma/context7/feature-dev/security-guidance 插件，重新启用 product-analysis/competitors-analysis/prompt-optimizer/github-ops/scrapling-skill | 优化 |
 | 2026-04-24 | 知识库目录迁移与四库架构 | 1) 知识库数据目录从 `logicdoc/` 迁移至 `sysfiles/sysknowledge/`，标签库从 `systag/` 迁移至 `sysfiles/systag/`；2) 建立四库架构：systag（标签库）、sysknowledge（知识库）、sysrules（规则库）、systech（技法库），外加 sysmapping（映射表）；3) 更新所有代码中的数据路径引用（20+文件）、向量库路径（logicdoc_dim* → sysknowledge_dim*）、索引版本（sysknowledge-v3）；4) 更新文档（CLAUDE.md、CONTEXT.md、文件对照表）。 | 重构   |

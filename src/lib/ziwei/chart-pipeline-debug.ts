@@ -23,11 +23,9 @@ import {
   STAGE3_HINT,
   STAGE4_HINT,
 } from '@/core/llm-wrapper/prompt-builder'
-import type { TianGan, DiZhi, PalaceBrightness } from '@/core/types'
+import type { TianGan, DiZhi } from '@/core/types'
 import { PALACE_NAMES } from '@/core/types'
 import type { VirtualChart } from '@/core/tai-sui-rua-gua/virtual-chart'
-import { getWeakerBrightness } from '@/core/energy-evaluator/scoring-flow'
-import { getFlankingDecay } from '@/core/knowledge-dict/query'
 import { evaluateLimitPatterns } from '@/core/limit-analyzer/limit-pattern-evaluator'
 import { getShengNianSihua, getDunGanSihua } from '@/core/sihua-calculator'
 import { getDunGan, getSihuaTable } from '@/core/sihua-calculator/tables'
@@ -115,6 +113,16 @@ export interface UiPalaceRow {
     formula: string
     /** 参与计算的宫位（三方四正+夹宫） */
     relatedPalaces: Array<{ palace: string; diZhi: string; role: string }>
+    /** 成立的夹宫成对（含命主同源判定） */
+    flankingPairs?: Array<{
+      pairName: string
+      displayName: string
+      pairType: '吉夹' | '煞夹'
+      leftLabel: string
+      rightLabel: string
+      decay: number
+      sameSourceLabel: string
+    }>
     /** 锚定宫格局（以该宫为 anchor 时成格列表） */
     anchorPatterns?: Array<{ name: string; level: string; multiplier: number }>
     /** 六步评分流程（基于 scoring.json formula 部分） */
@@ -612,63 +620,24 @@ export function buildChartPipelineDebugSnapshot(
         }
       }
 
-      // 夹宫处理：只有成对出现时才显示，使用动态衰减系数
-      const flankLeftIdx = (palaceIndex + 1) % 12
-      const flankRightIdx = (palaceIndex - 1 + 12) % 12
-      const leftPalace = stage1.scoringCtx.palaces[flankLeftIdx]
-      const rightPalace = stage1.scoringCtx.palaces[flankRightIdx]
-
-      if (leftPalace && rightPalace) {
-        const leftStars = new Set(leftPalace.stars.map(s => s.name))
-        const rightStars = new Set(rightPalace.stars.map(s => s.name))
-
-        // 计算动态衰减系数
-        const selfPalace = stage1.scoringCtx.palaces[palaceIndex]
-        const selfBrightness = (selfPalace?.brightness ?? '平') as PalaceBrightness
-        const flankBrightness = getWeakerBrightness(
-          (leftPalace.brightness ?? '平') as PalaceBrightness,
-          (rightPalace.brightness ?? '平') as PalaceBrightness
-        )
-        const decay = getFlankingDecay(selfBrightness, flankBrightness)
-
-        // 吉夹检查（含反向）
-        const jiPairs = [
-          { name: '昌曲夹', left: '文昌', right: '文曲' },
-          { name: '魁钺夹', left: '天魁', right: '天钺' },
-          { name: '左右夹', left: '左辅', right: '右弼' },
-          { name: '紫府夹', left: '紫微', right: '天府' },
-        ]
-        for (const pair of jiPairs) {
-          const forward = leftStars.has(pair.left) && rightStars.has(pair.right)
-          const reverse = leftStars.has(pair.right) && rightStars.has(pair.left)
-          if (forward || reverse) {
-            const val = 0.5 * decay // 使用动态衰减系数
-            bonusBreakdown.push({
-              source: `夹宫·${leftPalace.diZhi}-${rightPalace.diZhi}`,
-              value: val,
-              detail: `${pair.name}（${forward ? pair.left + '·' + pair.right : pair.right + '·' + pair.left}）× ${decay}衰减 = +${val.toFixed(2)}`,
-            })
-          }
-        }
-
-        // 煞夹检查（含反向）
-        const shaPairs = [
-          { name: '羊陀夹', left: '擎羊', right: '陀罗' },
-          { name: '空劫夹', left: '地空', right: '地劫' },
-          { name: '火铃夹', left: '火星', right: '铃星' },
-        ]
-        for (const pair of shaPairs) {
-          const forward = leftStars.has(pair.left) && rightStars.has(pair.right)
-          const reverse = leftStars.has(pair.right) && rightStars.has(pair.left)
-          if (forward || reverse) {
-            const baseVal = -0.5 * decay // 使用动态衰减系数
-            const val = baseVal * intensityFactor
-            penaltyBreakdown.push({
-              source: `夹宫·${leftPalace.diZhi}-${rightPalace.diZhi}`,
-              value: val,
-              detail: `${pair.name}（${forward ? pair.left + '·' + pair.right : pair.right + '·' + pair.left}）× ${decay}衰减 × ${intensityFactor}强度 = ${val.toFixed(2)}`,
-            })
-          }
+      // 夹宫：与 scoring-flow 共用 jiagong-matcher（含命主同源判定）
+      const flankingPairs = ps.flankingPairs ?? []
+      for (const pair of flankingPairs) {
+        if (pair.pairType === '吉夹') {
+          const val = 0.5 * pair.decay
+          bonusBreakdown.push({
+            source: `夹宫·${pair.leftLabel}↔${pair.rightLabel}`,
+            value: val,
+            detail: `${pair.displayName}（${pair.leftLabel}↔${pair.rightLabel}）× ${pair.decay}衰减｜${pair.sameSourceLabel} = +${val.toFixed(2)}`,
+          })
+        } else {
+          const baseVal = -0.5 * pair.decay
+          const val = baseVal * intensityFactor
+          penaltyBreakdown.push({
+            source: `夹宫·${pair.leftLabel}↔${pair.rightLabel}`,
+            value: val,
+            detail: `${pair.displayName}（${pair.leftLabel}↔${pair.rightLabel}）× ${pair.decay}衰减 × ${intensityFactor}强度｜${pair.sameSourceLabel} = ${val.toFixed(2)}`,
+          })
         }
       }
     }
@@ -801,6 +770,7 @@ export function buildChartPipelineDebugSnapshot(
         })) ?? [],
         formula,
         relatedPalaces,
+        flankingPairs: ps.flankingPairs ?? [],
         anchorPatterns: anchorPatterns.map(p => ({
           name: p.name,
           level: p.level,
@@ -931,40 +901,31 @@ export function buildChartPipelineDebugSnapshot(
   const rightFlankIdx = (mingIdx - 1 + 12) % 12
   const leftFlank = stage1.scoringCtx.palaces[leftFlankIdx]
   const rightFlank = stage1.scoringCtx.palaces[rightFlankIdx]
+  const mingFlankingPairs = stage1.palaceScores[mingIdx]?.flankingPairs ?? []
+
+  const flankingEffectByName: Record<string, string> = {
+    '昌曲夹': '聪明机智，文采出众，学习能力强，思维敏捷',
+    '魁钺夹': '贵人运强，逢凶化吉，人缘极佳，易得助力',
+    '左右夹': '辅助力强，人缘极佳，善于协调，团队合作佳',
+    '禄夹格': '财禄汇聚，资源易得，发展较为顺遂',
+    '双禄夹': '双禄汇聚，福泽深厚，行事多遇顺遂之机',
+    '双权夹': '权柄两侧，主导意识强，决策魄力突出',
+    '双科夹': '声名两侧，利于学习考试与口碑积累',
+    '羊陀夹': '性格急躁，易有波折，行事冲动，需注意情绪管理',
+    '空劫夹': '思想独特，但易有虚无感，理想主义，需脚踏实地',
+    '火铃夹': '脾气急躁，行动力强但易冲动，爆发力强但持久性弱',
+    '双忌夹': '两侧化忌，压力与执念较重，需留意情绪与决策',
+  }
 
   const flankingInfluence = (() => {
-    if (!leftFlank || !rightFlank) return '夹宫数据不完整'
-
-    const leftStars = new Set(leftFlank.stars.map(s => s.name))
-    const rightStars = new Set(rightFlank.stars.map(s => s.name))
-
-    // 吉夹
-    const jiPairs = [
-      { name: '昌曲夹', left: '文昌', right: '文曲', effect: '聪明机智，文采出众，学习能力强，思维敏捷' },
-      { name: '魁钺夹', left: '天魁', right: '天钺', effect: '贵人运强，逢凶化吉，人缘极佳，易得助力' },
-      { name: '左右夹', left: '左辅', right: '右弼', effect: '辅助力强，人缘极佳，善于协调，团队合作佳' },
-      { name: '紫府夹', left: '紫微', right: '天府', effect: '贵气天成，领导力强，稳重有魄力，事业易成' },
-    ]
-    for (const pair of jiPairs) {
-      if ((leftStars.has(pair.left) && rightStars.has(pair.right)) ||
-          (leftStars.has(pair.right) && rightStars.has(pair.left))) {
-        return `${pair.name}：${pair.effect}`
-      }
+    if (mingFlankingPairs.length > 0) {
+      return mingFlankingPairs
+        .map(p => {
+          const effect = flankingEffectByName[p.displayName] ?? flankingEffectByName[p.pairName] ?? '形成夹宫之势，影响该宫发展'
+          return `${p.displayName}（${p.sameSourceLabel}；${p.leftLabel}↔${p.rightLabel}）：${effect}`
+        })
+        .join('；')
     }
-
-    // 煞夹
-    const shaPairs = [
-      { name: '羊陀夹', left: '擎羊', right: '陀罗', effect: '性格急躁，易有波折，行事冲动，需注意情绪管理' },
-      { name: '空劫夹', left: '地空', right: '地劫', effect: '思想独特，但易有虚无感，理想主义，需脚踏实地' },
-      { name: '火铃夹', left: '火星', right: '铃星', effect: '脾气急躁，行动力强但易冲动，爆发力强但持久性弱' },
-    ]
-    for (const pair of shaPairs) {
-      if ((leftStars.has(pair.left) && rightStars.has(pair.right)) ||
-          (leftStars.has(pair.right) && rightStars.has(pair.left))) {
-        return `${pair.name}：${pair.effect}`
-      }
-    }
-
     return '无特殊夹宫影响，性格发展较为平顺'
   })()
 
@@ -1045,7 +1006,9 @@ export function buildChartPipelineDebugSnapshot(
       self: stage2.mingGongTags.selfTags.slice(0, 3).join('、'),
       opposite: stage2.mingGongTags.oppositeTags[0] || '中性投射',
       trine: stage2.mingGongTags.trineTags[0] || '三合支撑一般',
-      flanking: stage2.mingGongTags.flankingTags[0] || '夹宫不成立',
+      flanking: mingFlankingPairs.length > 0
+        ? mingFlankingPairs.map(p => `${p.displayName}(${p.sameSourceLabel})`).join('、')
+        : (stage2.mingGongTags.flankingTags[0] || '夹宫不成立'),
       synthesis: `本宫${stage2.mingGongTags.summary}；对宫${stage2.mingGongTags.oppositeTags[0] || '中性'}；三合${stage2.mingGongTags.trineTags[0] || '支撑一般'}`,
     },
     strengths: [

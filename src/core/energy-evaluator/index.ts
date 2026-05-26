@@ -15,7 +15,14 @@ export {
   getOppositeIndex,
   getTrineIndices,
   getFlankingIndices,
+  getWeakerBrightness,
 } from './scoring-flow'
+export {
+  getAllFlankingPairs,
+  getNativeSihuaHitsInPalace,
+  NATIVE_OWNER_SAME_SOURCE_LABEL,
+  type FlankingPairResult,
+} from './jiagong-matcher'
 export {
   evaluatePalacePatternsOnly,
   buildChartAccessor,

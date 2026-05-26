@@ -220,6 +220,19 @@ export interface PalaceScore {
   bonusDetails: BonusDetails
   /** 减分阶段子步骤详情 */
   penaltyDetails: PenaltyDetails
+  /** 成立的夹宫成对（含命主同源判定） */
+  flankingPairs: FlankingPairScore[]
+}
+
+/** 夹宫成对计分条目 */
+export interface FlankingPairScore {
+  pairName: string
+  displayName: string
+  pairType: '吉夹' | '煞夹'
+  leftLabel: string
+  rightLabel: string
+  decay: number
+  sameSourceLabel: string
 }
 
 /** 基调 */
