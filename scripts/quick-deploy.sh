@@ -60,12 +60,16 @@ sshpass -p "$PW" ssh "$SERVER" "cd $REMOTE && pnpm build 2>&1 | tail -3"
 
 echo "  ✓ 构建完成"
 
-# ─── 步骤 4: 重启 ───
-echo "[4/4] 重启服务..."
+# ─── 步骤 4: 复制静态资源 + 重启 ───
+echo "[4/4] 复制静态资源并重启服务..."
 sshpass -p "$PW" ssh "$SERVER" "
+cd $REMOTE
+mkdir -p .next/standalone/.next
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
 fuser -k 3000/tcp 2>/dev/null
 sleep 2
-cd $REMOTE/.next/standalone
+cd .next/standalone
 HOSTNAME=0.0.0.0 PORT=3000 nohup node server.js > /tmp/next.log 2>&1 &
 sleep 5
 CODE=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)
