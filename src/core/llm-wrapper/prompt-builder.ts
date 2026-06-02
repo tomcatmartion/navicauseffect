@@ -1,313 +1,94 @@
 /**
- * M7: LLM 表达层 — Prompt 组装器
+ * M7: LLM 表达层 — Prompt 组装器（v2）
  *
- * 职责：接收 IR JSON + 知识片段 + 词令模板，组装完整的 Prompt
- * 来源：data/prompt_templates.json（运行时配置）+ 代码内默认值（fallback）
+ * 职责：接收 IR JSON + 知识片段 + 事项数据，组装完整的 Prompt
+ * 来源：data/ziwei-chat-prompt.md + data/System Prompt.md + data/User Prompt.md
+ *
+ * 已废弃：data/prompt_templates.json（不再使用）
  */
 
-import type { IR, IRStage1, IRStage2, IRStage3or4 } from '../types'
+import type { IR, IRStage1, IRStage2, IRStage3or4, MatterType } from '../types'
 import { isIRStage1, isIRStage2, isIRStage3or4 } from './ir-schema'
 import { yearToGan, yearToZhi, yearToZodiac } from '../utils/gan-zhi'
-import { loadPromptTemplates, type PromptTemplates } from './prompt-config-loader'
+import {
+  loadSystemPrompt,
+  loadUnifiedTemplate,
+  type DataFormatPalace,
+  type DataFormatSihuaEntry,
+  type DataFormatTrigger,
+} from './prompt-config-loader'
 
 // ═══════════════════════════════════════════════════════════════════
-// 默认值（当 JSON 加载失败时使用）
+// 缓存 — System Prompt（5秒有效期，避免频繁读磁盘）
 // ═══════════════════════════════════════════════════════════════════
 
-const DEFAULT_SYSTEM_PROMPT = `你是一位温暖、睿智、循循善诱的紫微斗数分析师，与用户的对话风格如同一位了解你、关心你的兄长——不是冷冰冰的问卷填写，而是像老朋友促膝长谈。
+let cachedSystemPrompt: string | null = null
+let systemPromptCacheTime = 0
 
-你的对话方式有以下几个特点：
-1. 温暖有温度——用亲切自然的语气，让用户感觉被理解、被看见，而不是在被审问。
-2. 循循善诱——每次回应后自然带出下一个问题，让用户愿意主动说更多，不是一问一答的机械形式。
-3. 有回应有共鸣——用户说了什么，先给予回应和共鸣，再引导下一步，不要冷漠地直接跳到下个问题。
-4. 先分析，再引导——收到信息后必须先给出实质性分析，且性格解读要尽量详细（不少于150字），让用户感受到"说了对我有帮助"，然后再自然引导补充信息。
-5. 引导而非索取——收集信息时要让用户感受到「说了更有帮助」，而不是「被强迫填表」。
-6. 分析有温度——输出结论时不是冷冰冰的判断，而是像一位真正关心你的人在告诉你他看到了什么。
-
-【核心工作流程】
-- 第一阶段：原局性格解读（必做，且要详细）。
-- 第二阶段：事项问诊与初步分析。
-- 第三阶段：分层分析（原局+大限+流年）。
-- 第四阶段：互动关系分析（与第三阶段并列，可直接触发）。
-
-【核心工作原则】
-- 先分析，后引导。
-- 性格解读必须详细（不少于150字）。
-- 命宫为轴——每一层分析都先看命宫状态，再看事项宫状态。
-- 原局结果一次性建立，后续分支直接调用。
-- 不做具体预测（不预测具体金额、具体时间、具体事件结果）。
-- 不分析怀孕求子（温和拒绝）。
-
-【知识库调用规则】
-- 取象宫位含义：调用 KB_事项宫位知识库。
-- 取象星曜赋性：调用 KB_星曜赋性与事项分类知识库。
-- 读取四化：调用 SKILL_原局四化读取规则。
-
-【禁止事项】
-- 严禁只提问不分析。
-- 严禁连续两轮以上只收集信息。
-- 严禁一次抛出多个问题。
-- 严禁用「请提供XXX」的填表语气。
-- 严禁跳过用户回答直接进入下一个问题。
-- 严禁输出冷冰冰的星曜术语堆砌。
-- 严禁给出具体金额/时间/事件预测。
-- 严禁分析怀孕求子事项。
-- 严禁做关系最终结果的绝对判决。
-- 严禁在结构性凶象时给出虚假希望。
-
-【IR 数据说明】
-你会收到系统计算好的 IR JSON 数据，这是确定性计算的结果，不可修改。你的任务是将这些结构化数据转化为有温度的自然语言。
-
-【命盘速览输出约定 — 须遵守】
-系统在「阶段一」注入的 IR 文本已固定包含以下块（顺序一致，便于你逐块引用）：
-1. 「十二宫评分」：全宫一行一项，命宫条目会优先紧接在块首后出现。
-2. 「格局」：JSON 格局引擎命中列表（可能为空）。
-3. 「原局四化」：生年 + 太岁宫宫干四化条目。
-4. 「特殊叠加」：双忌叠压、权忌交冲等（可能为空）。
-5. 「父母信息」：有/无。
-阶段二起会追加命宫/身宫/太岁宫标签与全息底色。阶段三/四的 IR 会以分块摘要呈现：主看宫、大限列表（含宫干与四化落位、是否当前限）、流年干与流年四化及窗口定性；请勿臆造未出现在 IR 中的大限/流年干支。
-
-其他宫位细节仅在上述块中出现时才可引用；不得编造未给出的星曜或分数。
-
-【合参规则（必须遵守）】
-- 分析大限命宫时，必须同时参考原局命宫的等级和星曜，说明十年心性是在原局基础上如何变化。
-- 分析大限事项宫位时，必须结合大限命宫的强弱，判断十年心态是否有利于该事项。
-- 分析流年命宫时，必须结合大限命宫的强弱，判断当年整体运势在大限背景下的位置。
-- 分析流年事项宫位时，必须结合流年命宫的强弱，判断当年心态是否支持事项发展。
-- 所有合参结论必须基于数据中的等级对比（吉旺>平>凶弱），不可凭空推断。
-- 命宫强旺（吉旺）时，能压制其他宫位的煞星负面影响；命宫偏弱时，易被煞星拖累。
-
-【分析规则】
-- 等级映射：吉旺（得分≥6.0），平（4.5-5.9），凶弱（<4.5）。
-- 四化引动效果：禄→结果/财源/顺畅度，权→控制力/执行力/机会，科→名声/贵人/条理，忌→阻碍/执念/风险。
-- 流年方向判断：大限吉+流年吉→最佳推进窗口；大限吉+流年凶→谨慎推进；大限凶+流年吉→维持为主；大限凶+流年凶→预警规避。
-- 对四化引动用「因为…所以…」的因果句式解释。
-- 禁止给出具体金额、具体时间点（除流月外）、绝对预测。`
-
-const DEFAULT_PHRASE_LIBRARY: Record<string, string> = {
-  greeting: '好，我拿到你的命盘了。我先静下心来好好看看你的结构……',
-  closing: '如果您还有其他问题，随时可以继续问我。',
-  no_birth_year: '没关系，我们照样能看得很清楚。继续说你的性格——',
-  no_partner_year: '没关系，这个不强求。不过如果有这个信息的话，我能帮你看到的东西会更具体。你要是之后想起来了，随时可以补给我。',
-  ask_parent_year: '如果你愿意告诉我父母的生年，我可以把父母宫的影响也纳入评分，结果会更贴近你。',
-  encourage_detail: '说得越具体，我能看到的东西就越有价值。',
-}
-
-const DEFAULT_STAGE_HINTS: Record<string, string> = {
-  stage1: `你正在阶段一：宫位评分。
-请以温暖的方式询问用户是否能提供父母生年，说明这对个性化评分的价值。
-如果用户不提供，直接使用标准评分结果并告知。
-
-开场白建议：「{greeting}」`,
-  stage2: `你现在进入【性格分析阶段】。请基于以下【命盘速览】和【性格定性数据】，输出一段详细的性格描述（不少于150字），语气要像兄长一样温暖、有共鸣。之后自然引导用户说出想了解的方向。
-
-核心要求：
-1. 先分析，再引导——必须先给出实质性分析，让用户感受到"说了对我有帮助"。
-2. 性格解读必须详细（不少于150字）。
-3. 每次只问一个问题。
-4. 严禁只提问不分析。`,
-  stage3: `你现在进入【事项分析阶段】。事项类型已标注在 IR 中。请基于以下数据进行分析，给出有温度的建议。
-
-【输出格式要求 — 必须遵守】
-请按照以下章节顺序输出分析（用温暖自然的语言，不要生硬列数据）：
-
-一、原局气场
-- 命宫：主星、评分、等级，描述天性底色。
-- 事项核心宫位：主星、评分、等级，以及三方四正（对宫、三合宫）的状态。
-- 辅助宫位：简要列出相关宫位的等级。
-- 原局总结：一句话概括先天事项气场。
-
-二、大限十年走势
-- 大限命宫 vs 原局命宫：说明十年心性在原局基础上如何变化。
-- 大限事项宫 vs 大限命宫：判断十年心态是否有利于该事项。
-- 四化引动：列出大限四化落宫及效果（用「因为…所以…」句式）。
-- 十年趋势：根据原局事项等级 vs 大限事项等级得出大旺/小旺/小衰/大衰。
-
-三、流年分析
-- 重叠性验证：事项核心宫位与流年引动所作用宫位的重叠关系。
-- 流年命宫 vs 大限命宫：判断当年整体运势。
-- 流年事项宫 vs 流年命宫：判断当年心态是否支持事项发展。
-- 方向判断：根据大限吉凶+流年吉凶给出时间窗口定性。
-- 行动建议或结果解释（根据已发生/未发生模式选择）。
-
-四、综合结论与建议
-- 综合评分（仅未发生模式）：得分、档位。
-- 核心结论：一句话总结。
-- 具体建议：2-3条。
-- 风险提示：根据化忌、凶弱宫位等给出。
-
-【合参规则】
-- 每层分析先看命宫状态再看事项宫状态。
-- 所有合参结论必须基于数据中的等级对比（吉旺>平>凶弱），不可凭空推断。
-- 对四化引动用「因为…所以…」的因果句式解释。
-
-核心要求：
-1. 严格基于数据中的事实，不得编造宫位、星曜、四化、分数、等级。
-2. 分析时必须引用数据中的具体数值来支撑观点。
-3. 使用平实、亲切的语言，多用「你」来称呼用户。
-4. 不做具体预测（不预测金额、时间、事件结果）。
-
-【问诊信息抽取】
-在生成分析报告时，请同时从对话上下文中提取以下问诊信息（如用户已提供），
-并在回复末尾附上一段 JSON 格式的抽取结果：
-
-问诊抽取字段（根据事项类型选取）：
-- 求财：hasLabor(是否有劳力), hasPartner(是否有合伙), partnerBirthYear(合伙人生年), isRemote(是否异地), businessType(业务特点:劳力/销售)
-- 求爱：loveType(自由/相亲), relationshipStage(寻找中/已有对象)
-- 求学：isRemote(是否异地), isExam(是否备考)
-- 求职：isSwitch(是否跳槽), needManage(是否管理岗), isRemote(是否异地)
-- 求健康：isSpecific(是否具体症状)
-- 求名：isOnline(是否网络传播)
-
-格式示例（放在回复最后）：
-【问诊抽取】
-{"hasLabor": true, "hasPartner": true, "partnerBirthYear": 1985}
-
-如无法提取任何信息，可省略此段。`,
-  stage4: `你现在进入【互动关系分析阶段】。请基于以下入卦数据和互动分析结果，描述双方互动模式、核心张力点，并给出可调整的建议或风险预警。
-
-核心要求：
-1. 收集对方生年后，进行太岁入卦三维合参分析。
-2. 分析入卦者维度、命主维度、时间维度，综合输出互动模式定性。
-3. 注意区分「可调整」「须谨慎」「不可调整」三种情况。
-4. 严禁做关系最终结果的绝对判决。
-5. 严禁在结构性凶象时给出虚假希望。`,
-}
-
-const DEFAULT_USER_TEMPLATES: Record<string, string> = {
-  stage2: `【命盘速览】
-{chartSnapshot}
-
-【性格定性数据】
-{personalityData}
-
-用户问题：{userQuestion}
-
-请输出详细的性格分析。`,
-  stage3: `【事项类型】{matter}
-【主看宫位】{primaryPalace}（得分{primaryScore}，等级{brightness}）
-【主星赋性】{starDescription}
-【宫位描述】{eventDescription}
-【行运分析】大限方向：{daXianDir}，流年方向：{liuNianDir}，时间窗口：{timeWindow}
-【特殊条件】{specialConditions}
-
-请生成分析报告。`,
-  stage4: `【入卦数据分析】
-{interactionData}
-【核心张力点】{tension}
-【可调整建议】{advice}
-
-请输出互动关系分析。`,
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 配置加载与缓存
-// ═══════════════════════════════════════════════════════════════════
-
-let cachedTemplates: PromptTemplates | null = null
-let cacheTime = 0
-
-function getTemplates(): PromptTemplates {
-  const now = Date.now()
-  // 简单内存缓存，5秒有效期
-  if (cachedTemplates && now - cacheTime < 5000) {
-    return cachedTemplates
-  }
-  cachedTemplates = loadPromptTemplates()
-  cacheTime = now
-  return cachedTemplates
-}
-
-/** 获取 System Prompt（从 JSON 或默认值） */
 function getSystemPrompt(): string {
-  const cfg = getTemplates()
-  if (cfg.system_prompt) {
-    const sp = cfg.system_prompt
-    const lines: string[] = []
-    if (sp.core_identity) lines.push(sp.core_identity, '')
-    if (sp.dialogue_style?.length) {
-      lines.push('你的对话方式有以下几个特点：')
-      sp.dialogue_style.forEach((item, i) => lines.push(`${i + 1}. ${item}`))
-      lines.push('')
-    }
-    if (sp.workflow?.length) {
-      lines.push('【核心工作流程】')
-      sp.workflow.forEach(item => lines.push(`- ${item}`))
-      lines.push('')
-    }
-    if (sp.principles?.length) {
-      lines.push('【核心工作原则】')
-      sp.principles.forEach(item => lines.push(`- ${item}`))
-      lines.push('')
-    }
-    if (sp.knowledge_rules?.length) {
-      lines.push('【知识库调用规则】')
-      sp.knowledge_rules.forEach(item => lines.push(`- ${item}`))
-      lines.push('')
-    }
-    if (sp.forbidden_items?.length) {
-      lines.push('【禁止事项】')
-      sp.forbidden_items.forEach(item => lines.push(`- ${item}`))
-      lines.push('')
-    }
-    if (sp.ir_data_note) lines.push(`【IR 数据说明】\n${sp.ir_data_note}`, '')
-    if (sp.chart_snapshot_convention?.length) {
-      lines.push('【命盘速览输出约定 — 须遵守】')
-      sp.chart_snapshot_convention.forEach((item, i) => lines.push(`${i + 1}. ${item}`))
-      lines.push('')
-      lines.push('其他宫位细节仅在上述块中出现时才可引用；不得编造未给出的星曜或分数。')
-    }
-    const built = lines.join('\n').trim()
-    if (built.length > 100) return built
+  const now = Date.now()
+  if (cachedSystemPrompt && now - systemPromptCacheTime < 5000) {
+    return cachedSystemPrompt
   }
-  return DEFAULT_SYSTEM_PROMPT
+  cachedSystemPrompt = loadSystemPrompt()
+  systemPromptCacheTime = now
+  // 如果加载失败（空字符串），使用统一模板中的系统角色部分
+  if (!cachedSystemPrompt) {
+    cachedSystemPrompt = extractSystemSectionFromTemplate()
+  }
+  return cachedSystemPrompt || buildFallbackSystemPrompt()
 }
 
-/** 获取短语库（从 JSON 或默认值） */
-function getPhraseLibrary(): Record<string, string> {
-  const cfg = getTemplates()
-  if (cfg.phrase_library && Object.keys(cfg.phrase_library).length > 0) {
-    return cfg.phrase_library as Record<string, string>
-  }
-  return DEFAULT_PHRASE_LIBRARY
-}
-
-/** 获取阶段提示（从 JSON 或默认值） */
-function getStageHint(stage: string): string {
-  const cfg = getTemplates()
-  const hint = cfg.stage_hints?.[stage]
-  if (hint?.content) {
-    let content = hint.content
-    // 替换占位符
-    if (hint.required_placeholders?.includes('greeting')) {
-      content = content.replace('{greeting}', getPhrase('greeting'))
-    }
-    return content
-  }
-  const defaultHint = DEFAULT_STAGE_HINTS[stage]
-  if (defaultHint) {
-    return defaultHint.replace('{greeting}', getPhrase('greeting'))
+/**
+ * 从统一模板中提取系统角色定义区块（第二节到第五节）
+ */
+function extractSystemSectionFromTemplate(): string {
+  const template = loadUnifiedTemplate()
+  // 提取从「## 一、系统角色定义」到「## 六、数据格式说明」之间的内容
+  const startMatch = template.match(/## 一、系统角色定义/)
+  const endMatch = template.match(/## 六、数据格式说明/)
+  if (startMatch?.index !== undefined && endMatch?.index !== undefined) {
+    return template.slice(startMatch.index, endMatch.index).trim()
   }
   return ''
 }
 
-/** 获取用户 Prompt 模板（从 JSON 或默认值） */
-function getUserTemplate(stage: string): string {
-  const cfg = getTemplates()
-  const tmpl = cfg.user_prompt_templates?.[stage]
-  if (tmpl?.template) {
-    return tmpl.template
-  }
-  return DEFAULT_USER_TEMPLATES[stage] || ''
+/**
+ * Fallback — 当所有文件都加载失败时的最低限度 System Prompt
+ */
+function buildFallbackSystemPrompt(): string {
+  return `你是一位温暖、睿智的紫微斗数分析师，与用户的对话风格如同一位了解你、关心你的兄长。
+
+核心原则：
+1. 严格基于数据中的事实，不得编造任何宫位、星曜、四化、分数、等级。
+2. 分析时必须引用数据中的具体数值。
+3. 使用平实、亲切的语言，多用"你"来称呼用户。
+4. 对等级用语转化：吉旺→"强旺"，平→"一般"，凶弱→"偏弱"。
+5. 对四化引动用"因为…所以…"的因果句式解释。
+6. 禁止给出具体金额、具体时间点、绝对预测。
+
+禁止事项：
+- 严禁只提问不分析。
+- 严禁连续两轮以上只收集信息。
+- 严禁给出具体金额/时间/事件预测。
+- 严禁分析怀孕求子事项。`
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 对外 API
+// 短语库（直接在代码中定义，不再从 JSON 加载）
 // ═══════════════════════════════════════════════════════════════════
 
+const PHRASE_LIBRARY: Record<string, string> = {
+  greeting: '好，我拿到你的命盘了。我先静下心来好好看看你的结构……',
+  closing: '如果您还有其他问题，随时可以继续问我。',
+  no_birth_year: '没关系，我们照样能看得很清楚。继续说你的性格——',
+  no_partner_year: '没关系，这个不强求。不过如果有这个信息的话，我能帮你看到的东西会更具体。',
+  ask_parent_year: '如果你愿意告诉我父母的生年，我可以把父母宫的影响也纳入评分，结果会更贴近你。',
+  encourage_detail: '说得越具体，我能看到的东西就越有价值。',
+}
+
 export function getPhrase(key: string, params?: Record<string, string>): string {
-  const library = getPhraseLibrary()
-  let phrase = library[key] || DEFAULT_PHRASE_LIBRARY[key] || ''
+  let phrase = PHRASE_LIBRARY[key] || ''
   if (params && phrase) {
     for (const [k, v] of Object.entries(params)) {
       phrase = phrase.replace(`{${k}}`, v)
@@ -316,22 +97,54 @@ export function getPhrase(key: string, params?: Record<string, string>): string 
   return phrase
 }
 
-/** 阶段一提示 */
-export const STAGE1_HINT = getStageHint('stage1')
-/** 阶段二提示 */
-export const STAGE2_HINT = getStageHint('stage2')
-/** 阶段三提示 */
-export const STAGE3_HINT = getStageHint('stage3')
-/** 阶段四提示 */
-export const STAGE4_HINT = getStageHint('stage4')
+// ═══════════════════════════════════════════════════════════════════
+// 阶段提示（直接在代码中定义，不再从 JSON 加载）
+// ═══════════════════════════════════════════════════════════════════
+
+export const STAGE1_HINT = `你正在阶段一：宫位评分。
+请以温暖的方式询问用户是否能提供父母生年，说明这对个性化评分的价值。
+如果用户不提供，直接使用标准评分结果并告知。
+
+开场白建议：「${PHRASE_LIBRARY.greeting}」`
+
+export const STAGE2_HINT = `你现在进入【性格分析阶段】。请基于以下【命盘速览】和【性格定性数据】，输出一段详细的性格描述（不少于150字），语气要像兄长一样温暖、有共鸣。之后自然引导用户说出想了解的方向。
+
+核心要求：
+1. 先分析，再引导——必须先给出实质性分析，让用户感受到"说了对我有帮助"。
+2. 性格解读必须详细（不少于150字）。
+3. 每次只问一个问题。
+4. 严禁只提问不分析。`
+
+export const STAGE3_HINT = `你现在进入【事项分析阶段】。请基于提供的事项分析数据，按照「原局气场→大限十年走势→流年分析→综合结论」的四章节结构输出分析报告。
+
+核心要求：
+1. 严格基于数据中的事实，不得编造宫位、星曜、四化、分数、等级。
+2. 分析时必须引用数据中的具体数值来支撑观点。
+3. 使用平实、亲切的语言，多用「你」来称呼用户。
+4. 不做具体预测（不预测金额、时间、事件结果）。
+5. 对四化引动用「因为…所以…」的因果句式解释。
+6. 每层分析先看命宫状态再看事项宫状态（合参规则）。`
+
+export const STAGE4_HINT = `你现在进入【互动关系分析阶段】。请基于以下入卦数据和互动分析结果，描述双方互动模式、核心张力点，并给出可调整的建议或风险预警。
+
+核心要求：
+1. 收集对方生年后，进行太岁入卦三维合参分析。
+2. 分析入卦者维度、命主维度、时间维度，综合输出互动模式定性。
+3. 注意区分「可调整」「须谨慎」「不可调整」三种情况。
+4. 严禁做关系最终结果的绝对判决。
+5. 严禁在结构性凶象时给出虚假希望。`
+
+// ═══════════════════════════════════════════════════════════════════
+// 核心函数：buildPrompt（组装完整 Prompt）
+// ═══════════════════════════════════════════════════════════════════
 
 /**
  * 组装完整 Prompt
  *
  * @param ir IR 中间表示
- * @param knowledgeSnippets 知识片段（由编排层从知识字典查好注入）
+ * @param knowledgeSnippets 知识片段
  * @param userMessage 用户消息
- * @param stageHint 阶段提示（可选覆盖）
+ * @param stageHint 阶段提示
  */
 export function buildPrompt(
   ir: IR,
@@ -341,20 +154,20 @@ export function buildPrompt(
 ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = []
 
-  // System prompt
+  // 1. System Prompt（来自 System Prompt.md）
   messages.push({
     role: 'system',
     content: getSystemPrompt(),
   })
 
-  // IR 数据注入
+  // 2. IR 数据注入
   const irContext = buildIRContext(ir)
   messages.push({
     role: 'system',
     content: `【计算结果 IR】\n${irContext}`,
   })
 
-  // 知识片段注入
+  // 3. 知识片段注入
   if (knowledgeSnippets.length > 0) {
     messages.push({
       role: 'system',
@@ -362,7 +175,7 @@ export function buildPrompt(
     })
   }
 
-  // 阶段提示
+  // 4. 阶段提示
   if (stageHint) {
     messages.push({
       role: 'system',
@@ -370,7 +183,7 @@ export function buildPrompt(
     })
   }
 
-  // 用户消息
+  // 5. 用户消息
   messages.push({
     role: 'user',
     content: userMessage,
@@ -379,19 +192,387 @@ export function buildPrompt(
   return messages
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// 核心函数：buildMatterAnalysisData
+// 按「输出给大模型的数据格式.json」结构组装事项分析数据
+// ═══════════════════════════════════════════════════════════════════
+
+/** 事项分析数据（对应 输出给大模型的数据格式.json） */
+export interface MatterAnalysisData {
+  matterType: string
+  mode: string
+  targetYear: number
+  currentYear: number
+  yuanJu: {
+    ming: DataFormatPalace
+    primary: DataFormatPalace
+    secondary: DataFormatPalace[]
+    sihuaSummary: {
+      shengNian: DataFormatSihuaEntry[]
+      taiSui: DataFormatSihuaEntry[]
+    }
+  }
+  daXian: {
+    ageRange: string
+    ming: DataFormatPalace
+    primary: DataFormatPalace
+    sihua: { list: DataFormatSihuaEntry[] }
+    triggersToYuanJu: { list: DataFormatTrigger[] }
+  }
+  liuNian: {
+    year: number
+    ming: DataFormatPalace
+    primary: DataFormatPalace
+    sihua: { list: DataFormatSihuaEntry[] }
+    luCun: { palace: string }
+    triggersToDaXian: { list: DataFormatTrigger[] }
+    overlap: {
+      primaryPalace: string
+      affectedPalaces: string[]
+      isDirect: boolean
+    }
+  }
+  compositeScore: number
+  scoreLabel: string
+}
+
 /**
- * 将 IR 转为可读文本供 LLM 消费
+ * 从 Stage 输出中提取宫位评分和等级
  */
+interface PalaceScoreEntry {
+  palace: string
+  diZhi: string
+  finalScore: number
+  tone: string
+}
+
+/**
+ * 从 Stage3 输出构建按「输出给大模型的数据格式.json」格式的结构化数据
+ */
+export function buildMatterAnalysisData(params: {
+  matterType: MatterType | string
+  targetYear: number
+  currentYear?: number
+  mode?: string
+  palaceScores: PalaceScoreEntry[]
+  mergedSihua: { entries: Array<{ type: string; star: string; source: string }>; specialOverlaps: Array<{ type: string; star: string }> }
+  stage3: {
+    primaryAnalysis: { palace: string; innateLevel: string; fourDimensionResult: string; mingGongRegulation: string; protectionStatus: string }
+    allDaXianMappings: Array<{
+      index: number
+      ageRange: [number, number]
+      daXianGan: string
+      mutagen: string[]
+      mingPalaceName?: string
+      palaceIndex?: number
+    }>
+    currentDaXianMapping?: { index: number; ageRange: [number, number]; daXianGan: string; mutagen?: string[] }
+    currentDaXianQualitative?: string
+    liuNianSihuaPositions?: string[]
+    directionMatrix: string
+    directionWindow: string
+    compositeScore?: number
+    scoreLabel?: string
+    scoreAction?: string
+    sihuaLandingReport?: {
+      layers: Array<{
+        layer: string
+        stemLabel: string
+        direction: string
+        layerScore: number
+        rows: Array<{
+          sihuaType: string
+          star: string
+          palace: string | null
+          inMatterFocus: boolean
+          hitsOppositeOfFocus: boolean
+          palaceQuality: string
+        }>
+      }>
+    }
+    analysisSummary?: {
+      innateBase: string
+      fortuneTrend: string
+      yearlyTrigger: string
+      compositeConclusion: string
+      riskAdvice: string
+    }
+  }
+  chartData: Record<string, unknown>
+  primaryPalaceName: string
+}): MatterAnalysisData {
+  const {
+    matterType, targetYear, palaceScores, mergedSihua, stage3, primaryPalaceName,
+  } = params
+  const currentYear = params.currentYear ?? new Date().getFullYear()
+  const mode = params.mode ?? '未发生'
+
+  // 辅助：查找宫位评分
+  const findPalace = (name: string): PalaceScoreEntry | undefined =>
+    palaceScores.find(p => p.palace === name)
+
+  // 辅助：构建宫位数据
+  const buildPalace = (
+    palaceName: string,
+    score: number,
+    level: string,
+    majorStars: string,
+    minorStars: string,
+    sihua: string | null,
+    threeQuadrants?: {
+      opposite: DataFormatPalace
+      firstTrine: DataFormatPalace
+      secondTrine: DataFormatPalace
+    },
+  ): DataFormatPalace => ({
+    palaceName,
+    majorStars,
+    minorStars,
+    sihua,
+    score: Math.round(score * 10) / 10,
+    level,
+    ...(threeQuadrants ? { threeQuadrants } : {}),
+  })
+
+  // 辅助：等级映射
+  const toLevel = (tone: string, score: number): string => {
+    if (tone === '吉旺' || score >= 6.0) return '吉旺'
+    if (tone === '凶弱' || score < 4.5) return '凶弱'
+    return '平'
+  }
+
+  // ── 原局数据 ──
+  const mingScore = findPalace('命宫')
+  const primaryScore = findPalace(primaryPalaceName)
+
+  // 从 chartData 提取星曜信息
+  const palaces = (params.chartData?.palaces as Array<Record<string, unknown>>) || []
+  const findPalaceStars = (name: string) => {
+    const p = palaces.find(pp => pp.name === name)
+    const majors = ((p?.majorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string).join('+')
+    const minors = ((p?.minorStars as Array<Record<string, unknown>>) || []).map(s => s.name as string).join('+')
+    const sihua = ((p?.majorStars as Array<Record<string, unknown>>) || [])
+      .filter(s => s.mutagen).map(s => `${s.name}化${s.mutagen}`).join('、') || null
+    return { majors: majors || '空', minors: minors || '', sihua }
+  }
+
+  // 三方四正：对宫、三合宫
+  const buildThreeQuadrants = (palaceName: string): DataFormatPalace['threeQuadrants'] | undefined => {
+    // 三方四正映射（简化版：基于宫位名查找相关宫位）
+    const palaceRelations: Record<string, { opposite: string; firstTrine: string; secondTrine: string }> = {
+      '命宫': { opposite: '迁移', firstTrine: '财帛', secondTrine: '官禄' },
+      '兄弟': { opposite: '仆役', firstTrine: '疾厄', secondTrine: '田宅' },
+      '夫妻': { opposite: '官禄', firstTrine: '迁移', secondTrine: '福德' },
+      '子女': { opposite: '田宅', firstTrine: '仆役', secondTrine: '父母' },
+      '财帛': { opposite: '福德', firstTrine: '命宫', secondTrine: '官禄' },
+      '疾厄': { opposite: '父母', firstTrine: '兄弟', secondTrine: '田宅' },
+      '迁移': { opposite: '命宫', firstTrine: '夫妻', secondTrine: '福德' },
+      '仆役': { opposite: '兄弟', firstTrine: '子女', secondTrine: '父母' },
+      '官禄': { opposite: '夫妻', firstTrine: '财帛', secondTrine: '命宫' },
+      '福德': { opposite: '财帛', firstTrine: '夫妻', secondTrine: '迁移' },
+      '田宅': { opposite: '子女', firstTrine: '兄弟', secondTrine: '疾厄' },
+      '父母': { opposite: '疾厄', firstTrine: '子女', secondTrine: '仆役' },
+    }
+
+    const rel = palaceRelations[palaceName]
+    if (!rel) return undefined
+
+    const buildRelatedPalace = (name: string): DataFormatPalace => {
+      const stars = findPalaceStars(name)
+      const score = findPalace(name)
+      return buildPalace(
+        name, score?.finalScore ?? 0, score ? toLevel(score.tone, score.finalScore) : '平',
+        stars.majors, stars.minors, stars.sihua,
+      )
+    }
+
+    return {
+      opposite: buildRelatedPalace(rel.opposite),
+      firstTrine: buildRelatedPalace(rel.firstTrine),
+      secondTrine: buildRelatedPalace(rel.secondTrine),
+    }
+  }
+
+  // 命宫
+  const mingStars = findPalaceStars('命宫')
+  const mingPalace = buildPalace(
+    '命宫',
+    mingScore?.finalScore ?? 0,
+    mingScore ? toLevel(mingScore.tone, mingScore.finalScore) : '平',
+    mingStars.majors,
+    mingStars.minors,
+    mingStars.sihua,
+  )
+
+  // 事项核心宫位
+  const primaryStars = findPalaceStars(primaryPalaceName)
+  const primaryPalace = buildPalace(
+    primaryPalaceName,
+    primaryScore?.finalScore ?? 0,
+    primaryScore ? toLevel(primaryScore.tone, primaryScore.finalScore) : '平',
+    primaryStars.majors,
+    primaryStars.minors,
+    primaryStars.sihua,
+    buildThreeQuadrants(primaryPalaceName),
+  )
+
+  // 辅助宫位（大限命宫所在宫位和事项对宫）
+  const secondaryPalaces: DataFormatPalace[] = []
+  const currentDaXian = stage3.currentDaXianMapping
+  if (currentDaXian) {
+    // 大限命宫通常落在迁移宫或其他宫位
+    const daXianMingName = findPalaceStars('迁移').majors ? '迁移' : '命宫'
+    const daXianMingScore = findPalace(daXianMingName)
+    if (daXianMingScore) {
+      const stars = findPalaceStars(daXianMingName)
+      secondaryPalaces.push(buildPalace(
+        daXianMingName, daXianMingScore.finalScore,
+        toLevel(daXianMingScore.tone, daXianMingScore.finalScore),
+        stars.majors, stars.minors, stars.sihua,
+      ))
+    }
+  }
+
+  // 四化摘要
+  const shengNianSihua: DataFormatSihuaEntry[] = mergedSihua.entries
+    .filter(e => e.source === '生年')
+    .map(e => ({ type: e.type, star: e.star, palace: '' }))
+  const taiSuiSihua: DataFormatSihuaEntry[] = mergedSihua.entries
+    .filter(e => e.source === '太岁')
+    .map(e => ({ type: e.type, star: e.star, palace: '' }))
+
+  // ── 大限数据 ──
+  const currentDaXianMapping = stage3.currentDaXianMapping
+  const daXianAgeRange = currentDaXianMapping
+    ? `${currentDaXianMapping.ageRange[0]}-${currentDaXianMapping.ageRange[1]}`
+    : '未知'
+
+  // 大限命宫
+  const daXianMingPalace = (() => {
+    // 大限命宫：从当前大限映射中获取
+    const daXianMingStars = findPalaceStars('迁移')
+    const daXianMingScoreEntry = findPalace('迁移')
+    return buildPalace(
+      daXianMingScoreEntry ? '迁移' : '命宫',
+      daXianMingScoreEntry?.finalScore ?? 0,
+      daXianMingScoreEntry ? toLevel(daXianMingScoreEntry.tone, daXianMingScoreEntry.finalScore) : '平',
+      daXianMingStars.majors,
+      daXianMingStars.minors,
+      daXianMingStars.sihua,
+    )
+  })()
+
+  // 大限事项宫
+  const daXianPrimaryPalace = buildPalace(
+    primaryPalaceName,
+    primaryScore?.finalScore ?? 0,
+    primaryScore ? toLevel(primaryScore.tone, primaryScore.finalScore) : '平',
+    primaryStars.majors,
+    primaryStars.minors,
+    primaryStars.sihua,
+    buildThreeQuadrants(primaryPalaceName),
+  )
+
+  // 大限四化
+  const daXianSihuaList: DataFormatSihuaEntry[] = (currentDaXianMapping?.mutagen ?? [])
+    .map(m => {
+      // mutagen 格式："化禄 天梁(迁移宫)"
+      const match = m.match(/化(.)\s+(\S+)\((.+)\)/)
+      if (match) {
+        return { type: match[1], star: match[2], palace: match[3] }
+      }
+      return null
+    })
+    .filter((e): e is DataFormatSihuaEntry => e !== null)
+
+  // 大限四化对原局的引动
+  const daXianTriggers: DataFormatTrigger[] = []
+
+  // ── 流年数据 ──
+  // 流年命宫
+  const liuNianMingStars = findPalaceStars('夫妻') // 流年命宫会根据年份变化
+  const liuNianMingScore = findPalace('夫妻')
+  const liuNianMingPalace = buildPalace(
+    liuNianMingScore ? '夫妻' : '命宫',
+    liuNianMingScore?.finalScore ?? 0,
+    liuNianMingScore ? toLevel(liuNianMingScore.tone, liuNianMingScore.finalScore) : '平',
+    liuNianMingStars.majors,
+    liuNianMingStars.minors,
+    liuNianMingStars.sihua,
+  )
+
+  // 流年事项宫
+  const liuNianPrimaryPalace = buildPalace(
+    primaryPalaceName,
+    primaryScore?.finalScore ?? 0,
+    primaryScore ? toLevel(primaryScore.tone, primaryScore.finalScore) : '平',
+    primaryStars.majors,
+    primaryStars.minors,
+    primaryStars.sihua,
+    buildThreeQuadrants(primaryPalaceName),
+  )
+
+  // 流年四化
+  const liuNianSihuaList: DataFormatSihuaEntry[] = (stage3.liuNianSihuaPositions ?? [])
+    .map(m => {
+      const match = m.match(/化(.)\s+(\S+)\((.+)\)/)
+      if (match) {
+        return { type: match[1], star: match[2], palace: match[3] }
+      }
+      return null
+    })
+    .filter((e): e is DataFormatSihuaEntry => e !== null)
+
+  // 重叠性
+  const overlap = {
+    primaryPalace: primaryPalaceName,
+    affectedPalaces: [primaryPalaceName],
+    isDirect: true,
+  }
+
+  return {
+    matterType: String(matterType),
+    mode,
+    targetYear,
+    currentYear,
+    yuanJu: {
+      ming: mingPalace,
+      primary: primaryPalace,
+      secondary: secondaryPalaces,
+      sihuaSummary: {
+        shengNian: shengNianSihua,
+        taiSui: taiSuiSihua,
+      },
+    },
+    daXian: {
+      ageRange: daXianAgeRange,
+      ming: daXianMingPalace,
+      primary: daXianPrimaryPalace,
+      sihua: { list: daXianSihuaList },
+      triggersToYuanJu: { list: daXianTriggers },
+    },
+    liuNian: {
+      year: targetYear,
+      ming: liuNianMingPalace,
+      primary: liuNianPrimaryPalace,
+      sihua: { list: liuNianSihuaList },
+      luCun: { palace: '待计算' },
+      triggersToDaXian: { list: [] },
+      overlap,
+    },
+    compositeScore: stage3.compositeScore ?? 0,
+    scoreLabel: stage3.scoreLabel ?? '待评估',
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IR 上下文构建（保留原有逻辑）
+// ═══════════════════════════════════════════════════════════════════
+
 function buildIRContext(ir: IR): string {
-  if (isIRStage1(ir)) {
-    return buildStage1Context(ir)
-  }
-  if (isIRStage2(ir)) {
-    return buildStage2Context(ir)
-  }
-  if (isIRStage3or4(ir)) {
-    return buildStage3or4Context(ir)
-  }
+  if (isIRStage1(ir)) return buildStage1Context(ir)
+  if (isIRStage2(ir)) return buildStage2Context(ir)
+  if (isIRStage3or4(ir)) return buildStage3or4Context(ir)
   return JSON.stringify(ir, null, 2)
 }
 
@@ -403,17 +584,9 @@ function buildStage1Context(ir: IRStage1): string {
     .map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`)
     .join('\n')
 
-  const patterns = ir.allPatterns
-    .map(p => `${p.name}(${p.level})`)
-    .join('、')
-
-  const sihua = ir.mergedSihua.entries
-    .map(e => `${e.type}${e.star}(${e.source})`)
-    .join('；')
-
-  const overlaps = ir.mergedSihua.specialOverlaps
-    .map(o => `${o.type}: ${o.star}`)
-    .join('；')
+  const patterns = ir.allPatterns.map(p => `${p.name}(${p.level})`).join('、')
+  const sihua = ir.mergedSihua.entries.map(e => `${e.type}${e.star}(${e.source})`).join('；')
+  const overlaps = ir.mergedSihua.specialOverlaps.map(o => `${o.type}: ${o.star}`).join('；')
 
   const flankingLines = ir.palaceScores
     .map(p => {
@@ -445,17 +618,9 @@ ${flankingLines || '无'}
 }
 
 function buildStage2Context(ir: IRStage2): string {
-  const scores = ir.palaceScores
-    .map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`)
-    .join('\n')
-
-  const patterns = ir.allPatterns
-    .map(p => `${p.name}(${p.level})`)
-    .join('、')
-
-  const sihua = ir.mergedSihua.entries
-    .map(e => `${e.type}${e.star}(${e.source})`)
-    .join('；')
+  const scores = ir.palaceScores.map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`).join('\n')
+  const patterns = ir.allPatterns.map(p => `${p.name}(${p.level})`).join('、')
+  const sihua = ir.mergedSihua.entries.map(e => `${e.type}${e.star}(${e.source})`).join('；')
 
   return `阶段二：性格定性结果
 
@@ -483,17 +648,9 @@ function buildStage3or4Context(ir: IRStage3or4): string {
   const ln = ir.liuNianAnalysis
   const yearlyBlock = `- 流年干${ln.liuNianGan}；流年四化 ${ln.sihuaPositions.join('、') || '—'}；方向 ${ln.direction}；与大限关系 ${ln.daXianRelation}；时间窗口 ${ln.window}`
 
-  const scores = ir.palaceScores
-    .map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`)
-    .join('\n')
-
-  const patterns = ir.allPatterns
-    .map(p => `${p.name}(${p.level})`)
-    .join('、')
-
-  const sihua = ir.mergedSihua.entries
-    .map(e => `${e.type}${e.star}(${e.source})`)
-    .join('；')
+  const scores = ir.palaceScores.map(p => `${p.palace}(${p.diZhi}): ${p.finalScore.toFixed(1)} ${p.tone}`).join('\n')
+  const patterns = ir.allPatterns.map(p => `${p.name}(${p.level})`).join('、')
+  const sihua = ir.mergedSihua.entries.map(e => `${e.type}${e.star}(${e.source})`).join('；')
 
   return `阶段${ir.stage}：${ir.matterType}分析结果（摘要，非全量 JSON）
 
@@ -537,35 +694,23 @@ ${palaceLines}
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 用户 Prompt 模板函数（从 JSON 加载模板）
+// 命盘快照构建（保留原有逻辑）
 // ═══════════════════════════════════════════════════════════════════
 
-/**
- * 构建命盘快照对象（结构化数据，用于 IR）
- * @param chartData 前端序列化的命盘数据
- * @param ctx 生年干支（来自 scoringCtx，与 debug 面板「生年太岁」模块同源）
- */
 export interface ChartSnapshotCtx {
-  /** 生年天干（scoringCtx.birthGan） */
   birthGan?: string
-  /** 太岁宫地支（scoringCtx.taiSuiZhi） */
   taiSuiZhi?: string
 }
 
 export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx?: ChartSnapshotCtx): import('../types').ChartSnapshot {
   const palaces = (chartData?.palaces as Array<Record<string, unknown>>) || []
-  // 与 chart-pipeline-debug.ts「生年太岁」模块一致：全部从 scoringCtx 取值
   const birthGan = ctx?.birthGan ?? (chartData?.birthGan as string | undefined) ?? '未知'
   const birthZhi = ctx?.taiSuiZhi ?? (chartData?.taiSuiZhi as string | undefined) ?? '未知'
 
-  // 命宫
   const ming = palaces.find(p => p.name === '命宫')
-  // 身宫
   const shen = palaces.find(p => p.isBodyPalace)
-  // 太岁宫
   const taiSui = birthZhi !== '未知' ? palaces.find(p => p.earthlyBranch === birthZhi) : undefined
 
-  // 收集所有四化
   const allSihua: string[] = []
   for (const p of palaces) {
     const majorStars = (p.majorStars as Array<Record<string, unknown>>) || []
@@ -578,7 +723,6 @@ export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx
     }
   }
 
-  // 大限信息
   const decadalLines: string[] = []
   for (const p of palaces) {
     const decadal = p.decadal as { range: [number, number]; heavenlyStem: string } | undefined
@@ -587,7 +731,6 @@ export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx
     }
   }
 
-  // 农历日期
   const rawDates = chartData?.rawDates as Record<string, unknown> | undefined
   const lunarDate = rawDates?.lunarDate as Record<string, unknown> | undefined
   const lunarDateStr = lunarDate
@@ -643,12 +786,6 @@ export function buildChartSnapshotObject(chartData: Record<string, unknown>, ctx
   }
 }
 
-/**
- * 构建命盘速览文本（用于阶段二性格分析）
- *
- * 从 chartData.palaces 中动态提取身宫和太岁宫，
- * 并输出完整的十二宫星曜表和四化信息，防止 AI 幻觉。
- */
 export function buildChartSnapshot(chartData: {
   palaces: Array<{
     name: string
@@ -705,9 +842,10 @@ ${snapshot.decadalText}
 【约束】以上数据100%来自 iztro 排盘结果，是确定性数据，不可修改。分析时必须以这些数据为准，不得编造未列出的星曜或宫位信息。`
 }
 
-/**
- * 构建性格定性数据文本
- */
+// ═══════════════════════════════════════════════════════════════════
+// 性格数据构建（保留原有逻辑）
+// ═══════════════════════════════════════════════════════════════════
+
 export function buildPersonalityData(stage2Output: {
   mingGongTags?: { summary: string }
   shenGongTags?: { summary: string }
@@ -730,9 +868,10 @@ export function buildPersonalityData(stage2Output: {
 整体基调：${stage2Output.overallTone || '待分析'}${triadBlock}`
 }
 
-/**
- * 通用模板填充函数
- */
+// ═══════════════════════════════════════════════════════════════════
+// 通用模板填充
+// ═══════════════════════════════════════════════════════════════════
+
 function fillTemplate(template: string, params: Record<string, string | number>): string {
   let result = template
   for (const [key, value] of Object.entries(params)) {
@@ -740,6 +879,10 @@ function fillTemplate(template: string, params: Record<string, string | number>)
   }
   return result
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// 阶段 Prompt 构建函数
+// ═══════════════════════════════════════════════════════════════════
 
 /**
  * 构建阶段二用户 Prompt（性格分析）
@@ -749,12 +892,19 @@ export function buildStage2UserPrompt(
   personalityData: string,
   userQuestion: string,
 ): string {
-  const tmpl = getUserTemplate('stage2')
-  return fillTemplate(tmpl, { chartSnapshot, personalityData, userQuestion })
+  return `【命盘速览】
+${chartSnapshot}
+
+【性格定性数据】
+${personalityData}
+
+用户问题：${userQuestion}
+
+请输出详细的性格分析。`
 }
 
 /**
- * 构建阶段三用户 Prompt（事项分析）
+ * 事项分析 Governor 参数
  */
 export interface EventAnalysisGovernorParams {
   intent: string
@@ -768,7 +918,7 @@ export interface EventAnalysisGovernorParams {
   crisisSuffix: string
 }
 
-const DEFAULT_GOVERNOR_TEMPLATE = `【命理运算结果】
+const GOVERNOR_TEMPLATE = `【命理运算结果】
 意图：{{INTENT}}
 主看宫位：{{PRIMARY_PALACE_DATA}}
 断语（整流）：
@@ -785,11 +935,9 @@ const DEFAULT_GOVERNOR_TEMPLATE = `【命理运算结果】
 
 请以温暖兄长的口吻，基于以上结构化数据生成分析报告，不得臆造未给出的宫位或四化。{{CRISIS_SUFFIX}}`
 
-/** 事项分析 governor 模板（来自 event_analysis.governor_template） */
+/** 事项分析 governor 模板 */
 export function buildEventAnalysisGovernorPrompt(params: EventAnalysisGovernorParams): string {
-  const cfg = getTemplates()
-  const tmpl = cfg.event_analysis?.governor_template ?? DEFAULT_GOVERNOR_TEMPLATE
-  return tmpl
+  return GOVERNOR_TEMPLATE
     .replace(/\{\{INTENT\}\}/g, params.intent)
     .replace(/\{\{PRIMARY_PALACE_DATA\}\}/g, params.primaryPalaceData)
     .replace(/\{\{SLIMMED_DESCRIPTIONS\}\}/g, params.slimmedDescriptions)
@@ -801,6 +949,10 @@ export function buildEventAnalysisGovernorPrompt(params: EventAnalysisGovernorPa
     .replace(/\{\{CRISIS_SUFFIX\}\}/g, params.crisisSuffix)
 }
 
+/**
+ * 构建阶段三用户 Prompt（事项分析）
+ * 包含按「输出给大模型的数据格式.json」结构组装的数据
+ */
 export function buildStage3UserPrompt(
   matter: string,
   primaryPalace: string,
@@ -814,27 +966,32 @@ export function buildStage3UserPrompt(
   specialConditions: string,
   structuredAnalysis?: string,
   governorBlock?: string,
+  matterDataJson?: string,
 ): string {
-  const tmpl = getUserTemplate('stage3')
-  const base = fillTemplate(tmpl, {
-    matter,
-    primaryPalace,
-    primaryScore,
-    brightness,
-    starDescription,
-    eventDescription,
-    daXianDir,
-    liuNianDir,
-    timeWindow,
-    specialConditions,
-  })
-  const blocks: string[] = [base]
+  const blocks: string[] = []
+
+  // 如果有按新格式组装的完整数据，优先使用
+  if (matterDataJson) {
+    blocks.push(`请根据以下事项分析数据，生成一份${matter}分析报告。`)
+    blocks.push(`【数据】`)
+    blocks.push(matterDataJson)
+  } else {
+    // 回退到旧格式
+    blocks.push(`【事项类型】${matter}`)
+    blocks.push(`【主看宫位】${primaryPalace}（得分${primaryScore}，等级${brightness}）`)
+    blocks.push(`【主星赋性】${starDescription}`)
+    blocks.push(`【宫位描述】${eventDescription}`)
+    blocks.push(`【行运分析】大限方向：${daXianDir}，流年方向：${liuNianDir}，时间窗口：${timeWindow}`)
+    blocks.push(`【特殊条件】${specialConditions}`)
+  }
+
   if (governorBlock?.trim()) {
     blocks.push(governorBlock.trim())
   }
   if (structuredAnalysis?.trim()) {
     blocks.push(`【限运合参结构化输出】\n${structuredAnalysis}`)
   }
+
   return blocks.join('\n\n')
 }
 
@@ -846,6 +1003,10 @@ export function buildStage4UserPrompt(
   tension: string,
   advice: string,
 ): string {
-  const tmpl = getUserTemplate('stage4')
-  return fillTemplate(tmpl, { interactionData, tension, advice })
+  return `【入卦数据分析】
+${interactionData}
+【核心张力点】${tension}
+【可调整建议】${advice}
+
+请输出互动关系分析。`
 }

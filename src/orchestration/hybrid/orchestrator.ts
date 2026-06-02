@@ -33,6 +33,7 @@ import {
   buildStage3UserPrompt,
   buildStage4UserPrompt,
   buildEventAnalysisGovernorPrompt,
+  buildMatterAnalysisData,
   STAGE1_HINT,
   STAGE2_HINT,
   STAGE3_HINT,
@@ -768,6 +769,36 @@ function buildStage3Messages(
     governorStrategy: stage3.resilience?.strategy ?? stage3.scoreAction ?? '发展性咨询',
     crisisSuffix: stage3.resilience?.promptSuffix ?? '',
   })
+  // 按「输出给大模型的数据格式.json」结构组装完整数据
+  const matterAnalysisData = buildMatterAnalysisData({
+    matterType,
+    targetYear,
+    palaceScores: stage1.palaceScores,
+    mergedSihua: stage1.mergedSihua,
+    stage3: {
+      primaryAnalysis: stage3.primaryAnalysis,
+      allDaXianMappings: stage3.allDaXianMappings,
+      currentDaXianMapping: currentDaXianMapping ? {
+        index: currentDaXianMapping.index,
+        ageRange: currentDaXianMapping.ageRange,
+        daXianGan: currentDaXianMapping.daXianGan,
+        mutagen: currentDaXianMapping.mutagen,
+      } : undefined,
+      currentDaXianQualitative: stage3.currentDaXianQualitative,
+      liuNianSihuaPositions: stage3.liuNianSihuaPositions,
+      directionMatrix: stage3.directionMatrix,
+      directionWindow: stage3.directionWindow,
+      compositeScore: stage3.compositeScore,
+      scoreLabel: stage3.scoreLabel,
+      scoreAction: stage3.scoreAction,
+      sihuaLandingReport: stage3.sihuaLandingReport,
+      analysisSummary: stage3.analysisSummary,
+    },
+    chartData,
+    primaryPalaceName: primaryPalace,
+  })
+  const matterDataJson = JSON.stringify(matterAnalysisData, null, 2)
+
   const userPrompt = buildStage3UserPrompt(
     matterType,
     primaryPalace,
@@ -781,6 +812,7 @@ function buildStage3Messages(
     route.specialConditions.join('；') || '无',
     structuredAnalysis,
     governorBlock,
+    matterDataJson,
   )
 
   const msgs = buildPrompt(
