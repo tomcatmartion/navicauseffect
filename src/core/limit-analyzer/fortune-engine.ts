@@ -16,12 +16,18 @@ import type {
   DaXianPalaceMapping, MajorStar,
   DirectionMatrix,
 } from '@/core/types'
-import { PALACE_NAMES } from '@/core/types'
+import { PALACE_NAMES, PALACE_NAME_TO_INDEX } from '@/core/types'
 import { getSihuaTable } from '@/core/sihua-calculator'
 import type { ScoringContext, PalaceForScoring } from '@/core/energy-evaluator/scoring-flow'
 import { evaluatePalacePatternsOnly } from '@/core/energy-evaluator/pattern-scoring'
 import { evaluateAllPalaces } from '@/core/energy-evaluator/scoring-flow'
 import { buildDaXianScoringContext } from './limit-scoring-context'
+import {
+  directionFromLayerScore,
+  scoreMutagenLayerForDirection,
+  type MatterFocus,
+} from './sihua-trigger-engine'
+import type { Stage1Output } from '@/core/types'
 
 /** 十天干 */
 const GAN_TABLE: TianGan[] = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸']
@@ -154,6 +160,81 @@ export function extractAllDaXianMappings(
 }
 
 /**
+ * 解析目标年的虚岁：优先 horoscope.age.nominalAge（需 referenceYear 对齐）
+ */
+function resolveNominalAge(
+  chartData: Record<string, unknown> | undefined,
+  targetYear: number,
+  birthYear: number,
+): number {
+  if (chartData) {
+    const horoscope = chartData.horoscope as Record<string, unknown> | undefined
+    const refYear = typeof horoscope?.referenceYear === 'number' ? horoscope.referenceYear : undefined
+    const ageScope = horoscope?.age as { nominalAge?: number } | undefined
+    if (refYear === targetYear && typeof ageScope?.nominalAge === 'number') {
+      return ageScope.nominalAge
+    }
+  }
+  // 虚岁近似：出生年计一岁
+  return targetYear - birthYear + 1
+}
+
+/**
+ * 统一获取当前大限 — 直接从 iztro horoscope.decadal 构建（权威数据源）
+ *
+ * iztro 的 horoscope(year, timeIndex).decadal 包含：
+ * - index: 大限所在的原局宫位索引（0-11），palaces[index] 即大限命宫所在的原局位置
+ * - heavenlyStem: 大限天干
+ * - mutagen: 大限四化
+ * - palaceNames: getPalaceNames(index) 的重排结果，[0] 并非大限命宫名！
+ *
+ * 注意：palaceNames[0] 是 getPalaceNames 重排后的数学结果，不是大限命宫名。
+ * 大限命宫 = 原局 palaces[decadalIndex] 所在位置。
+ */
+export function findCurrentDaXianFromChart(
+  _mappings: DaXianPalaceMapping[],
+  targetYear: number,
+  birthYear: number,
+  chartData?: Record<string, unknown>,
+): DaXianPalaceMapping | undefined {
+  const nominalAge = resolveNominalAge(chartData, targetYear, birthYear)
+  const ageMatched = _mappings.find(d => d.ageRange[0] <= nominalAge && d.ageRange[1] >= nominalAge)
+
+  if (chartData) {
+    const horoscope = chartData.horoscope as Record<string, unknown> | undefined
+    const refYear = typeof horoscope?.referenceYear === 'number' ? horoscope.referenceYear : undefined
+    const decadalScope = horoscope?.decadal as Record<string, unknown> | undefined
+    const decadalGan = decadalScope?.heavenlyStem
+    const decadalIndex = typeof decadalScope?.index === 'number' ? decadalScope.index as number : -1
+    const decadalMutagen = decadalScope?.mutagen as string[] | undefined
+
+    // horoscope 与 targetYear 对齐时，decadal 为权威；index 用虚岁匹配的 mapping 避免重复天干错限
+    if (refYear === targetYear && typeof decadalGan === 'string' && decadalGan && decadalIndex >= 0 && decadalIndex < 12) {
+      // decadalIndex 是 iztro palaces 数组索引（按地支排列），不是 PALACE_NAMES 索引
+      // 必须从 chartData.palaces 取宫名，不能混用 PALACE_NAMES
+      const chartPalaces = chartData.palaces as Array<Record<string, unknown>> | undefined
+      const mingPalaceName = (chartPalaces?.[decadalIndex]?.name ?? PALACE_NAMES[decadalIndex]) as PalaceName
+      // palaceIndex 需要转为 PALACE_NAMES 体系下的索引（供后续评分使用）
+      const palaceIndex = PALACE_NAME_TO_INDEX[mingPalaceName] ?? decadalIndex
+      const base = ageMatched ?? _mappings.find(m => m.daXianGan === decadalGan)
+      return {
+        index: base?.index ?? 0,
+        ageRange: base?.ageRange ?? [0, 0] as [number, number],
+        daXianGan: decadalGan as TianGan,
+        mingPalaceName,
+        palaceIndex,
+        mutagen: decadalMutagen ?? base?.mutagen ?? [],
+        scores: base?.scores,
+        palacePatterns: base?.palacePatterns,
+        patterns: base?.patterns,
+      }
+    }
+  }
+
+  return ageMatched
+}
+
+/**
  * 流年干支单一真源：chartData.horoscope → 公式计算
  * 禁止调用 iztro 重新排盘
  */
@@ -212,11 +293,8 @@ export function buildThreeLayerTable(
 
   const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
   const birthYear = typeof birthInfo?.year === 'number' ? birthInfo.year : 1990
-  const currentAge = targetYear - birthYear
 
-  const currentDaXian = daXianMappings.find(
-    d => d.ageRange[0] <= currentAge && d.ageRange[1] >= currentAge,
-  ) ?? daXianMappings[0]
+  const currentDaXian = findCurrentDaXianFromChart(daXianMappings, targetYear, birthYear, chartData) ?? daXianMappings[0]
 
   const decadalLayer = currentDaXian
     ? buildDaXianLayer(currentDaXian, natalCtx)
@@ -241,49 +319,62 @@ export function buildThreeLayerTable(
 }
 
 /**
- * 计算方向矩阵
+ * 计算方向矩阵（大限×流年），四化落宫按事项主/辅宫 + 命宫焦点计分
  */
 export function calculateDirectionMatrix(
   daXianMapping: DaXianPalaceMapping | undefined,
   targetYear: number,
   natalCtx?: ScoringContext,
   chartData?: Record<string, unknown>,
+  focus?: MatterFocus,
+  palaceScores?: Stage1Output['palaceScores'],
 ): DirectionMatrix {
-  let daXianScore = 0
-  if (daXianMapping?.mutagen[0]) daXianScore += 2
-  if (daXianMapping?.mutagen[1]) daXianScore += 1
-  if (daXianMapping?.mutagen[2]) daXianScore += 0.5
-  if (daXianMapping?.mutagen[3]) daXianScore -= 2
-
-  if (natalCtx && daXianMapping) {
-    const keyPalaceIndices = [0, 4, 6, 8]
-    const weights = [2, 1, 0.5, -2]
-    for (let i = 0; i < daXianMapping.mutagen.length && i < 4; i++) {
-      const starName = daXianMapping.mutagen[i]
-      if (!starName) continue
-      for (const idx of keyPalaceIndices) {
-        const palace = natalCtx.palaces[idx]
-        if (palace?.stars.some(s => s.name === starName)) {
-          daXianScore += weights[i] * 0.5
-        }
-      }
-    }
+  const matterFocus: MatterFocus = focus ?? {
+    primaryPalace: '命宫',
+    secondaryPalaces: [],
   }
 
-  const daXianDirection: '吉' | '凶' = daXianScore > 0 ? '吉' : (daXianScore < 0 ? '凶' : '吉')
+  let daXianScore = 0
+  if (natalCtx && daXianMapping && palaceScores) {
+    daXianScore = scoreMutagenLayerForDirection(
+      daXianMapping.mutagen,
+      natalCtx,
+      matterFocus,
+      palaceScores,
+    )
+  } else if (daXianMapping) {
+    const sihuaBase = { lu: 2, quan: 1, ke: 0.5, ji: -2 }
+    if (daXianMapping.mutagen[0]) daXianScore += sihuaBase.lu
+    if (daXianMapping.mutagen[1]) daXianScore += sihuaBase.quan
+    if (daXianMapping.mutagen[2]) daXianScore += sihuaBase.ke
+    if (daXianMapping.mutagen[3]) daXianScore += sihuaBase.ji
+  }
+
+  const daXianDirection = directionFromLayerScore(daXianScore)
 
   const liuNianGan = chartData
     ? resolveLiuNianGan(chartData, targetYear)
     : GAN_TABLE[(targetYear - 4) % 10]
   const liuNianSihua = getSihuaTable()[liuNianGan]
+  const liuNianMutagen = [liuNianSihua.禄, liuNianSihua.权, liuNianSihua.科, liuNianSihua.忌]
 
   let liuNianScore = 0
-  if (liuNianSihua.禄) liuNianScore += 2
-  if (liuNianSihua.权) liuNianScore += 1
-  if (liuNianSihua.科) liuNianScore += 0.5
-  if (liuNianSihua.忌) liuNianScore -= 2
+  if (natalCtx && palaceScores) {
+    liuNianScore = scoreMutagenLayerForDirection(
+      liuNianMutagen,
+      natalCtx,
+      matterFocus,
+      palaceScores,
+    )
+  } else {
+    const sihuaBase = { lu: 2, quan: 1, ke: 0.5, ji: -2 }
+    if (liuNianSihua.禄) liuNianScore += sihuaBase.lu
+    if (liuNianSihua.权) liuNianScore += sihuaBase.quan
+    if (liuNianSihua.科) liuNianScore += sihuaBase.ke
+    if (liuNianSihua.忌) liuNianScore += sihuaBase.ji
+  }
 
-  const liuNianDirection: '吉' | '凶' = liuNianScore > 0 ? '吉' : (liuNianScore < 0 ? '凶' : '吉')
+  const liuNianDirection = directionFromLayerScore(liuNianScore)
 
   return `${daXianDirection}${liuNianDirection}` as DirectionMatrix
 }

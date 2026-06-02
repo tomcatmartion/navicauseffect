@@ -7,6 +7,7 @@ import { routeMatter, detectMatterIntent } from '../router/decision-tree'
 import { createInitialState, advanceStage, canAdvanceTo } from '../orchestrator/state-machine'
 import { buildVirtualChart, groupIncomingByTarget } from '../tai-sui-rua-gua/virtual-chart'
 import { buildPrompt, STAGE1_HINT } from '../llm-wrapper/prompt-builder'
+import type { IR } from '@/core/types'
 import { generateFourDimensionTags, judgeThreePalaceTone } from '../personality-analyzer/four-dimension'
 import type { PalaceInput } from '../personality-analyzer/four-dimension'
 import type { MajorStar, PalaceBrightness } from '../types'
@@ -64,18 +65,42 @@ describe('M5: 事项路由', () => {
     expect(result.primaryPalace).toBe('疾厄')
   })
 
-  it('求名 — 技艺+网络', () => {
-    const result = routeMatter('求名', { fame_1: 'skill', fame_2: 'online' })
-    expect(result.primaryPalace).toBe('官禄')
+  it('求财 — 置产收租主看田宅', () => {
+    const result = routeMatter('求财', {
+      wealth_1: 'labor',
+      wealth_2a: 'no_site',
+      wealth_3: 'solo',
+      wealth_4: 'local',
+      wealth_5: 'labor',
+      wealth_7: 'yes',
+    })
+    expect(result.primaryPalace).toBe('田宅')
+  })
+
+  it('求财 — 合伙有生年需互动', () => {
+    const result = routeMatter('求财', {
+      wealth_1: 'labor',
+      wealth_3: 'partner',
+      wealth_3a: 'lead',
+      wealth_3b: 'has',
+    })
+    expect(result.needInteraction).toBe(true)
   })
 })
 
 describe('意图识别', () => {
   it('识别财运', () => expect(detectMatterIntent('我想看看今年的财运')).toBe('求财'))
   it('识别感情', () => expect(detectMatterIntent('我的感情什么时候能有着落')).toBe('求爱'))
-  it('识别关系', () => expect(detectMatterIntent('我和我老婆的相处模式')).toBe('求爱')) // "老婆"匹配感情关键词
+  it('识别关系', () => expect(detectMatterIntent('我和我老婆的相处模式')).toBe('求爱'))
   it('识别健康', () => expect(detectMatterIntent('最近身体不太舒服')).toBe('求健康'))
-  it('识别综合', () => expect(detectMatterIntent('看看整体运势')).toBeNull()) // 无匹配关键词返回null
+  it('识别综合', () => expect(detectMatterIntent('看看整体运势')).toBe('综合'))
+  it('识别性格分析', () => expect(detectMatterIntent('我想了解自己的性格')).toBe('性格分析'))
+  it('互动关系 — 非伴侣语境', () => {
+    expect(detectMatterIntent('我和同事的合作相处')).toBe('互动关系')
+  })
+  it('合伙关键词在 intentPriorities 下优先求财', () => {
+    expect(detectMatterIntent('我和合伙人的合作相处')).toBe('求财')
+  })
   it('无法识别返回 null', () => expect(detectMatterIntent('你好')).toBeNull())
 })
 
@@ -170,8 +195,8 @@ describe('性格定性', () => {
 
 describe('LLM Prompt 组装', () => {
   it('基本结构正确', () => {
-    const ir = { stage: 2 as const, mingGongTags: { palace: '命宫' as const, diZhi: '申' as const, selfTags: ['天同旺'], oppositeTags: ['加强'], trineTags: ['支撑'], flankingTags: ['均衡'], summary: '强旺' }, shenGongTags: { palace: '迁移' as const, diZhi: '子' as const, selfTags: [], oppositeTags: [], trineTags: [], flankingTags: [], summary: '' }, taiSuiTags: { palace: '父母' as const, diZhi: '酉' as const, selfTags: [], oppositeTags: [], trineTags: [], flankingTags: [], summary: '' }, overallTone: '强旺', mingGongHolographic: { sihuaDirection: '', auspiciousEffect: '', inauspiciousEffect: '', minorEffect: '', summary: '中性' } }
-    const messages = buildPrompt(ir, [], '你觉得我是什么样的人？', STAGE1_HINT)
+    const ir = { stage: 2 as const, mingGongTags: { palace: '命宫' as const, diZhi: '申' as const, selfTags: ['天同旺'], oppositeTags: ['加强'], trineTags: ['支撑'], flankingTags: ['均衡'], summary: '强旺' }, shenGongTags: { palace: '迁移' as const, diZhi: '子' as const, selfTags: [], oppositeTags: [], trineTags: [], flankingTags: [], summary: '' }, taiSuiTags: { palace: '父母' as const, diZhi: '酉' as const, selfTags: [], oppositeTags: [], trineTags: [], flankingTags: [], summary: '' }, overallTone: '强旺', mingGongHolographic: { sihuaDirection: '', auspiciousEffect: '', inauspiciousEffect: '', minorEffect: '', summary: '中性' }, palaceScores: [], allPatterns: [], mergedSihua: { shengNian: { 禄: '', 权: '', 科: '', 忌: '' }, dunGan: { 禄: '', 权: '', 科: '', 忌: '' }, entries: [], specialOverlaps: [], palaceAnnotations: [] }, chartSnapshot: { birthGanZhi: '壬戌', zodiac: '狗', fiveElementsClass: '水二局', soul: '巨门', body: '天梁', solarDate: '1982-09-24', lunarDate: '八月初八', mingGong: { name: '命宫', diZhi: '申', majorStars: [], minorStars: [], adjectiveStars: [] }, shenGong: { name: '迁移', diZhi: '子', majorStars: [], minorStars: [], adjectiveStars: [] }, taiSuiGong: { name: '父母', diZhi: '酉', majorStars: [], minorStars: [], adjectiveStars: [] }, allPalaces: [], sihuaText: '', decadalText: '' } }
+    const messages = buildPrompt(ir as IR, [], '你觉得我是什么样的人？', STAGE1_HINT)
     expect(messages.length).toBeGreaterThanOrEqual(3) // system + system(IR) + system(hint) + user
     expect(messages[0].role).toBe('system')
     expect(messages[messages.length - 1].role).toBe('user')

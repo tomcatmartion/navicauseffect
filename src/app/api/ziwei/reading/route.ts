@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
       question,
       chartData,
       parentBirthYears: parsed.data.parentBirthYears,
+      targetYear: parsed.data.targetYear,
+      routingAnswers: parsed.data.routingAnswers,
     })
 
     await incrementDailyUsage(session.user.id, ip)

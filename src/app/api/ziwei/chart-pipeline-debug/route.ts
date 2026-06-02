@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
       targetYear,
       partnerBirthYear: partnerBirthYear ?? null,
       parentBirthYears,
+      routingAnswers:
+        body?.routingAnswers && typeof body.routingAnswers === 'object' && !Array.isArray(body.routingAnswers)
+          ? (body.routingAnswers as Record<string, string>)
+          : undefined,
     })
 
     return NextResponse.json({ ok: true, data: snapshot })

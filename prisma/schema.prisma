@@ -123,6 +123,17 @@ model ConsultationRecord {
   astrolabeData     Json     @map("astrolabe_data")
   createdAt         DateTime @default(now()) @map("created_at")
 
+  /** Stage1 输出 JSON（宫位评分、格局、四化） */
+  stage1Snapshot   Json?    @map("stage1_snapshot")
+  /** Stage2 输出 JSON（性格定性、全息底色） */
+  stage2Snapshot   Json?    @map("stage2_snapshot")
+  /** 最后分析的事项类型 */
+  lastMatterType   String?  @map("last_matter_type")
+  /** 最新编译报告 JSON */
+  latestReport     Json?    @map("latest_report")
+  /** 来源会话 ID */
+  sourceSessionId  String?  @map("source_session_id")
+
   user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   analyses   AIAnalysis[]
 

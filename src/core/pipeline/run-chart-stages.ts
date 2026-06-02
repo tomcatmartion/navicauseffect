@@ -5,7 +5,7 @@ import { executeStage1 } from '@/core/stages/stage1-palace-scoring'
 import { executeStage2 } from '@/core/stages/stage2-personality'
 import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
 import { executeStage4 } from '@/core/stages/stage4-interaction'
-import { routeMatter } from '@/core/router/decision-tree'
+import { resolveMatterRoute } from '@/core/router/matter-route-resolver'
 import type {
   MatterType,
   PalaceName,
@@ -23,6 +23,8 @@ export interface RunChartStagesOptions {
   partnerBirthYear?: number | null
   parentBirthYears?: { father?: number; mother?: number }
   focusContext?: { matterType: MatterType; primaryPalace: PalaceName }
+  /** 显式问诊 answers（与 data/router.json 字段对应） */
+  routingAnswers?: Record<string, string>
 }
 
 export interface RunChartStagesResult {
@@ -33,6 +35,8 @@ export interface RunChartStagesResult {
   route: MatterRouteResult
   matterType: MatterType
   targetYear: number
+  routingAnswers: Record<string, string>
+  routeExtractConfidence: number
 }
 
 export function runCoreChartStages(
@@ -45,7 +49,10 @@ export function runCoreChartStages(
 
   const stage1 = executeStage1({ chartData, parentBirthYears: opts.parentBirthYears })
   const stage2 = executeStage2({ stage1, question })
-  const route = routeMatter(matterType, {})
+  const resolvedRoute = resolveMatterRoute(matterType, question, opts.routingAnswers, {
+    partnerBirthYear: opts.partnerBirthYear,
+  })
+  const route = resolvedRoute
   const stage3 = executeStage3({
     stage1,
     stage2,
@@ -66,5 +73,15 @@ export function runCoreChartStages(
     },
   })
 
-  return { stage1, stage2, stage3, stage4, route, matterType, targetYear }
+  return {
+    stage1,
+    stage2,
+    stage3,
+    stage4,
+    route,
+    matterType,
+    targetYear,
+    routingAnswers: resolvedRoute.routingAnswers,
+    routeExtractConfidence: resolvedRoute.extractConfidence,
+  }
 }

@@ -16,5 +16,24 @@ describe('buildChartPipelineDebugSnapshot', () => {
     expect(snap.personality.overview).toContain('命宫')
     expect(snap.extended.prompts.stage1).toContain('【system】')
     expect(snap.extended.threeLayerTable).toBeDefined()
+    expect(snap.affair.sihuaLandingReport).toBeDefined()
+    expect(snap.affair.sihuaLandingReport?.layers.length).toBeGreaterThanOrEqual(2)
+    expect(snap.affair.causalChain).toBeTruthy()
+    expect(snap.affair.resilience?.strategy).toBeTruthy()
+    expect(snap.affair.fourDimension?.self.palace).toBeTruthy()
+    expect(snap.affair.scoreBreakdown?.originBase).toBeDefined()
+    expect(snap.interaction.threeDimension.dimensionB.tone).toBeTruthy()
+    expect(snap.interaction.mode).toBe('solo')
+  })
+
+  it('有对方生年时应为 full 模式', () => {
+    const snap = buildChartPipelineDebugSnapshot(CHART_FIXTURE as Record<string, unknown>, {
+      affairType: '求爱',
+      affair: '相处',
+      targetYear: 2026,
+      partnerBirthYear: 1990,
+    })
+    expect(snap.interaction.mode).toBe('full')
+    expect(snap.interaction.partnerYear).toBe(1990)
   })
 })

@@ -193,4 +193,12 @@ export interface ScoringParams {
     trine: number
   }
   luCunDelta: Record<string, number>
+  /** 化权加分值 */
+  quanScore: number
+  /** 化科加分值 */
+  keScore: number
+  /** 化禄加分值 */
+  luScore: number
+  /** 化忌减分值 */
+  jiScore: number
 }

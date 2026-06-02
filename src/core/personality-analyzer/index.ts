@@ -8,3 +8,5 @@ export {
   judgeThreePalaceTone,
   type PalaceInput,
 } from './four-dimension'
+
+export { buildPersonalityTriadProfile, type BuildPersonalityTriadInput } from './triad-builder'

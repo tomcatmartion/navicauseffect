@@ -116,6 +116,10 @@ export interface BonusDetails {
   '2.6_母亲生年化禄': number
   '2.7_母亲遁干化禄': number
   '2.8_吉格倍率': number
+  '2.9_命主生年化权': number
+  '2.10_命主遁干化权': number
+  '2.11_命主生年化科': number
+  '2.12_命主遁干化科': number
 }
 
 /** 步骤4子步骤详情（v2.3：化忌拆分为6个独立项） */
@@ -265,6 +269,10 @@ function step2_bonus(palaceIdx: number, ctx: ScoringContext, state: ScoringState
     '2.6_母亲生年化禄': 0,
     '2.7_母亲遁干化禄': 0,
     '2.8_吉格倍率': 1.0,
+    '2.9_命主生年化权': 0,
+    '2.10_命主遁干化权': 0,
+    '2.11_命主生年化科': 0,
+    '2.12_命主遁干化科': 0,
   }
 
   // 空间位置定义
@@ -337,6 +345,52 @@ function step2_bonus(palaceIdx: number, ctx: ScoringContext, state: ScoringState
     }
   }
 
+  // 2.9-2.10 化权加分（命主生年、遁干）— 同空间衰减模式，分值取自 scoring.json
+  const scoringParams = getScoringParams()
+  const quanScore = scoringParams.quanScore ?? 0.4
+  const keScore = scoringParams.keScore ?? 0.3
+
+  const quanSources: Array<{ key: keyof BonusDetails; sihua: SihuaMap | null }> = [
+    { key: '2.9_命主生年化权', sihua: getShengNianSihua(ctx.birthGan) },
+    { key: '2.10_命主遁干化权', sihua: getDunGanSihua(ctx.birthGan, ctx.taiSuiZhi) },
+  ]
+
+  for (const source of quanSources) {
+    if (!source.sihua) continue
+    const quanStar = source.sihua.权
+    for (const pos of positions) {
+      if (pos.type.startsWith('夹宫')) continue
+      const targetPalace = ctx.palaces[pos.idx]
+      if (!targetPalace) continue
+      for (const star of targetPalace.stars) {
+        if (star.name === quanStar) {
+          details[source.key] = round2(details[source.key] + quanScore * pos.decay)
+        }
+      }
+    }
+  }
+
+  // 2.11-2.12 化科加分（命主生年、遁干）
+  const keSources: Array<{ key: keyof BonusDetails; sihua: SihuaMap | null }> = [
+    { key: '2.11_命主生年化科', sihua: getShengNianSihua(ctx.birthGan) },
+    { key: '2.12_命主遁干化科', sihua: getDunGanSihua(ctx.birthGan, ctx.taiSuiZhi) },
+  ]
+
+  for (const source of keSources) {
+    if (!source.sihua) continue
+    const keStar = source.sihua.科
+    for (const pos of positions) {
+      if (pos.type.startsWith('夹宫')) continue
+      const targetPalace = ctx.palaces[pos.idx]
+      if (!targetPalace) continue
+      for (const star of targetPalace.stars) {
+        if (star.name === keStar) {
+          details[source.key] = round2(details[source.key] + keScore * pos.decay)
+        }
+      }
+    }
+  }
+
   // 2.8 吉格倍率 — 从 pattern_library.json 按格局名称查找定义
   // 使用当前宫位作为锚定宫位时的格局列表
   const palacePatternList = ctx.palacePatterns?.[palaceIdx] ?? ctx.patterns
@@ -357,7 +411,7 @@ function step2_bonus(palaceIdx: number, ctx: ScoringContext, state: ScoringState
 
   details['2.8_吉格倍率'] = G
 
-  // 计算加分后的分数
+  // 计算加分后的分数（排除吉格倍率 key）
   const sumBonus = round2(Object.entries(details)
     .filter(([k]) => k !== '2.8_吉格倍率')
     .reduce((sum, [, v]) => sum + v, 0))
@@ -545,11 +599,13 @@ function step6_ceiling_and_absoluteFail(
   let finalScore = Math.min(score, ceiling)
   finalScore = round2(finalScore)
 
-  const { isAbsoluteFail, specialFlags } = detectAbsoluteFail(palaceIdx, ctx)
-
-  if (isAbsoluteFail) {
-    finalScore = 1.0
-  }
+  // 路径二：特殊组合强制绝败 — 临时屏蔽，保留代码，观察路径一效果后再决定是否启用
+  // const { isAbsoluteFail, specialFlags } = detectAbsoluteFail(palaceIdx, ctx)
+  // if (isAbsoluteFail) {
+  //   finalScore = 1.0
+  // }
+  const isAbsoluteFail = false
+  const specialFlags: string[] = []
 
   return { finalScore, isAbsoluteFail, specialFlags }
 }

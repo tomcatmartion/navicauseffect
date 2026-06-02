@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import { buildPrompt } from '@/core/llm-wrapper/prompt-builder'
-import type { IRStage1, IRStage3or4 } from '@/core/types'
+import type { IRStage1, IRStage3or4, ChartSnapshot } from '@/core/types'
+
+const MIN_CHART_SNAPSHOT = {
+  birthGanZhi: '庚午',
+  zodiac: '马',
+  fiveElementsClass: '土五局',
+  soul: '禄存',
+  body: '火星',
+  solarDate: '1990-06-15',
+  lunarDate: '五月廿三',
+  mingGong: { name: '命宫', diZhi: '寅', majorStars: ['紫微'], minorStars: [], adjectiveStars: [] },
+  shenGong: { name: '迁移', diZhi: '申', majorStars: [], minorStars: [], adjectiveStars: [] },
+  taiSuiGong: { name: '午', diZhi: '午', majorStars: [], minorStars: [], adjectiveStars: [] },
+  allPalaces: [
+    { name: '命宫', diZhi: '寅', heavenlyStem: '甲', majorStars: ['紫微'], minorStars: [], adjectiveStars: [], isBodyPalace: false },
+  ],
+  sihuaText: '测试四化',
+  decadalText: '测试大限',
+} satisfies ChartSnapshot
 
 function makeStage1IR(): IRStage1 {
   return {
@@ -15,6 +33,7 @@ function makeStage1IR(): IRStage1 {
       specialOverlaps: [],
     },
     hasParentInfo: false,
+    chartSnapshot: MIN_CHART_SNAPSHOT,
   } as unknown as IRStage1
 }
 
@@ -44,8 +63,12 @@ function makeStage3IR(): IRStage3or4 {
       sihuaPositions: ['化忌入夫妻'],
       direction: '凶',
       daXianRelation: '凶吉',
-      window: '风险期',
+      window: '蛰伏期',
     },
+    palaceScores: [{ palace: '财帛', diZhi: '戌', finalScore: 6.5, tone: '磨炼' }],
+    allPatterns: [],
+    mergedSihua: { entries: [], specialOverlaps: [] },
+    chartSnapshot: MIN_CHART_SNAPSHOT,
   } as unknown as IRStage3or4
 }
 

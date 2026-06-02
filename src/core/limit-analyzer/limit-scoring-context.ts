@@ -6,6 +6,32 @@ import type { TianGan, SihuaType } from '@/core/types'
 import type { ScoringContext, PalaceForScoring } from '@/core/energy-evaluator/scoring-flow'
 import type { DaXianPalaceMapping } from '@/core/types'
 import { getSihuaTable } from '@/core/sihua-calculator/tables'
+import { getLiuNianExtraStars } from './liu-nian-extra-stars'
+
+/** 流月 horoscope 快照（与 serializeHoroscopeForReading 输出对齐） */
+export interface LiuYueHoroscopeSnapshot {
+  heavenlyStem: TianGan
+  mutagen: [string, string, string, string]
+}
+
+/** 从 chartData.horoscope.monthly 读取流月四化（缺失或字段不全时返回 null） */
+export function extractMonthlyHoroscope(
+  chartData: Record<string, unknown>,
+): LiuYueHoroscopeSnapshot | null {
+  const horoscope = chartData.horoscope as Record<string, unknown> | undefined
+  const monthly = horoscope?.monthly as Record<string, unknown> | undefined
+  if (!monthly) return null
+
+  const stemRaw = monthly.heavenlyStem ?? monthly.gan
+  const heavenlyStem = typeof stemRaw === 'string' ? stemRaw : ''
+  const mutagenRaw = monthly.mutagen
+  if (!heavenlyStem || !Array.isArray(mutagenRaw) || mutagenRaw.length < 4) return null
+
+  const mutagen = mutagenRaw.slice(0, 4).map(s => String(s ?? '')) as [string, string, string, string]
+  if (mutagen.every(s => !s)) return null
+
+  return { heavenlyStem: heavenlyStem as TianGan, mutagen }
+}
 
 export function buildDaXianScoringContext(
   mapping: Pick<DaXianPalaceMapping, 'daXianGan' | 'mutagen' | 'palaceIndex'>,
@@ -43,6 +69,42 @@ export function buildDaXianScoringContext(
   }
 }
 
+/** 叠流月宫干四化到原局星曜，供 evaluateAllPalaces 使用 */
+export function buildLiuYueScoringContext(
+  monthly: LiuYueHoroscopeSnapshot,
+  natalCtx: ScoringContext,
+): ScoringContext | null {
+  const monthlyPalaces: PalaceForScoring[] = natalCtx.palaces.map(p => ({
+    ...p,
+    stars: p.stars.map(s => ({ ...s })),
+    majorStars: [...p.majorStars],
+  }))
+
+  const sihuaTypes: SihuaType[] = ['化禄', '化权', '化科', '化忌']
+  for (let i = 0; i < monthly.mutagen.length && i < 4; i++) {
+    const starName = monthly.mutagen[i]
+    const sihuaType = sihuaTypes[i]
+    if (!starName) continue
+    for (const palace of monthlyPalaces) {
+      for (const star of palace.stars) {
+        if (star.name === starName && !star.sihua) {
+          star.sihua = sihuaType
+          star.sihuaSource = '流月'
+        }
+      }
+    }
+  }
+
+  return {
+    skeletonId: natalCtx.skeletonId,
+    palaces: monthlyPalaces,
+    birthGan: monthly.heavenlyStem,
+    taiSuiZhi: natalCtx.taiSuiZhi,
+    shenGongIndex: natalCtx.shenGongIndex,
+    patterns: [],
+  }
+}
+
 export function buildYearlyScoringContext(
   year: number,
   natalCtx: ScoringContext,
@@ -72,6 +134,25 @@ export function buildYearlyScoringContext(
           s.sihuaSource = '流年'
         }
       }
+    }
+  }
+
+  // 流年禄存替换原局禄存，并叠流年羊陀魁钺
+  for (const palace of yearlyPalaces) {
+    palace.hasLuCun = false
+    palace.stars = palace.stars.filter(s => s.name !== '禄存')
+  }
+  const extraStars = getLiuNianExtraStars(gan, { ...natalCtx, palaces: yearlyPalaces })
+  for (const extra of extraStars) {
+    const palace = yearlyPalaces[extra.palaceIndex]
+    if (!palace) continue
+    if (extra.starName === '禄存') {
+      palace.hasLuCun = true
+      if (!palace.stars.some(s => s.name === '禄存')) {
+        palace.stars.push({ name: '禄存' })
+      }
+    } else if (!palace.stars.some(s => s.name === extra.starName)) {
+      palace.stars.push({ name: extra.starName })
     }
   }
 

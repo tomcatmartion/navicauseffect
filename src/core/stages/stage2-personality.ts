@@ -35,6 +35,7 @@ import {
 } from '@/core/personality-analyzer/score-reason-to-personality'
 import { buildPalaceInput } from './helpers/palace-input-builder'
 import { injectStage2Knowledge } from './helpers/knowledge-injector'
+import { buildPersonalityTriadProfile } from '@/core/personality-analyzer/triad-builder'
 
 /**
  * 执行阶段二：性格定性
@@ -121,6 +122,28 @@ export function executeStage2(input: Stage2Input): Stage2Output {
   // ═══════════════════════════════════════════════════════════════════
   // P2: 三宫交叉张力分析
   // ═══════════════════════════════════════════════════════════════════
+  const personalityTriad = buildPersonalityTriadProfile({
+    ctx,
+    palaceScores,
+    mingIdx,
+    shenIdx,
+    taiSuiIdx: taiSuiIdx >= 0 ? taiSuiIdx : 0,
+  })
+
+  const knowledgeSnippetsWithTriad = [
+    ...knowledgeSnippets,
+    {
+      source: '性格三宫' as const,
+      key: '性格三宫基准',
+      content: [
+        `命宫：${personalityTriad.mingLayer.description}`,
+        `身宫：${personalityTriad.shenLayer.description}`,
+        `太岁宫：${personalityTriad.taiSuiLayer.description}`,
+        personalityTriad.synthesis,
+      ].join('\n'),
+    },
+  ]
+
   const threePalaceCross = analyzeThreePalaceCrossTension({
     mingScore: palaceScores[mingIdx]?.finalScore ?? 5,
     mingStars: ctx.palaces[mingIdx].majorStars.map(ms => ({ star: String(ms.star), brightness: ms.brightness })),
@@ -139,7 +162,8 @@ export function executeStage2(input: Stage2Input): Stage2Output {
     taiSuiTags,
     overallTone,
     mingGongHolographic,
-    knowledgeSnippets,
+    knowledgeSnippets: knowledgeSnippetsWithTriad,
+    personalityTriad,
     shenGongIndex: shenIdx,
     taiSuiIndex: taiSuiIdx >= 0 ? taiSuiIdx : 0,
     patternPersonality: {

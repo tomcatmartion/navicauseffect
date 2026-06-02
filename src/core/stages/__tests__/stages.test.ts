@@ -74,6 +74,13 @@ describe('Stage 2: 性格定性', () => {
     const output = executeStage2({ stage1: stage1Output, question: '性格' })
     expect(output.overallTone).toBeTruthy()
   })
+
+  it('应包含 personalityTriad JSON 画像', () => {
+    const output = executeStage2({ stage1: stage1Output, question: '性格' })
+    expect(output.personalityTriad).toBeDefined()
+    expect(output.personalityTriad?.synthesis).toBeTruthy()
+    expect(output.knowledgeSnippets.some(s => s.source === '性格三宫')).toBe(true)
+  })
 })
 
 describe('Stage 3: 事项分析', () => {
@@ -122,6 +129,25 @@ describe('Stage 3: 事项分析', () => {
     })
 
     expect(output.knowledgeSnippets.length).toBeGreaterThan(0)
+  })
+
+  it('应返回 compositeScore 与 analysisSummary', () => {
+    const stage2Output = executeStage2({ stage1: stage1Output, question: '财运' })
+    const routeResult = routeMatter('求财', {})
+    const output = executeStage3({
+      stage1: stage1Output,
+      stage2: stage2Output,
+      matterType: '求财',
+      routeResult,
+      chartData: CHART_FIXTURE,
+      targetYear: 2026,
+    })
+
+    expect(output.compositeScore).toBeGreaterThanOrEqual(0)
+    expect(output.compositeScore).toBeLessThanOrEqual(10)
+    expect(output.scoreLabel).toBeTruthy()
+    expect(output.analysisSummary?.compositeConclusion).toBeTruthy()
+    expect(output.directionWindow).not.toBe('转机期')
   })
 })
 

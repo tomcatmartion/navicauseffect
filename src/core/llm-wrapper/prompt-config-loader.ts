@@ -36,12 +36,17 @@ export interface UserPromptTemplateConfig {
   placeholders?: string[]
 }
 
+export interface EventAnalysisConfig {
+  governor_template?: string
+}
+
 export interface PromptTemplates {
   version?: string
   description?: string
   system_prompt?: SystemPromptConfig
   phrase_library?: Record<string, string>
   stage_hints?: Record<string, StageHintConfig>
+  event_analysis?: EventAnalysisConfig
   user_prompt_templates?: Record<string, UserPromptTemplateConfig>
   state_transition_hints?: Record<string, string>
 }

@@ -13,6 +13,9 @@ export function createEmptyHybridPersisted(): SessionPersisted {
     sessionState: createInitialState(),
     conversationHistory: [],
     collected: { eventAnswers: {} },
+    matterHistory: {},
+    currentMatterKey: null,
+    conversationSummary: '',
   }
 }
 

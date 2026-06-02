@@ -118,6 +118,34 @@ const BONUS_PERSONALITY_MAP: Record<keyof BonusDetails, (score: number) => Score
         : '格局影响中性',
     impactLevel: score > 1.3 ? '强' : score > 1.1 ? '中' : '弱',
   }),
+  '2.9_命主生年化权': (score) => ({
+    dimension: '行动力',
+    item: '命主生年化权',
+    score,
+    personalityInterpretation: '生年化权加持，行动果断、执行力和掌控欲增强',
+    impactLevel: score > 0.3 ? '强' : score > 0.1 ? '中' : '弱',
+  }),
+  '2.10_命主遁干化权': (score) => ({
+    dimension: '行动力',
+    item: '命主遁干化权',
+    score,
+    personalityInterpretation: '遁干化权加持，对行动力有间接强化效果',
+    impactLevel: score > 0.3 ? '中' : '弱',
+  }),
+  '2.11_命主生年化科': (score) => ({
+    dimension: '才学名望',
+    item: '命主生年化科',
+    score,
+    personalityInterpretation: '生年化科加持，才学出众、易获贵人相助，注重名声',
+    impactLevel: score > 0.2 ? '强' : score > 0.1 ? '中' : '弱',
+  }),
+  '2.12_命主遁干化科': (score) => ({
+    dimension: '才学名望',
+    item: '命主遁干化科',
+    score,
+    personalityInterpretation: '遁干化科加持，对才学和贵人运有间接促进',
+    impactLevel: score > 0.2 ? '中' : '弱',
+  }),
 }
 
 // ═══════════════════════════════════════════════════════════════════

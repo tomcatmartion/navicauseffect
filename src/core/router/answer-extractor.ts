@@ -5,7 +5,7 @@
  * 策略：规则优先（关键词+正则）→ 提取 70% 字段
  * 剩余字段由 M7 在报告生成时隐式补全（合并到一次 LLM 调用中）。
  *
- * 不单独调用 LLM 做 Extractor，减少延迟和出错点。
+ * 字段定义与 data/router.json 各分支 questions 对齐。
  */
 
 import type { MatterType } from '@/core/types'
@@ -22,10 +22,6 @@ export interface ExtractedAnswers {
 
 /**
  * 从对话文本中提取问诊信息
- *
- * @param dialogText 对话文本（用户最近的几条消息）
- * @param matterType 事项类型
- * @returns 提取结果
  */
 export function extractAnswersFromDialog(
   dialogText: string,
@@ -35,19 +31,19 @@ export function extractAnswersFromDialog(
   let extractedCount = 0
   const totalFields = getFieldCount(matterType)
 
-  // ── 通用字段提取 ──────────────────────────────────────
-
   // 合伙人生年（4位数字，1950-2020范围）
   const yearMatch = dialogText.match(/(?:19[5-9]\d|20[0-1]\d)/)
   if (yearMatch) {
-    const context = getContext(dialogText, yearMatch.index ?? 0, 20)
-    if (/合伙|伙伴|伙伴|朋友|一起/.test(context)) {
+    const context = getContext(dialogText, yearMatch.index ?? 0, 24)
+    if (/合伙|伙伴|朋友|一起|搭档/.test(context)) {
       answers.partnerBirthYear = yearMatch[0]
+      if (matterType === '求财') {
+        answers.wealth_3 = answers.wealth_3 ?? 'partner'
+        answers.wealth_3b = 'has'
+      }
       extractedCount++
     }
   }
-
-  // ── 按事项类型提取 ──────────────────────────────────
 
   switch (matterType) {
     case '求财':
@@ -70,48 +66,72 @@ export function extractAnswersFromDialog(
       break
   }
 
-  const confidence = totalFields > 0 ? extractedCount / totalFields : 0
-  const knownFields = Object.keys(answers)
+  const confidence = totalFields > 0 ? Math.min(1, extractedCount / totalFields) : 0
+  const knownFields = Object.keys(answers).filter(k => k !== 'partnerBirthYear')
   const missingFields = getExpectedFields(matterType).filter(f => !knownFields.includes(f))
 
   return { answers, confidence, missingFields }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 各事项提取规则
-// ═══════════════════════════════════════════════════════════════════
-
 function extractWealthAnswers(text: string, answers: Record<string, string>): number {
   let count = 0
 
-  // 有无劳力
-  if (/投资|理财|基金|股票|期货|博弈|彩票/.test(text)) {
+  if (/投资|理财|基金|股票|期货|博弈|彩票|纯投资/.test(text)) {
     answers.wealth_1 = 'invest'
     count++
-  } else if (/开店|经营|上班|打工|做(生意|买卖)/.test(text)) {
+    if (/基金|理财|定存/.test(text)) {
+      answers.wealth_6 = 'fund'
+      count++
+    } else if (/股票|期货|证券/.test(text)) {
+      answers.wealth_6 = 'stock'
+      count++
+    } else if (/彩票|博弈|赌/.test(text)) {
+      answers.wealth_6 = 'lottery'
+      count++
+    }
+  } else if (/开店|经营|上班|打工|做(生意|买卖)|劳力|生产/.test(text)) {
     answers.wealth_1 = 'labor'
     count++
   }
 
-  // 有无合伙
+  if (/门店|店铺|公司|工厂|场地|实体|营业/.test(text)) {
+    answers.wealth_2a = 'has_site'
+    count++
+    if (/摆摊|兼职|小本|小生意/.test(text)) {
+      answers.wealth_2b = 'small'
+      count++
+    } else if (/大公司|连锁|规模|门店/.test(text)) {
+      answers.wealth_2b = 'large'
+      count++
+    }
+  } else if (/没有店|无店|线上|无场地/.test(text)) {
+    answers.wealth_2a = 'no_site'
+    count++
+  }
+
   if (/合伙|一起|合作|搭档/.test(text)) {
     answers.wealth_3 = 'partner'
     count++
-  } else if (/自己|一个人|独立/.test(text)) {
+    if (/当头|主导|负责经营|我来管/.test(text)) {
+      answers.wealth_3a = 'lead'
+      count++
+    } else if (/只出资|不参与|投资人/.test(text)) {
+      answers.wealth_3a = 'investor'
+      count++
+    }
+  } else if (/自己|一个人|独立|单干/.test(text)) {
     answers.wealth_3 = 'solo'
     count++
   }
 
-  // 本地/异地
   if (/外贸|跨境|异地|海外|出口/.test(text)) {
     answers.wealth_4 = 'remote'
     count++
-  } else if (/本地|本地|附近|同城的?/.test(text)) {
+  } else if (/本地|同城|附近/.test(text)) {
     answers.wealth_4 = 'local'
     count++
   }
 
-  // 业务特点
   if (/中介|业务|销售|口才|介绍|经纪/.test(text)) {
     answers.wealth_5 = 'sales'
     count++
@@ -120,9 +140,13 @@ function extractWealthAnswers(text: string, answers: Record<string, string>): nu
     count++
   }
 
-  // 有无场地
-  if (/门店|店铺|公司|工厂|场地|实体/.test(text)) {
-    answers.wealth_2a = 'has_site'
+  if (/收租|置产|房产|不动产|收房/.test(text)) {
+    answers.wealth_7 = 'yes'
+    count++
+  }
+
+  if (/服务业|空间.*大|餐饮|酒店|会所/.test(text)) {
+    answers.wealth_8 = 'yes'
     count++
   }
 
@@ -135,8 +159,11 @@ function extractLoveAnswers(text: string, answers: Record<string, string>): numb
   if (/自由恋爱|自己认识|自然/.test(text)) {
     answers.love_1 = 'free'
     count++
-  } else if (/相亲|介绍|相亲/.test(text)) {
+  } else if (/相亲|介绍/.test(text)) {
     answers.love_1 = 'match'
+    count++
+  } else if (/条件|交换|物质/.test(text)) {
+    answers.love_1 = 'exchange'
     count++
   }
 
@@ -165,6 +192,9 @@ function extractStudyAnswers(text: string, answers: Record<string, string>): num
   if (/备考|冲刺|考试|考研|高考|记诵/.test(text)) {
     answers.study_2 = 'exam'
     count++
+  } else if (/常规|平时|日常学习/.test(text)) {
+    answers.study_2 = 'normal'
+    count++
   }
 
   return count
@@ -176,18 +206,32 @@ function extractCareerAnswers(text: string, answers: Record<string, string>): nu
   if (/跳槽|换工作|离职|辞职/.test(text)) {
     answers.career_1 = 'switch'
     count++
-  } else if (/第一次|刚毕业|应届|初入/.test(text)) {
+  } else if (/第一次|刚毕业|应届|初入|初次/.test(text)) {
     answers.career_1 = 'first'
+    count++
+  }
+
+  if (/学历|证书|门槛|资格证|要求/.test(text)) {
+    answers.career_2 = 'has_barrier'
+    count++
+  } else if (/无门槛|不限学历/.test(text)) {
+    answers.career_2 = 'no_barrier'
     count++
   }
 
   if (/管理|带人|下属|团队|领导/.test(text)) {
     answers.career_3 = 'manage'
     count++
+  } else if (/不需要管理|不带人/.test(text)) {
+    answers.career_3 = 'no_manage'
+    count++
   }
 
   if (/异地|外地|出差|驻外/.test(text)) {
     answers.career_4 = 'remote'
+    count++
+  } else if (/本地|同城/.test(text)) {
+    answers.career_4 = 'local'
     count++
   }
 
@@ -197,11 +241,27 @@ function extractCareerAnswers(text: string, answers: Record<string, string>): nu
 function extractHealthAnswers(text: string, answers: Record<string, string>): number {
   let count = 0
 
-  if (/具体|症状|病|痛|不舒服/.test(text)) {
+  if (/具体|症状|病|痛|不舒服|疾病/.test(text)) {
     answers.health_1 = 'specific'
     count++
-  } else if (/体质|整体|养生|预防/.test(text)) {
+  } else if (/体质|整体|养生|预防|评估/.test(text)) {
     answers.health_1 = 'general'
+    count++
+  }
+
+  if (/父母.*生年|父亲.*年|母亲.*年|爸妈.*年/.test(text)) {
+    answers.health_2 = 'yes'
+    count++
+  } else if (/没有.*父母.*生年|不知.*父母/.test(text)) {
+    answers.health_2 = 'no'
+    count++
+  }
+
+  if (/遗传|家族病史|家族.*病/.test(text)) {
+    answers.health_3 = 'yes'
+    count++
+  } else if (/无遗传|没有遗传/.test(text)) {
+    answers.health_3 = 'no'
     count++
   }
 
@@ -211,46 +271,55 @@ function extractHealthAnswers(text: string, answers: Record<string, string>): nu
 function extractFameAnswers(text: string, answers: Record<string, string>): number {
   let count = 0
 
+  if (/技艺|专业|技能|能力|手艺/.test(text)) {
+    answers.fame_1 = 'skill'
+    count++
+  } else if (/流量|粉丝|人脉|社交|人缘|网红/.test(text)) {
+    answers.fame_1 = 'social'
+    count++
+  }
+
   if (/直播|网络|自媒体|短视频|演艺|网红/.test(text)) {
     answers.fame_2 = 'online'
+    count++
+  } else if (/传统|线下|口碑/.test(text)) {
+    answers.fame_2 = 'traditional'
     count++
   }
 
   return count
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 辅助函数
-// ═══════════════════════════════════════════════════════════════════
-
-/** 获取上下文窗口文本 */
 function getContext(text: string, center: number, radius: number): string {
   const start = Math.max(0, center - radius)
   const end = Math.min(text.length, center + radius)
   return text.slice(start, end)
 }
 
-/** 获取事项类型的期望字段数 */
 function getFieldCount(matterType: MatterType): number {
-  const counts: Record<MatterType, number> = {
-    '求学': 2,
-    '求爱': 2,
-    '求财': 6,
-    '求职': 4,
-    '求健康': 2,
-    '求名': 2,
-  }
-  return counts[matterType] ?? 2
+  return getExpectedFields(matterType).length
 }
 
-/** 获取事项类型的期望字段名 */
+/** 与 router.json 各分支 questions id 对齐（不含 partnerBirthYear 辅助字段） */
 function getExpectedFields(matterType: MatterType): string[] {
   const fields: Record<MatterType, string[]> = {
     '求学': ['study_1', 'study_2'],
     '求爱': ['love_1', 'love_2'],
-    '求财': ['wealth_1', 'wealth_2a', 'wealth_3', 'wealth_4', 'wealth_5'],
+    '求财': [
+      'wealth_1',
+      'wealth_2a',
+      'wealth_2b',
+      'wealth_3',
+      'wealth_3a',
+      'wealth_3b',
+      'wealth_4',
+      'wealth_5',
+      'wealth_6',
+      'wealth_7',
+      'wealth_8',
+    ],
     '求职': ['career_1', 'career_2', 'career_3', 'career_4'],
-    '求健康': ['health_1', 'health_2'],
+    '求健康': ['health_1', 'health_2', 'health_3'],
     '求名': ['fame_1', 'fame_2'],
   }
   return fields[matterType] ?? []

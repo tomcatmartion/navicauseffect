@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MatterRouterQuestionnaire } from "@/components/analysis/matter-router-questionnaire";
+import { MatterAffairPanel, type MatterAffairResult } from "@/components/analysis/matter-affair-panel";
+import { MatterInteractionPanel, type MatterInteractionResult } from "@/components/analysis/matter-interaction-panel";
+import { SihuaLandingTable } from "@/components/analysis/sihua-landing-table";
+import type { DirectionMatrix, DirectionWindow, ThreeLayerPalaceTable } from "@/core/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -13,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import limitDirectionData from "../../../data/limit_direction.json";
 
 type AnalysisType =
   | "palace"
@@ -28,6 +34,7 @@ type AnalysisType =
   | "debug-three-layer"
   | "debug-taisui-rua"
   | "debug-liunian"
+  | "debug-sihua-landing"
   | "debug-prompts";
 
 function isDebugTab(type: AnalysisType | null): type is Exclude<
@@ -47,6 +54,7 @@ function isDebugTab(type: AnalysisType | null): type is Exclude<
     type === "debug-three-layer" ||
     type === "debug-taisui-rua" ||
     type === "debug-liunian" ||
+    type === "debug-sihua-landing" ||
     type === "debug-prompts"
   );
 }
@@ -67,18 +75,25 @@ interface ZiweiAnalysisPanelProps {
   parentBirthYears?: { father?: number; mother?: number };
 }
 
-const ANALYSIS_OPTIONS = [
+const PRIMARY_ANALYSIS_OPTIONS = [
   { id: "patterns" as const, label: "格局识别", icon: "🏆" },
   { id: "all-palaces" as const, label: "宫位能级", icon: "📊" },
   { id: "personality" as const, label: "性格分析", icon: "🔮" },
+  { id: "affair" as const, label: "事项分析", icon: "🎯" },
+  { id: "interaction" as const, label: "互动分析", icon: "🤝" },
+] as const;
+
+const DEBUG_ANALYSIS_OPTIONS = [
   { id: "debug-sihua" as const, label: "生年·太岁四化", icon: "🔣" },
   { id: "debug-merged-sihua" as const, label: "合并四化", icon: "🔗" },
   { id: "debug-three-layer" as const, label: "三层表", icon: "📐" },
   { id: "debug-taisui-rua" as const, label: "太岁入卦", icon: "🎴" },
   { id: "debug-liunian" as const, label: "流年", icon: "📅" },
+  { id: "debug-sihua-landing" as const, label: "化星落宫", icon: "📍" },
   { id: "debug-prompts" as const, label: "阶段 Prompt", icon: "📝" },
-  { id: "affair" as const, label: "事项分析", icon: "🎯" },
 ] as const;
+
+const ANALYSIS_OPTIONS = [...PRIMARY_ANALYSIS_OPTIONS, ...DEBUG_ANALYSIS_OPTIONS] as const;
 
 /** POST /api/ziwei/chart-pipeline-debug 返回 data 形状（精简，仅前端消费） */
 interface PipelineSnapshot {
@@ -158,6 +173,10 @@ interface PipelineSnapshot {
             '2.6_母亲生年化禄': number;
             '2.7_母亲遁干化禄': number;
             '2.8_吉格倍率': number;
+            '2.9_命主生年化权': number;
+            '2.10_命主遁干化权': number;
+            '2.11_命主生年化科': number;
+            '2.12_命主遁干化科': number;
           };
           /** 2.1-2.7 原始总和（不含倍率） */
           sumBonus?: number;
@@ -254,8 +273,63 @@ interface PipelineSnapshot {
   };
   affair: {
     overview: string;
-    conclusion: { probability: string; opportunities: string[]; obstacles: string[] };
-    advice: { strategy: string[] };
+    matterType?: string;
+    affairText?: string;
+    route?: {
+      primaryPalace: string;
+      secondaryPalaces: string[];
+      specialConditions: string[];
+      needInteraction: boolean;
+      routingAnswers: Record<string, string>;
+      extractConfidence: number;
+    };
+    analysisSummary?: {
+      innateBase: string;
+      fortuneTrend: string;
+      yearlyTrigger: string;
+      compositeConclusion: string;
+      riskAdvice: string;
+    };
+    compositeScore?: number;
+    scoreLabel?: string;
+    scoreAction?: string;
+    directionMatrix?: string;
+    directionWindow?: string;
+    currentDaXianQualitative?: string;
+    personalityAnchor?: string;
+    innateLevelDetail?: {
+      level: string;
+      description: string;
+      advice: string;
+    };
+    primaryAnalysis?: {
+      palace: string;
+      fourDimensionResult: string;
+      mingGongRegulation: string;
+      protectionStatus: string;
+    };
+    protectionMechanisms?: Array<{ id: string; effect: string; description?: string }>;
+    liuNianSihuaPositions?: string[];
+    liuYueDataAvailable?: boolean;
+    sihuaLandingReport?: SihuaLandingReportVm;
+    fourDimension?: import("@/core/types").FourDimensionProjection;
+    scoreBreakdown?: import("@/core/types").MatterScoreBreakdown;
+    causalChain?: string;
+    luluJiFlow?: string[];
+    resilience?: import("@/core/types").MatterResilienceResult;
+    daXianTimeline?: import("@/core/types").DaXianTimelineEntry[];
+    secondaryPalaceSnapshots?: import("@/core/types").SecondaryPalaceSnapshot[];
+    timeDimensions?: string[];
+    personalityInfluence?: string;
+    currentDaXianDetail?: import("@/core/types").CurrentDaXianDetail;
+    fourDimensionFocus?: string[];
+    slimmedDescriptions?: string[];
+    conclusion: { probability: string; summary?: string; opportunities?: string[]; obstacles?: string[] };
+    advice: { strategy: string[]; resilienceStrategy?: string };
+  };
+  interaction: MatterInteractionResult;
+  limitPatterns?: {
+    synthesis?: { trend: string; keyDecennials?: string[]; peakYears?: number[] };
   };
   extended: {
     birthGan: string;
@@ -393,14 +467,72 @@ interface PersonalityVm {
   };
 }
 
+interface SihuaLandingReportVm {
+  focusPalaces: string[];
+  directionMatrix: string;
+  layers: Array<{
+    layer: "大限" | "流年" | "流月";
+    stemLabel: string;
+    direction: "吉" | "凶";
+    layerScore: number;
+    ruleKey: string;
+    ruleAdjustment: number;
+    rows: Array<{
+      sihuaType: string;
+      star: string;
+      palace: string | null;
+      inMatterFocus: boolean;
+      palaceQuality: "good" | "bad" | "neutral" | "unknown";
+      triggersShaPalace?: boolean;
+      hasAuspiciousPattern?: boolean;
+    }>;
+  }>;
+}
+
 interface AffairVm {
   overview?: string;
+  matterType?: string;
+  affairText?: string;
+  route?: PipelineSnapshot["affair"]["route"];
+  analysisSummary?: PipelineSnapshot["affair"]["analysisSummary"];
+  compositeScore?: number;
+  scoreLabel?: string;
+  scoreAction?: string;
+  directionMatrix?: string;
+  directionWindow?: string;
+  currentDaXianQualitative?: string;
+  personalityAnchor?: string;
+  innateLevelDetail?: PipelineSnapshot["affair"]["innateLevelDetail"];
+  primaryAnalysis?: PipelineSnapshot["affair"]["primaryAnalysis"];
+  protectionMechanisms?: PipelineSnapshot["affair"]["protectionMechanisms"];
+  liuNianSihuaPositions?: string[];
+  liuYueDataAvailable?: boolean;
+  sihuaLandingReport?: SihuaLandingReportVm;
+  fourDimension?: import("@/core/types").FourDimensionProjection;
+  scoreBreakdown?: import("@/core/types").MatterScoreBreakdown;
+  causalChain?: string;
+  luluJiFlow?: string[];
+  resilience?: import("@/core/types").MatterResilienceResult;
+  daXianTimeline?: import("@/core/types").DaXianTimelineEntry[];
+  secondaryPalaceSnapshots?: import("@/core/types").SecondaryPalaceSnapshot[];
+  timeDimensions?: string[];
+  personalityInfluence?: string;
+  currentDaXianDetail?: import("@/core/types").CurrentDaXianDetail;
+  fourDimensionFocus?: string[];
+  slimmedDescriptions?: string[];
+  threeLayerTable?: ThreeLayerPalaceTable;
+  sihuaTriggers?: import("@/core/types").SihuaTrigger[];
+  daXianPalaceScores?: import("@/core/types").PalaceScoreBrief[];
+  liuNianPalaceScores?: import("@/core/types").PalaceScoreBrief[];
+  lifeTrend?: string;
+  capabilityMatch?: string;
   conclusion?: {
     probability?: string;
+    summary?: string;
     opportunities?: string[];
     obstacles?: string[];
   };
-  advice?: { strategy?: string[] };
+  advice?: { strategy?: string[]; resilienceStrategy?: string };
 }
 
 const AFFAIR_TYPES = [
@@ -418,6 +550,7 @@ const EFFECT_LABELS: Record<string, string> = {
   mixed: "吉凶参半",
 };
 
+
 /** 调试展开状态管理 */
 interface DebugExpandedState {
   patterns: Record<string, boolean>;
@@ -432,6 +565,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
   const [error, setError] = useState<string | null>(null);
   const [selectedAffair, setSelectedAffair] = useState("求财");
   const [affairInput, setAffairInput] = useState("投资赚钱");
+  const [routingAnswers, setRoutingAnswers] = useState<Record<string, string>>({});
+  const [questionnaireComplete, setQuestionnaireComplete] = useState(false);
+  const [affairRunKey, setAffairRunKey] = useState<string | null>(null);
+  const [interactionRunKey, setInteractionRunKey] = useState<string | null>(null);
   const [targetYear, setTargetYear] = useState(() => new Date().getFullYear());
   const [partnerDebugYear, setPartnerDebugYear] = useState("");
   const [debugExpanded, setDebugExpanded] = useState<DebugExpandedState>({
@@ -441,12 +578,35 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
 
   const usePipeline = Boolean(chartData?.palaces);
 
+  useEffect(() => {
+    setRoutingAnswers({});
+    setPipelineSnapshot(null);
+    setAffairRunKey(null);
+  }, [selectedAffair]);
+
+  const currentAffairParamsKey = JSON.stringify({
+    selectedAffair,
+    affairInput,
+    targetYear,
+    routingAnswers,
+    partnerDebugYear,
+  });
+  const affairParamsStale = affairRunKey !== null && affairRunKey !== currentAffairParamsKey;
+
+  const currentInteractionParamsKey = JSON.stringify({
+    targetYear,
+    partnerDebugYear,
+  });
+  const interactionParamsStale =
+    interactionRunKey !== null && interactionRunKey !== currentInteractionParamsKey;
+
   const fetchPipelineSnapshot = useCallback(
     async (opts?: {
       affairType?: string;
       affair?: string;
       targetYear?: number;
       partnerBirthYear?: number | null;
+      routingAnswers?: Record<string, string>;
     }) => {
       if (!chartData) return null;
       const raw = opts?.partnerBirthYear;
@@ -469,13 +629,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
           targetYear: opts?.targetYear ?? targetYear,
           partnerBirthYear: partnerNorm,
           parentBirthYears,
+          routingAnswers: opts?.routingAnswers ?? routingAnswers,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "调试接口失败");
       return json.data as PipelineSnapshot;
     },
-    [chartData, selectedAffair, affairInput, targetYear, partnerDebugYear, parentBirthYears],
+    [chartData, selectedAffair, affairInput, targetYear, partnerDebugYear, parentBirthYears, routingAnswers],
   );
 
   const fetchLegacyAnalyze = async (type: AnalysisType) => {
@@ -487,7 +648,8 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
     if (type === "affair") {
       payload.affair = affairInput;
       payload.affairType = selectedAffair;
-      payload.targetYear = { year: targetYear };
+      payload.targetYear = targetYear;
+      payload.routingAnswers = routingAnswers;
     }
     const response = await fetch("/api/ziwei/analyze", {
       method: "POST",
@@ -511,6 +673,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
 
     try {
       if (usePipeline && type === "affair") {
+        setLoading(false);
+        return;
+      }
+      if (usePipeline && type === "interaction") {
         setLoading(false);
         return;
       }
@@ -595,13 +761,48 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
         affairType: selectedAffair,
         affair: affairInput,
         targetYear,
+        routingAnswers,
       });
       setPipelineSnapshot(snap);
+      setAffairRunKey(currentAffairParamsKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : "请求失败");
     } finally {
       setLoading(false);
     }
+  };
+
+  const runInteractionPipeline = async () => {
+    if (!usePipeline) {
+      setError("互动分析需已排盘并携带命盘数据（chartData）。");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const py =
+        partnerDebugYear.trim() === "" ? null : Number.parseInt(partnerDebugYear, 10);
+      const partnerNorm =
+        py !== null && (Number.isNaN(py) || py < 1900 || py > 2100) ? null : py;
+      const snap = await fetchPipelineSnapshot({
+        affairType: selectedAffair,
+        affair: affairInput,
+        targetYear,
+        partnerBirthYear: partnerNorm,
+        routingAnswers,
+      });
+      setPipelineSnapshot(snap);
+      setInteractionRunKey(currentInteractionParamsKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "请求失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goToInteractionStage4 = () => {
+    setActiveType("interaction");
+    void runInteractionPipeline();
   };
 
   const displayResult = Boolean(pipelineSnapshot || legacyResult);
@@ -620,6 +821,81 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
     (legacyResult && typeof legacyResult === "object" && !Array.isArray(legacyResult)
       ? (legacyResult as AffairVm)
       : {}) as AffairVm;
+
+  const buildAffairResult = (
+    analysis: AffairVm,
+    limitPatternsSynthesis?: string,
+    threeLayerTableFromPipeline?: ThreeLayerPalaceTable,
+  ): MatterAffairResult => ({
+    compositeScore: analysis.compositeScore,
+    scoreLabel: analysis.scoreLabel,
+    scoreAction: analysis.scoreAction,
+    directionMatrix: analysis.directionMatrix as DirectionMatrix | undefined,
+    directionWindow: analysis.directionWindow as DirectionWindow | undefined,
+    liuYueDataAvailable: analysis.liuYueDataAvailable,
+    report: {
+      matterType: analysis.matterType,
+      affairText: analysis.affairText,
+      route: analysis.route
+        ? {
+            primaryPalace: analysis.route.primaryPalace,
+            secondaryPalaces: analysis.route.secondaryPalaces,
+            specialConditions: analysis.route.specialConditions,
+            needInteraction: analysis.route.needInteraction,
+            routingAnswers: analysis.route.routingAnswers,
+          }
+        : undefined,
+      personalityAnchor: analysis.personalityAnchor,
+      personalityInfluence: analysis.personalityInfluence,
+      innateLevelDetail: analysis.innateLevelDetail as import("@/core/types").InnateLevelDetail | undefined,
+      fourDimension: analysis.fourDimension,
+      fourDimensionFocus: analysis.fourDimensionFocus,
+      secondaryPalaceSnapshots: analysis.secondaryPalaceSnapshots,
+      protectionMechanisms: analysis.protectionMechanisms as import("@/core/types").ProtectionMechanismHit[] | undefined,
+      currentDaXianQualitative: analysis.currentDaXianQualitative,
+      currentDaXianDetail: analysis.currentDaXianDetail,
+      daXianTimeline: analysis.daXianTimeline,
+      timeDimensions: analysis.timeDimensions,
+      directionMatrix: analysis.directionMatrix,
+      causalChain: analysis.causalChain,
+      luluJiFlow: analysis.luluJiFlow,
+      liuNianSihuaPositions: analysis.liuNianSihuaPositions,
+      analysisSummary: analysis.analysisSummary,
+      scoreAction: analysis.scoreAction,
+      scoreLabel: analysis.scoreLabel,
+      resilience: analysis.resilience,
+      scoreBreakdown: analysis.scoreBreakdown,
+      slimmedDescriptions: analysis.slimmedDescriptions,
+      sihuaLandingReport: analysis.sihuaLandingReport as import("@/core/types").SihuaLandingReport | undefined,
+      sihuaTriggers: analysis.sihuaTriggers,
+      daXianPalaceScores: analysis.daXianPalaceScores,
+      liuNianPalaceScores: analysis.liuNianPalaceScores,
+      lifeTrend: analysis.lifeTrend,
+      capabilityMatch: analysis.capabilityMatch,
+      limitPatternsSynthesis,
+      threeLayerTable: threeLayerTableFromPipeline ?? analysis.threeLayerTable,
+      analysisLogic: {
+        compositeFormula: (limitDirectionData as unknown as { compositeScoring?: { formula?: Record<string, unknown> } }).compositeScoring?.formula ?? {},
+        timeWeights: {
+          daXian: (limitDirectionData as unknown as { timeAnalysis?: { weights?: { daXian?: { weight: number }; liuNian?: { weight: number }; liuYue?: { weight: number } } } }).timeAnalysis?.weights?.daXian?.weight ?? 0.5,
+          liuNian: (limitDirectionData as unknown as { timeAnalysis?: { weights?: { daXian?: { weight: number }; liuNian?: { weight: number }; liuYue?: { weight: number } } } }).timeAnalysis?.weights?.liuNian?.weight ?? 0.3,
+          liuYue: (limitDirectionData as unknown as { timeAnalysis?: { weights?: { daXian?: { weight: number }; liuNian?: { weight: number }; liuYue?: { weight: number } } } }).timeAnalysis?.weights?.liuYue?.weight ?? 0.2,
+        },
+        directionJudgment: (() => {
+          const ld = limitDirectionData as unknown as { timeAnalysis?: { directionJudgment?: { matrix?: Record<string, { judgment: string; suggestion: string; description: string }> } } };
+          const matrix = ld.timeAnalysis?.directionJudgment?.matrix ?? {};
+          const result: Record<string, { judgment: string; suggestion: string; description: string }> = {};
+          for (const [k, v] of Object.entries(matrix)) {
+            // JSON 用"吉◇吉"格式，后端 DirectionMatrix 用"吉吉"格式，统一转为后端格式
+            const normalizedKey = k.replace('◇', '');
+            result[normalizedKey] = { judgment: v.judgment, suggestion: v.suggestion, description: v.description };
+          }
+          return result;
+        })(),
+        analysisFlow: (limitDirectionData as unknown as { analysisFlow?: { steps?: Array<{ step: number; name: string; content: string }> } }).analysisFlow?.steps ?? [],
+      },
+    },
+  });
 
   // ─── 格局识别：紧凑列表（含调试详情） ───
   const renderPatterns = (patterns: PatternListItem[], dslHits?: Array<{ id: string; name: string }>, fromPipeline?: boolean) => {
@@ -829,6 +1105,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                           <div className="flex justify-between"><span>2.6 母亲生年化禄{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.gan}干·${pipelineSnapshot.parentSihuaMeta.mother.luStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.6_母亲生年化禄'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.7 母亲遁干化禄{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.dunGan}干·${pipelineSnapshot.parentSihuaMeta.mother.dunLuStar}）` : ''}：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.7_母亲遁干化禄'].toFixed(2)}</span></div>
                           <div className="flex justify-between"><span>2.8 吉格倍率：</span><span className="text-green-600">×{debug.sixSteps.step2_bonus.details['2.8_吉格倍率'].toFixed(1)}</span></div>
+                          <div className="flex justify-between"><span>2.9 命主生年化权：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.9_命主生年化权'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.10 命主遁干化权：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.10_命主遁干化权'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.11 命主生年化科：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.11_命主生年化科'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>2.12 命主遁干化科：</span><span className="text-green-600">+{debug.sixSteps.step2_bonus.details['2.12_命主遁干化科'].toFixed(2)}</span></div>
                         </div>
                         {/* 具体加分星曜列表 */}
                         {debug.sixSteps.step2_bonus.starList && debug.sixSteps.step2_bonus.starList.length > 0 && (
@@ -1586,47 +1866,6 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
     );
   };
 
-  // ─── 事项分析：紧凑展示 ───
-  const renderAffair = (analysis: AffairVm) => {
-    const conclusion = analysis.conclusion;
-    const advice = analysis.advice;
-    return (
-      <div className="space-y-3 text-sm">
-        {analysis.overview && (
-          <p className="text-muted-foreground leading-relaxed">{analysis.overview}</p>
-        )}
-
-        {conclusion?.probability && (
-          <div>
-            <span className="text-xs text-muted-foreground">成功率</span>
-            <p className="font-medium">{conclusion.probability}</p>
-          </div>
-        )}
-
-        {conclusion?.opportunities && conclusion.opportunities.length > 0 && (
-          <div>
-            <span className="text-xs text-muted-foreground">机会点</span>
-            <p className="mt-0.5 text-muted-foreground">{conclusion.opportunities.join("；")}</p>
-          </div>
-        )}
-
-        {conclusion?.obstacles && conclusion.obstacles.length > 0 && (
-          <div>
-            <span className="text-xs text-muted-foreground">潜在障碍</span>
-            <p className="mt-0.5 text-muted-foreground">{conclusion.obstacles.join("；")}</p>
-          </div>
-        )}
-
-        {advice?.strategy && advice.strategy.length > 0 && (
-          <div>
-            <span className="text-xs text-muted-foreground">建议</span>
-            <p className="mt-0.5 text-muted-foreground">{advice.strategy.join("；")}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const promptDebugEntries: Array<{ key: keyof PipelineSnapshot["extended"]["prompts"]; title: string }> = [
     { key: "stage1", title: "阶段一（宫位评分）" },
     { key: "stage2", title: "阶段二（性格定性）" },
@@ -1746,6 +1985,26 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
     </div>
   );
 
+  const renderDebugSihuaLanding = (snap: PipelineSnapshot) => {
+    const report = snap.affair.sihuaLandingReport;
+    if (!report) {
+      return (
+        <p className="text-xs text-muted-foreground">
+          暂无落宫明细。请先在「事项分析」中计算，或切换本 Tab 触发管线刷新（需已选事项类型与流年）。
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          按事项主/辅宫 + 命宫焦点，展示大限、流年、流月四化在原局的落宫、宫质与引动规则。
+          当前事项：{snap.affair.matterType ?? "—"} · {snap.affair.affairText ?? "—"}
+        </p>
+        {report && <SihuaLandingTable report={report as import("@/core/types").SihuaLandingReport} />}
+      </div>
+    );
+  };
+
   const renderDebugPrompts = (snap: PipelineSnapshot) => {
     const ex = snap.extended;
     return (
@@ -1767,26 +2026,48 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
   return (
     <div className="space-y-2">
       {/* 入口按钮：紧凑 tab 栏 */}
-      <div className="flex flex-wrap gap-1 rounded-lg border border-primary/10 bg-muted/30 p-1">
-        {ANALYSIS_OPTIONS.map((opt) => (
-          <button
-            key={opt.id}
-            onClick={() => handleAnalyze(opt.id)}
-            className={`flex min-w-[4.5rem] flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-sm transition-colors sm:min-w-0 ${
-              activeType === opt.id
-                ? "bg-card font-medium text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="text-base">{opt.icon}</span>
-            <span className="max-w-[4.5rem] truncate sm:max-w-none">{opt.label}</span>
-          </button>
-        ))}
+      <div className="space-y-2 rounded-lg border border-primary/10 bg-muted/30 p-2">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground px-1">主分析</p>
+        <div className="flex flex-wrap gap-1">
+          {PRIMARY_ANALYSIS_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => void handleAnalyze(opt.id)}
+              className={`flex min-w-[4.5rem] cursor-pointer items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-sm transition-colors sm:min-w-0 ${
+                activeType === opt.id
+                  ? "bg-card font-medium text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-base">{opt.icon}</span>
+              <span className="max-w-[4.5rem] truncate sm:max-w-none">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground px-1 pt-1">高级调试</p>
+        <div className="flex flex-wrap gap-1">
+          {DEBUG_ANALYSIS_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => void handleAnalyze(opt.id)}
+              className={`flex min-w-[4.5rem] cursor-pointer items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-sm transition-colors sm:min-w-0 ${
+                activeType === opt.id
+                  ? "bg-card font-medium text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="text-base">{opt.icon}</span>
+              <span className="max-w-[4.5rem] truncate sm:max-w-none">{opt.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {usePipeline && (
         <p className="text-[11px] text-muted-foreground">
-          格局、宫位、性格、事项与 Hybrid 共用 Stage1–4；「生年·太岁四化」等为原计算调试子项，与宫位能级同级切换；无 chartData
+          格局、宫位、性格、事项、互动与 Hybrid 共用 Stage1–4；「生年·太岁四化」等为原计算调试子项，与宫位能级同级切换；无 chartData
           时回退旧引擎。
         </p>
       )}
@@ -1795,9 +2076,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
       {activeType === "affair" && (
         <Card className="border-primary/10">
           <CardContent className="flex flex-col gap-3 p-3">
-            <div className="flex gap-2">
-              <Select value={selectedAffair} onValueChange={setSelectedAffair}>
-                <SelectTrigger className="h-8 flex-1 text-sm">
+            <div className="flex flex-wrap items-end gap-2">
+              <Select
+                value={selectedAffair}
+                onValueChange={(v) => {
+                  setSelectedAffair(v);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[140px] text-sm cursor-pointer">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1813,10 +2099,45 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                 value={affairInput}
                 onChange={(e) => setAffairInput(e.target.value)}
                 placeholder="具体描述，如：投资股票"
-                className="h-8 flex-1 rounded-md border px-2 text-sm"
+                className="h-8 min-w-[160px] flex-1 rounded-md border px-2 text-sm"
               />
+              <div>
+                <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="affair-target-year">
+                  目标流年
+                </label>
+                <input
+                  id="affair-target-year"
+                  type="number"
+                  value={targetYear}
+                  onChange={(e) => setTargetYear(Number(e.target.value) || new Date().getFullYear())}
+                  className="h-8 w-24 rounded-md border px-2 text-sm"
+                />
+              </div>
             </div>
-            <Button onClick={() => void runAffairPipeline()} size="sm" className="w-full" disabled={loading}>
+            {currentAge !== undefined && (
+              <p className="text-[11px] text-muted-foreground">
+                当前约 {currentAge} 岁 · 分析流年 {targetYear}
+              </p>
+            )}
+            <MatterRouterQuestionnaire
+              matterType={selectedAffair}
+              answers={routingAnswers}
+              onAnswersChange={setRoutingAnswers}
+              partnerBirthYear={partnerDebugYear}
+              onPartnerBirthYearChange={setPartnerDebugYear}
+              onCompleteChange={setQuestionnaireComplete}
+            />
+            {affairParamsStale && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+                参数已变更，请重新分析以更新结果。
+              </p>
+            )}
+            <Button
+              onClick={() => void runAffairPipeline()}
+              size="sm"
+              className="w-full cursor-pointer"
+              disabled={loading || !questionnaireComplete}
+            >
               {loading ? (
                 <>
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1825,18 +2146,94 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               ) : (
                 <>
                   <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  {usePipeline ? "按上述参数计算（Stage3）" : "开始分析"}
+                  {usePipeline ? "开始分析（Stage3）" : "开始分析"}
                 </>
               )}
             </Button>
-            {usePipeline && pipelineSnapshot && !loading && (
+            {!questionnaireComplete && (
+              <p className="text-[11px] text-muted-foreground">请先完成上方问诊，再开始分析。</p>
+            )}
+            {usePipeline && pipelineSnapshot && !loading && !affairParamsStale && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
-                {renderAffair(pipelineSnapshot.affair)}
+                <MatterAffairPanel
+                  result={buildAffairResult(
+                    pipelineSnapshot.affair,
+                    pipelineSnapshot.limitPatterns?.synthesis?.trend,
+                    pipelineSnapshot.extended?.threeLayerTable as ThreeLayerPalaceTable | undefined,
+                  )}
+                  onStage4={goToInteractionStage4}
+                />
               </div>
             )}
             {!usePipeline && !!legacyResult && !loading && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
-                {renderAffair(legacyAffair())}
+                <MatterAffairPanel result={buildAffairResult(legacyAffair())} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 互动分析：Stage4 太岁入卦 / 单方关系宫 */}
+      {activeType === "interaction" && (
+        <Card className="border-primary/10">
+          <CardContent className="flex flex-col gap-3 p-3">
+            <p className="text-[11px] text-muted-foreground">
+              填写对方出生年份可跑完整太岁入卦；留空则分析命主夫妻/迁移/三合关系宫（单方模式）。
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="interaction-partner-year">
+                  对方生年
+                </label>
+                <input
+                  id="interaction-partner-year"
+                  type="number"
+                  placeholder="如 1990"
+                  value={partnerDebugYear}
+                  onChange={(e) => setPartnerDebugYear(e.target.value)}
+                  className="h-8 w-28 rounded-md border px-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-muted-foreground" htmlFor="interaction-target-year">
+                  目标流年
+                </label>
+                <input
+                  id="interaction-target-year"
+                  type="number"
+                  value={targetYear}
+                  onChange={(e) => setTargetYear(Number(e.target.value) || new Date().getFullYear())}
+                  className="h-8 w-28 rounded-md border px-2 text-sm"
+                />
+              </div>
+            </div>
+            {interactionParamsStale && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+                参数已变更，请重新分析以更新结果。
+              </p>
+            )}
+            <Button
+              onClick={() => void runInteractionPipeline()}
+              size="sm"
+              className="w-full cursor-pointer"
+              disabled={loading || !usePipeline}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  分析中...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  开始分析（Stage4）
+                </>
+              )}
+            </Button>
+            {usePipeline && pipelineSnapshot && !loading && !interactionParamsStale && (
+              <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
+                <MatterInteractionPanel result={pipelineSnapshot.interaction} />
               </div>
             )}
           </CardContent>
@@ -1859,7 +2256,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
       )}
 
       {/* 结果：格局 / 宫位 / 性格 / 各调试子项 共用卡片；事项单独卡片 */}
-      {displayResult && !loading && activeType !== "affair" && (
+      {displayResult && !loading && activeType !== "affair" && activeType !== "interaction" && (
         <div className="rounded-lg border border-primary/10 bg-card p-3">
           {pipelineSnapshot && activeType && !isDebugTab(activeType) && (
             <Badge variant="outline" className="mb-2 text-[10px]">
@@ -1904,6 +2301,12 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             <>
               {renderDebugPipelineHeader(pipelineSnapshot)}
               {renderDebugLiunian()}
+            </>
+          )}
+          {activeType === "debug-sihua-landing" && pipelineSnapshot && (
+            <>
+              {renderDebugPipelineHeader(pipelineSnapshot)}
+              {renderDebugSihuaLanding(pipelineSnapshot)}
             </>
           )}
           {activeType === "debug-prompts" && pipelineSnapshot && (

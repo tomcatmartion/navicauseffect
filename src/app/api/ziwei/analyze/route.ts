@@ -122,6 +122,45 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      case "affair": {
+        const { executeStage3 } = await import('@/core/stages/stage3-matter-analysis');
+        const { resolveMatterRoute } = await import('@/core/router/matter-route-resolver');
+        const matterType = (body.affairType ?? '求财') as import('@/core/types').MatterType;
+        const targetYear =
+          typeof body.targetYear === 'number'
+            ? body.targetYear
+            : new Date().getFullYear();
+        const stage1Input: Stage1Input = {
+          chartData: effectiveChartData,
+          parentBirthYears: body.parentBirthYears,
+        };
+        const stage1Output = executeStage1(stage1Input);
+        const stage2Output = executeStage2({
+          stage1: stage1Output,
+          question: body.affair ?? matterType,
+        });
+        const routeResult = resolveMatterRoute(
+          matterType,
+          body.affair ?? matterType,
+          body.routingAnswers as Record<string, string> | undefined,
+        );
+        const stage3Output = executeStage3({
+          stage1: stage1Output,
+          stage2: stage2Output,
+          matterType,
+          routeResult,
+          chartData: effectiveChartData,
+          targetYear,
+        });
+        return NextResponse.json({
+          type: "affair",
+          data: {
+            route: routeResult,
+            ...stage3Output,
+          },
+        });
+      }
+
       case "full": {
         // 完整解盘（阶段一 + 阶段二）
         const stage1Input: Stage1Input = {
@@ -180,6 +219,7 @@ export async function GET() {
       "all-palaces", // 所有宫位评估
       "personality", // 性格分析
       "patterns",    // 格局识别
+      "affair",      // 事项分析（Stage3）
       "full",        // 完整解盘
     ],
     palaceNames: [

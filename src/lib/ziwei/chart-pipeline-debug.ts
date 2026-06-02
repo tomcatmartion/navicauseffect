@@ -31,7 +31,7 @@ import { getShengNianSihua, getDunGanSihua } from '@/core/sihua-calculator'
 import { getDunGan, getSihuaTable } from '@/core/sihua-calculator/tables'
 // getDunGan 也在 sihua-calculator/index 中 re-export，避免重复导入
 import { yearToGan, yearToZhi, yearToZodiac } from '@/core/utils/gan-zhi'
-import { resolveLiuNianGan } from '@/core/limit-analyzer/fortune-engine'
+import { resolveLiuNianGan, findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
 import type { LimitPatternsOutput, LimitPatternResult } from '@/core/types'
 
 export interface ChartPipelineDebugOptions {
@@ -45,6 +45,8 @@ export interface ChartPipelineDebugOptions {
   partnerBirthYear?: number | null
   /** 父母出生年份（可选，影响父母四化评分） */
   parentBirthYears?: { father?: number; mother?: number }
+  /** router.json 逐步问诊 answers（优先于 affair 文本规则提取） */
+  routingAnswers?: Record<string, string>
 }
 
 /** 与 `ziwei-analysis-panel` 格局列表展示兼容 */
@@ -152,6 +154,10 @@ export interface UiPalaceRow {
           '2.6_母亲生年化禄': number
           '2.7_母亲遁干化禄': number
           '2.8_吉格倍率': number
+          '2.9_命主生年化权': number
+          '2.10_命主遁干化权': number
+          '2.11_命主生年化科': number
+          '2.12_命主遁干化科': number
         }
         /** 2.1-2.7 原始总和（不含倍率） */
         sumBonus: number
@@ -250,12 +256,62 @@ export interface ChartPipelineDebugSnapshot {
   }
   affair: {
     overview: string
+    matterType: MatterType
+    affairText: string
+    route: {
+      primaryPalace: string
+      secondaryPalaces: string[]
+      specialConditions: string[]
+      needInteraction: boolean
+      routingAnswers: Record<string, string>
+      extractConfidence: number
+    }
+    analysisSummary?: Stage3Output['analysisSummary']
+    compositeScore?: number
+    scoreLabel?: string
+    scoreAction?: string
+    directionMatrix?: Stage3Output['directionMatrix']
+    directionWindow?: Stage3Output['directionWindow']
+    currentDaXianQualitative?: Stage3Output['currentDaXianQualitative']
+    personalityAnchor?: string
+    innateLevelDetail?: Stage3Output['primaryAnalysis']['innateLevelDetail']
+    primaryAnalysis?: Stage3Output['primaryAnalysis']
+    protectionMechanisms?: Stage3Output['protectionMechanisms']
+    liuNianSihuaPositions?: string[]
+    liuYueDataAvailable?: boolean
+    sihuaLandingReport?: Stage3Output['sihuaLandingReport']
+    fourDimension?: Stage3Output['fourDimension']
+    scoreBreakdown?: Stage3Output['scoreBreakdown']
+    causalChain?: string
+    luluJiFlow?: string[]
+    resilience?: Stage3Output['resilience']
+    daXianTimeline?: Stage3Output['daXianTimeline']
+    slimmedDescriptions?: string[]
+    sihuaTriggers?: Stage3Output['sihuaTriggers']
+    daXianPalaceScores?: Stage3Output['daXianPalaceScores']
+    liuNianPalaceScores?: Stage3Output['liuNianPalaceScores']
+    lifeTrend?: Stage3Output['lifeTrend']
+    capabilityMatch?: Stage3Output['capabilityMatch']
     conclusion: {
       probability: string
-      opportunities: string[]
-      obstacles: string[]
+      summary: string
     }
-    advice: { strategy: string[] }
+    advice: {
+      strategy: string[]
+      resilienceStrategy?: string
+    }
+  }
+  /** Stage4 互动关系分析（太岁入卦 / 单方关系宫） */
+  interaction: {
+    mode: 'full' | 'solo'
+    partnerYear: number | null
+    partnerGan: string
+    partnerZhi: string
+    threeDimension: Stage4Output['interaction']['threeDimension']
+    tensionPoints: string[]
+    adjustableAdvice: string[]
+    fixedRisks: string[]
+    virtualChart: ReturnType<typeof serializeVirtualChart>
   }
   /** 运限格局识别结果 */
   limitPatterns: {
@@ -336,21 +392,30 @@ function buildStage3Ir(
   targetYear: number,
   stage1Ref: { palaceScores: import('@/core/types').PalaceScore[]; allPatterns: import('@/core/types').PatternMatch[]; mergedSihua: import('@/core/types').MergedSihua; scoringCtx?: import('@/core/llm-wrapper/prompt-builder').ChartSnapshotCtx & { taiSuiZhi?: string; birthGan?: string } },
 ): IRStage3or4 {
+  const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
+  const birthYear = typeof birthInfo?.year === 'number' ? birthInfo.year : 1990
+  const currentDaXianMapping = findCurrentDaXianFromChart(output.allDaXianMappings, targetYear, birthYear, chartData)
+
   return {
     stage: 3,
     matterType: output.matterType,
     primaryAnalysis: output.primaryAnalysis,
-    daXianAnalysis: output.allDaXianMappings.map(d => ({
-      index: d.index,
-      ageRange: `${d.ageRange[0]}~${d.ageRange[1]}`,
-      daXianGan: d.daXianGan,
-      sihuaPositions: d.mutagen,
-      tone: (d.mutagen[3] ? '艰辛期' : '顺畅期') as '顺畅期' | '艰辛期' | '危机期' | '转机期',
-      isCurrent: false,
-    })),
+    daXianAnalysis: output.allDaXianMappings.map(d => {
+      const isCurrent = currentDaXianMapping ? d.index === currentDaXianMapping.index : false
+      return {
+        index: d.index,
+        ageRange: `${d.ageRange[0]}~${d.ageRange[1]}`,
+        daXianGan: d.daXianGan,
+        sihuaPositions: d.mutagen,
+        tone: isCurrent
+          ? (output.currentDaXianQualitative ?? '转机期')
+          : ((d.mutagen[3] ? '艰辛期' : '顺畅期') as import('@/core/types').DaXianQualitativeLevel),
+        isCurrent,
+      }
+    }),
     liuNianAnalysis: {
       liuNianGan: resolveLiuNianGan(chartData, targetYear),
-      sihuaPositions: [],
+      sihuaPositions: output.liuNianSihuaPositions ?? [],
       direction: output.directionMatrix[1] === '吉' ? '吉' : '凶',
       daXianRelation: output.directionMatrix,
       window: output.directionWindow,
@@ -400,13 +465,15 @@ export function buildChartPipelineDebugSnapshot(
   chartData: Record<string, unknown>,
   opts: ChartPipelineDebugOptions,
 ): ChartPipelineDebugSnapshot {
-  const { stage1, stage2, stage3, stage4, route } = runCoreChartStages(chartData, {
-    question: opts.affair || '性格与事项调试',
-    matterType: opts.affairType,
-    targetYear: opts.targetYear,
-    partnerBirthYear: opts.partnerBirthYear,
-    parentBirthYears: opts.parentBirthYears,
-  })
+  const { stage1, stage2, stage3, stage4, route, routingAnswers, routeExtractConfidence } =
+    runCoreChartStages(chartData, {
+      question: opts.affair || '性格与事项调试',
+      matterType: opts.affairType,
+      targetYear: opts.targetYear,
+      partnerBirthYear: opts.partnerBirthYear,
+      parentBirthYears: opts.parentBirthYears,
+      routingAnswers: opts.routingAnswers,
+    })
 
   // ═══════════════════════════════════════════════════════════════════
   // 运限格局识别
@@ -996,6 +1063,14 @@ export function buildChartPipelineDebugSnapshot(
       `太岁宫（${stage2.taiSuiTags.palace}·${stage2.taiSuiTags.diZhi}）：${stage2.taiSuiTags.summary}`,
       `整体基调：${stage2.overallTone}`,
       `全息底色：${stage2.mingGongHolographic.summary}`,
+      ...(stage2.personalityTriad
+        ? [
+            `三宫 JSON 画像（v${stage2.personalityTriad.version}）：${stage2.personalityTriad.synthesis}`,
+            `命宫层：${stage2.personalityTriad.mingLayer.description}`,
+            `身宫层：${stage2.personalityTriad.shenLayer.description}`,
+            `太岁宫层：${stage2.personalityTriad.taiSuiLayer.description}`,
+          ]
+        : []),
     ].join('\n'),
     traits: {
       surface: surfaceTags.length ? surfaceTags : ['（暂无表层标签）'],
@@ -1108,25 +1183,76 @@ export function buildChartPipelineDebugSnapshot(
     overview: [
       `事项：${opts.affair}（${opts.affairType}）`,
       `主看宫：${stage3.primaryAnalysis.palace} — ${stage3.primaryAnalysis.fourDimensionResult}`,
+      `兼看：${route.secondaryPalaces.length ? route.secondaryPalaces.join('、') : '无'}`,
       `命宫调节：${stage3.primaryAnalysis.mingGongRegulation}`,
       `格局保护：${stage3.primaryAnalysis.protectionStatus}`,
-      `方向窗口：${stage3.directionWindow}；矩阵 ${JSON.stringify(stage3.directionMatrix)}`,
+      `方向窗口：${stage3.directionWindow}；矩阵 ${stage3.directionMatrix}`,
+      ...(stage3.compositeScore !== undefined
+        ? [`综合分：${stage3.compositeScore.toFixed(1)}（${stage3.scoreLabel ?? ''}）→ ${stage3.scoreAction ?? ''}`]
+        : []),
+      ...(stage3.currentDaXianQualitative
+        ? [`当前大限定性：${stage3.currentDaXianQualitative}`]
+        : []),
+      ...(stage3.personalityAnchor ? [`性格锚点：${stage3.personalityAnchor}`] : []),
+      ...(stage3.liuYueDataAvailable === false ? ['流月：数据缺失，流月层按中性分估算'] : []),
+      ...(stage3.protectionMechanisms?.length
+        ? [`护佑机制：${stage3.protectionMechanisms.map(m => m.id).join('、')}`]
+        : []),
+      ...(Object.keys(routingAnswers).length
+        ? [`路由答案：${JSON.stringify(routingAnswers)}`]
+        : []),
     ].join('\n'),
+    matterType: opts.affairType,
+    affairText: opts.affair,
+    route: {
+      primaryPalace: route.primaryPalace,
+      secondaryPalaces: route.secondaryPalaces,
+      specialConditions: route.specialConditions,
+      needInteraction: route.needInteraction,
+      routingAnswers,
+      extractConfidence: routeExtractConfidence,
+    },
+    analysisSummary: stage3.analysisSummary,
+    compositeScore: stage3.compositeScore,
+    scoreLabel: stage3.scoreLabel,
+    scoreAction: stage3.scoreAction,
+    directionMatrix: stage3.directionMatrix,
+    directionWindow: stage3.directionWindow,
+    currentDaXianQualitative: stage3.currentDaXianQualitative,
+    personalityAnchor: stage3.personalityAnchor,
+    innateLevelDetail: stage3.primaryAnalysis.innateLevelDetail,
+    primaryAnalysis: stage3.primaryAnalysis,
+    protectionMechanisms: stage3.protectionMechanisms,
+    liuNianSihuaPositions: stage3.liuNianSihuaPositions,
+    liuYueDataAvailable: stage3.liuYueDataAvailable,
+    sihuaLandingReport: stage3.sihuaLandingReport,
+    fourDimension: stage3.fourDimension,
+    scoreBreakdown: stage3.scoreBreakdown,
+    causalChain: stage3.causalChain,
+    luluJiFlow: stage3.luluJiFlow,
+    resilience: stage3.resilience,
+    daXianTimeline: stage3.daXianTimeline,
+    secondaryPalaceSnapshots: stage3.secondaryPalaceSnapshots,
+    timeDimensions: stage3.timeDimensions,
+    personalityInfluence: stage3.personalityInfluence,
+    currentDaXianDetail: stage3.currentDaXianDetail,
+    fourDimensionFocus: stage3.fourDimensionFocus,
+    slimmedDescriptions: stage3.slimmedDescriptions,
+    sihuaTriggers: stage3.sihuaTriggers,
+    daXianPalaceScores: stage3.daXianPalaceScores,
+    liuNianPalaceScores: stage3.liuNianPalaceScores,
+    lifeTrend: stage3.lifeTrend,
+    capabilityMatch: stage3.capabilityMatch,
     conclusion: {
-      probability: `${stage3.directionWindow}（由方向矩阵推导，非概率预测）`,
-      opportunities: [
-        `主看${stage3.primaryAnalysis.palace}`,
-        ...route.secondaryPalaces.map(p => `兼看${p}`),
-      ],
-      obstacles:
-        route.specialConditions.length > 0
-          ? route.specialConditions
-          : stage1.mergedSihua.specialOverlaps.map(o => `${o.type}：${o.star}`),
+      probability: `${stage3.directionWindow}（由方向矩阵 ${stage3.directionMatrix} 推导，非概率预测）`,
+      summary: stage3.causalChain ?? stage3.analysisSummary?.riskAdvice ?? '',
     },
     advice: {
-      strategy: stage3.knowledgeSnippets.slice(0, 6).map(
-        s => `[${s.source}/${s.key}] ${s.content.slice(0, 120)}`,
-      ),
+      strategy: [
+        stage3.scoreAction ?? '',
+        ...(stage3.analysisSummary?.riskAdvice ? [stage3.analysisSummary.riskAdvice] : []),
+      ].filter(Boolean),
+      resilienceStrategy: stage3.resilience?.strategy,
     },
   }
 
@@ -1184,6 +1310,18 @@ export function buildChartPipelineDebugSnapshot(
     ),
   }
 
+  const interaction = {
+    mode: (partnerYear ? 'full' : 'solo') as 'full' | 'solo',
+    partnerYear,
+    partnerGan: String(stage4.interaction.partnerGan),
+    partnerZhi: String(stage4.interaction.partnerZhi),
+    threeDimension: stage4.interaction.threeDimension,
+    tensionPoints: stage4.interaction.tensionPoints,
+    adjustableAdvice: stage4.interaction.adjustableAdvice,
+    fixedRisks: stage4.interaction.fixedRisks,
+    virtualChart: serializeVirtualChart(stage4.interaction.virtualChart),
+  }
+
   return {
     engine: 'hybrid-stages',
     patterns,
@@ -1191,6 +1329,7 @@ export function buildChartPipelineDebugSnapshot(
     allPalaces,
     personality,
     affair,
+    interaction,
     limitPatterns,
     extended: {
       birthGan,

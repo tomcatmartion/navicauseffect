@@ -16,7 +16,7 @@ import type {
 } from '@/core/types'
 import { buildVirtualChart, groupIncomingByTarget } from '@/core/tai-sui-rua-gua/virtual-chart'
 import type { VirtualChart, IncomingStar } from '@/core/tai-sui-rua-gua/virtual-chart'
-import { buildThreeLayerTable } from '@/core/limit-analyzer/fortune-engine'
+import { buildThreeLayerTable, findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
 import { injectStage4Knowledge } from '@/core/stages/helpers/knowledge-injector'
 
 /** 十天干 */
@@ -161,10 +161,7 @@ function buildThreeDimensionAnalysis(
         chartDataAny,
         targetYear,
       )
-      const currentAge = targetYear - birthYear
-      const currentDaXian = daXianMappings.find(
-        d => d.ageRange[0] <= currentAge && d.ageRange[1] >= currentAge,
-      )
+      const currentDaXian = findCurrentDaXianFromChart(daXianMappings, targetYear, birthYear, chartDataAny)
 
       if (currentDaXian) {
         const daXianSihua = currentDaXian.mutagen.filter(Boolean)

@@ -8,11 +8,37 @@
 // ── 原 fortune-engine 导出 ──────────────────────────────
 export {
   extractAllDaXianMappings,
+  findCurrentDaXianFromChart,
   buildThreeLayerTable,
   calculateDirectionMatrix,
   resolveLiuNianGan,
   resolveLiuNianGanZhi,
 } from './fortune-engine'
+
+export { getLiuNianExtraStars } from './liu-nian-extra-stars'
+export { scorePalacesToBrief, mapToneToBriefLevel } from './limit-layer-scoring'
+
+export { executeMatterLimitAnalysis } from './matter-limit-engine'
+export {
+  matchDaXianSihuaRule,
+  matchLiuNianSihuaRule,
+  scoreMutagenLayerForDirection,
+  analyzeMutagenHits,
+  buildMutagenLandingRows,
+  buildSihuaLandingReport,
+  buildYuanJuTriggerEntries,
+  buildLayerTriggerEntries,
+  buildTriggerEntriesFromMutagen,
+  detectSihuaTriggers,
+  applyTriggerActivationAdjust,
+} from './sihua-trigger-engine'
+export {
+  buildDaXianScoringContext,
+  buildYearlyScoringContext,
+  buildLiuYueScoringContext,
+  buildMinorScoringContext,
+  extractMonthlyHoroscope,
+} from './limit-scoring-context'
 
 // ── 运限格局识别引擎导出 ────────────────────────────────
 export {

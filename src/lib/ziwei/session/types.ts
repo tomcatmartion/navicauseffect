@@ -63,4 +63,6 @@ export const ReadingRequestSchema = z.object({
     father: z.number().int().min(1900).max(2100).optional(),
     mother: z.number().int().min(1900).max(2100).optional(),
   }).optional(),
+  targetYear: z.number().int().min(1900).max(2100).optional(),
+  routingAnswers: z.record(z.string(), z.string()).optional(),
 })

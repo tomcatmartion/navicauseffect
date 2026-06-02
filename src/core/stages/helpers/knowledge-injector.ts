@@ -18,9 +18,15 @@ import type {
   MajorStar,
   DaXianPalaceMapping,
   SihuaType,
+  MatterType,
 } from '@/core/types'
 import { getStarAttr, getStarTraitByBrightness, getPalaceMeaning } from '@/core/knowledge-dict/query'
 import { getInteractionQuXiang } from '@/core/knowledge-dict/loader'
+import { findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
+import {
+  getMatterPersonalityInfluence,
+  getFourDimensionFocus,
+} from '@/core/knowledge-dict/limit-direction'
 
 /** 构建"星曜赋性"片段 */
 function starSnippet(star: string, brightness?: string): KnowledgeSnippet | null {
@@ -115,6 +121,10 @@ export function injectStage3Knowledge(
   secondaryPalaces: PalaceName[],
   palaceScores: PalaceScore[],
   daXianMappings: DaXianPalaceMapping[],
+  matterType?: MatterType,
+  targetYear?: number,
+  birthYear?: number,
+  chartData?: Record<string, unknown>,
 ): KnowledgeSnippet[] {
   const snippets: KnowledgeSnippet[] = []
   const seen = new Set<string>()
@@ -141,11 +151,10 @@ export function injectStage3Knowledge(
     }
   }
 
-  // 当前大限四化星赋性
-  const currentDaXian = daXianMappings.find(d => {
-    const now = new Date().getFullYear()
-    return d.ageRange[0] <= (now - 1990) && d.ageRange[1] >= (now - 1990)
-  })
+  // 当前大限四化星赋性（从 horoscope.decadal 匹配）
+  const year = targetYear ?? new Date().getFullYear()
+  const safeBirthYear = birthYear ?? 1990
+  const currentDaXian = findCurrentDaXianFromChart(daXianMappings, year, safeBirthYear, chartData)
   if (currentDaXian) {
     for (const star of currentDaXian.mutagen) {
       if (!seen.has(star)) {
@@ -153,6 +162,25 @@ export function injectStage3Knowledge(
         const sSnip = starSnippet(star)
         if (sSnip) snippets.push(sSnip)
       }
+    }
+  }
+
+  if (matterType) {
+    const personalityInfluence = getMatterPersonalityInfluence(matterType)
+    if (personalityInfluence) {
+      snippets.push({
+        source: '限运方向',
+        key: `${matterType}_性格影响`,
+        content: personalityInfluence,
+      })
+    }
+    const fourFocus = getFourDimensionFocus(matterType)
+    if (fourFocus.length) {
+      snippets.push({
+        source: '限运方向',
+        key: `${matterType}_四维焦点`,
+        content: `事项四维分析焦点：${fourFocus.join('；')}`,
+      })
     }
   }
 

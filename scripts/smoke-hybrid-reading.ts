@@ -78,10 +78,13 @@ async function login(): Promise<string> {
 }
 
 /** 无 LLM：验证 chart 管线快照与 Hybrid 前置逻辑 */
-async function smokeChartPipelineDebug(): Promise<void> {
+async function smokeChartPipelineDebug(cookie: string): Promise<void> {
   const res = await fetch(`${BASE}/api/ziwei/chart-pipeline-debug`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookie,
+    },
     body: JSON.stringify({
       chartData: CHART_FIXTURE,
       affairType: "求财",
@@ -90,12 +93,28 @@ async function smokeChartPipelineDebug(): Promise<void> {
     }),
     signal: AbortSignal.timeout(60_000),
   });
-  const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  const j = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    data?: {
+      affair?: {
+        causalChain?: string;
+        resilience?: { strategy?: string };
+        fourDimension?: unknown;
+        scoreBreakdown?: unknown;
+      };
+    };
+  };
   if (!res.ok || !j.ok) {
     console.error("chart-pipeline-debug 失败", res.status, j);
     process.exit(1);
   }
-  console.log("chart-pipeline-debug 快路径 ok");
+  const affair = j.data?.affair;
+  if (!affair?.causalChain || !affair.resilience?.strategy || !affair.fourDimension || !affair.scoreBreakdown) {
+    console.error("chart-pipeline-debug 缺少 Stage3 扩展字段", affair);
+    process.exit(1);
+  }
+  console.log("chart-pipeline-debug 快路径 ok（含 causalChain / resilience / fourDimension）");
 }
 
 async function smokeHybridReadingStream(cookie: string): Promise<void> {
@@ -182,7 +201,7 @@ async function main() {
   const cookie = await login();
   console.log("登录 ok");
 
-  await smokeChartPipelineDebug();
+  await smokeChartPipelineDebug(cookie);
 
   if (skipLlm) {
     console.log("已跳过 Hybrid LLM 流式步骤（SMOKE_SKIP_LLM=1），冒烟结束");

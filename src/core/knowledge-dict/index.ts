@@ -26,3 +26,18 @@ export {
   getFlankingDecay,
   getLuCunDelta,
 } from './query'
+export {
+  getLimitDirectionMeta,
+  getMatterMapping,
+  getMatterPersonalityInfluence,
+  getFourDimensionFocus,
+  getDirectionWindowFromMatrix,
+  getInnateLevelDetail,
+  getDaXianQualitativeLevel,
+  computeCompositeScore,
+} from './limit-direction'
+export type {
+  InnateLevelDetail,
+  DaXianQualitativeLevel,
+} from './limit-direction-types'
+export type { PersonalityTriadProfile } from './personality-triad-types'

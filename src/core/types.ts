@@ -152,6 +152,14 @@ export interface BonusDetails {
   '2.7_母亲遁干化禄': number
   /** 2.8 吉格倍率 */
   '2.8_吉格倍率': number
+  /** 2.9 命主生年化权加分 */
+  '2.9_命主生年化权': number
+  /** 2.10 命主遁干化权加分 */
+  '2.10_命主遁干化权': number
+  /** 2.11 命主生年化科加分 */
+  '2.11_命主生年化科': number
+  /** 2.12 命主遁干化科加分 */
+  '2.12_命主遁干化科': number
 }
 
 /** 减分阶段子步骤详情（基于 scoring_formula.json v2.3） */
@@ -413,6 +421,8 @@ export interface IRStage2 {
   mergedSihua: MergedSihua
   /** 命盘快照（完整命盘信息，供 AI 参考） */
   chartSnapshot: ChartSnapshot
+  /** personality_triad.json 三宫画像摘要 */
+  personalityTriadSummary?: string
 }
 
 /** 四维合参标签 */
@@ -475,8 +485,36 @@ export interface MatterAnalysis {
   mingGongRegulation: string
   /** 格局保护机制 */
   protectionStatus: string
-  /** 先天格局定性 */
+  /** 先天格局定性（等级名） */
   innateLevel: string
+  /** 原局底盘详情（来自 innateLevelMap） */
+  innateLevelDetail?: InnateLevelDetail
+}
+
+/** 原局底盘能级（limit_direction innateLevelMap） */
+export interface InnateLevelDetail {
+  level: string
+  description: string
+  carryingCapacity: string
+  sihuaEffect: string
+  advice: string
+}
+
+/** 检测到的护佑机制 */
+export interface ProtectionMechanismHit {
+  id: string
+  description: string
+  effect: string
+  scoreBonus: number
+}
+
+/** Stage3 结构化分析摘要（对齐 outputTemplate） */
+export interface MatterAnalysisSummary {
+  innateBase: string
+  fortuneTrend: string
+  yearlyTrigger: string
+  compositeConclusion: string
+  riskAdvice: string
 }
 
 /** 大限分析 */
@@ -490,7 +528,7 @@ export interface DaXianAnalysis {
   /** 大限四化落位 */
   sihuaPositions: string[]
   /** 这十年定性 */
-  tone: '顺畅期' | '艰辛期' | '危机期' | '转机期'
+  tone: DaXianQualitativeLevel
   /** 是否当前大限 */
   isCurrent: boolean
 }
@@ -642,14 +680,17 @@ export interface LimitPatternsOutput {
 /** 方向矩阵：流年吉/凶 × 大限吉/凶 */
 export type DirectionMatrix = '吉吉' | '吉凶' | '凶吉' | '凶凶'
 
-/** 方向矩阵对应的窗口类型 */
-export type DirectionWindow = '推进窗口' | '蛰伏期' | '风险期' | '转机期'
+/** 方向矩阵对应的窗口类型（limit_direction liuNianTimeWindow） */
+export type DirectionWindow = '推进窗口' | '蛰伏期' | '挑战期' | '风险期'
 
-/** 根据方向矩阵获取窗口 */
+/** 大限定性（limit_direction daXianQualitative，与 DirectionWindow 分离） */
+export type DaXianQualitativeLevel = '顺畅期' | '转机期' | '艰辛期' | '危机期'
+
+/** 根据方向矩阵获取时间窗口（与 limit_direction.json liuNianTimeWindow 对齐） */
 export function getDirectionWindow(matrix: DirectionMatrix): DirectionWindow {
   switch (matrix) {
     case '吉吉': return '推进窗口'
-    case '吉凶': return '转机期'
+    case '吉凶': return '挑战期'
     case '凶吉': return '蛰伏期'
     case '凶凶': return '风险期'
   }
@@ -662,7 +703,7 @@ export function getDirectionWindow(matrix: DirectionMatrix): DirectionWindow {
 /** 知识片段（从 M6 查询后注入 IR） */
 export interface KnowledgeSnippet {
   /** 查询来源 */
-  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量'
+  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量' | '性格三宫' | '限运方向'
   /** 查询键值 */
   key: string
   /** 知识内容 */
@@ -810,9 +851,41 @@ export interface Stage2Output {
     crossTensions: string[]
     synthesis: string
   }
+  /** personality_triad.json 驱动的三宫性格画像 */
+  personalityTriad?: import('@/core/knowledge-dict/personality-triad-types').PersonalityTriadProfile
 }
 
-/** 阶段三输入 */
+/** 化星落宫明细 — 单层四化一行 */
+export interface MutagenLandingRow {
+  sihuaType: '化禄' | '化权' | '化科' | '化忌'
+  star: string
+  palace: PalaceName | null
+  inMatterFocus: boolean
+  /** 四化星落在焦点宫的对宫（间接冲击） */
+  hitsOppositeOfFocus: boolean
+  palaceQuality: 'good' | 'bad' | 'neutral' | 'unknown'
+  triggersShaPalace?: boolean
+  hasAuspiciousPattern?: boolean
+}
+
+/** 大限/流年/流月 四化落宫汇总 */
+export interface MutagenLayerDetail {
+  layer: '大限' | '流年' | '流月'
+  stemLabel: string
+  direction: '吉' | '凶'
+  layerScore: number
+  ruleKey: string
+  ruleAdjustment: number
+  rows: MutagenLandingRow[]
+}
+
+/** Stage3 化星落宫调试报告 */
+export interface SihuaLandingReport {
+  focusPalaces: PalaceName[]
+  directionMatrix: DirectionMatrix
+  layers: MutagenLayerDetail[]
+}
+
 export interface Stage3Input {
   /** 阶段一输出 */
   stage1: Stage1Output
@@ -829,6 +902,89 @@ export interface Stage3Input {
 }
 
 /** 阶段三输出 */
+/** 事项主宫四维空间投射 */
+export interface FourDimensionProjection {
+  self: { palace: PalaceName; score: number; factor: number; tone: string }
+  opposite: { palace: PalaceName; score: number; factor: number; tone: string }
+  trine: { palaces: PalaceName[]; score: number; factor: number }
+  flanking: { palaces: PalaceName[]; score: number; factor: number; tone: string }
+  weightedTotal: number
+  summary: string
+}
+
+/** 综合分拆解 */
+export interface MatterScoreBreakdown {
+  originBase: number
+  daXianActivation: number
+  liuNianActivation: number
+  liuYueActivation: number
+}
+
+/** 大限时间线摘要 */
+export interface DaXianTimelineEntry {
+  index: number
+  ageRange: string
+  qualitative: DaXianQualitativeLevel
+  isCurrent: boolean
+  /** 大限命宫（原局宫名） */
+  mingPalaceName?: PalaceName
+  /** 大限天干 */
+  daXianGan?: TianGan
+}
+
+/** 兼看宫位原局快照 */
+export interface SecondaryPalaceSnapshot {
+  palace: PalaceName
+  score: number
+  tone: string
+}
+
+/** 当前大限摘要（行运脉络用） */
+export interface CurrentDaXianDetail {
+  index: number
+  ageRange: [number, number]
+  mingPalaceName: PalaceName
+  daXianGan: TianGan
+  qualitative: DaXianQualitativeLevel
+}
+
+/** 心理承载力评估 */
+export interface MatterResilienceResult {
+  score: number
+  strategy: '危机干预' | '发展性咨询' | '赋能性咨询'
+  promptSuffix: string
+}
+
+/** 引动检测专用四化条目（含落宫索引） */
+export interface TriggerSihuaEntry {
+  starName: string
+  palaceIndex: number
+  type: '禄' | '权' | '科' | '忌'
+}
+
+/** 三代四化引动结果 */
+export interface SihuaTrigger {
+  triggerLevel: 'daXian' | 'liuNian'
+  targetLevel: 'yuanJu' | 'daXian'
+  type: '禄' | '权' | '科' | '忌'
+  relation: '本宫' | '对宫' | '三合' | '双夹'
+  triggerStars: string[]
+  targetStar: string
+  triggerPalaces: number[]
+  targetPalace: number
+  effect: string
+  weight: number
+}
+
+/** 运限层十二宫评分摘要 */
+export interface PalaceScoreBrief {
+  palaceIndex: number
+  palaceName: PalaceName
+  score: number
+  grade: PalaceTone
+  level: '吉旺' | '平' | '凶弱'
+}
+
 export interface Stage3Output {
   /** 事项类型 */
   matterType: MatterType
@@ -844,6 +1000,60 @@ export interface Stage3Output {
   directionWindow: DirectionWindow
   /** 知识片段 */
   knowledgeSnippets: KnowledgeSnippet[]
+  /** 事项综合得分（compositeScoring） */
+  compositeScore: number
+  /** 得分档位标签 */
+  scoreLabel: string
+  /** 得分档位行动建议 */
+  scoreAction: string
+  /** 性格锚点（Step0） */
+  personalityAnchor: string
+  /** 当前大限定性 */
+  currentDaXianQualitative: DaXianQualitativeLevel
+  /** 护佑机制命中 */
+  protectionMechanisms: ProtectionMechanismHit[]
+  /** 流年四化落位描述 */
+  liuNianSihuaPositions: string[]
+  /** 流月数据是否可用 */
+  liuYueDataAvailable: boolean
+  /** 结构化分析摘要 */
+  analysisSummary: MatterAnalysisSummary
+  /** 大限/流年/流月 化星落宫明细 */
+  sihuaLandingReport: SihuaLandingReport
+  /** 四维投射结构化数据 */
+  fourDimension?: FourDimensionProjection
+  /** 综合分各层拆解 */
+  scoreBreakdown?: MatterScoreBreakdown
+  /** 行运因果链文案 */
+  causalChain?: string
+  /** 禄随忌走描述（可多条） */
+  luluJiFlow?: string[]
+  /** 心理承载力与咨询策略 */
+  resilience?: MatterResilienceResult
+  /** 大限时间线摘要（近若干限） */
+  daXianTimeline?: DaXianTimelineEntry[]
+  /** 兼看宫位原局评分 */
+  secondaryPalaceSnapshots?: SecondaryPalaceSnapshot[]
+  /** 时间维度标签（来自 matterTypeMappings） */
+  timeDimensions?: string[]
+  /** 性格影响说明（来自 matterTypeMappings） */
+  personalityInfluence?: string
+  /** 当前大限结构化摘要 */
+  currentDaXianDetail?: CurrentDaXianDetail
+  /** 与路由主宫对齐的四维焦点文案 */
+  fourDimensionFocus?: string[]
+  /** 整流断语（≤3 条） */
+  slimmedDescriptions?: string[]
+  /** 三代四化引动列表 */
+  sihuaTriggers?: SihuaTrigger[]
+  /** 大限独立十二宫评分 */
+  daXianPalaceScores?: PalaceScoreBrief[]
+  /** 流年独立十二宫评分（含流年禄存/羊陀魁钺） */
+  liuNianPalaceScores?: PalaceScoreBrief[]
+  /** 人生趋势（先升后降/先抑后扬/平稳） */
+  lifeTrend?: string
+  /** 能力与机会匹配度 */
+  capabilityMatch?: string
 }
 
 /** 阶段四输入 */

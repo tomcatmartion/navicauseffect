@@ -5,7 +5,7 @@
  * 对齐《最终方案》§3.10：ChartBridge → 确定性引擎 → Session → Prompt → AI
  */
 
-import type { DiZhi, TianGan } from '@/core/types'
+import type { DiZhi, TianGan, MatterType } from '@/core/types'
 import { createInitialState, type SessionState } from '@/core/orchestrator/state-machine'
 import type { Stage1Output, Stage2Output, Stage3Output, Stage4Output } from '@/core/types'
 import type { ThreeLayerPalaceTable } from '@/core/types'
@@ -78,6 +78,10 @@ export interface HybridCollected {
   lastIntent?: string
   /** 最近一次解析到的 memory_update 原文 */
   lastMemoryPatch?: Record<string, unknown>
+  /** 事项分析目标流年（Hybrid Stage3 复用） */
+  targetYear?: number
+  /** router.json 问诊答案（Hybrid Stage3 复用） */
+  routingAnswers?: Record<string, string>
 }
 
 // ── 通用会话接口（RAG 与 Hybrid 统一）─────────────────────────
@@ -92,6 +96,34 @@ export interface ConversationMessage {
 export interface StageCache {
   stage1?: string  // JSON: Stage1Output（四化+评分+格局）
   stage2?: string  // JSON: Stage2Output（性格定性+全息底色）
+}
+
+/** 事项记录 — 每个事项独立缓存 Stage3 输出和查询年份 */
+export interface MatterRecord {
+  /** 事项类型 */
+  matterType: MatterType
+  /** 查询年份 */
+  queryYear: number
+  /** 序列化的 Stage3Output */
+  stage3Json: string
+  /** 最近 AI 回复摘要（前 200 字） */
+  lastAiSummary: string
+  /** 该事项被分析了几轮 */
+  turnCount: number
+  /** 最后分析时间戳 */
+  lastAnalyzedAt: number
+}
+
+/** 报告草稿槽位 — 用于影子报告生成 */
+export interface ReportSlot {
+  /** 报告章节标识 */
+  section: 'innate_aura' | 'decadal_trend' | 'yearly_analysis' | 'composite_conclusion'
+  /** 章节内容 */
+  content: string
+  /** 内容来源 */
+  source: 'program' | 'llm_summary'
+  /** 时间戳 */
+  timestamp: number
 }
 
 /** 通用会话持久化接口（RAG 与 Hybrid 统一） */
@@ -114,6 +146,14 @@ export interface SessionPersisted {
   stage2Output?: Stage2Output
   stage3Output?: Stage3Output
   stage4Output?: Stage4Output
+
+  // ── 自由对话模式新增字段 ──
+  /** 跨事项记忆：每个事项独立的 Stage3 缓存 */
+  matterHistory: Record<string, MatterRecord>
+  /** 当前活跃事项 key（如 '求财'） */
+  currentMatterKey: string | null
+  /** 压缩后的旧对话摘要 */
+  conversationSummary: string
 }
 
 /** @deprecated 使用 SessionPersisted 替代 */
@@ -230,5 +270,8 @@ export function createEmptyHybridPersisted(): HybridPersisted {
     sessionState: createInitialState(),
     conversationHistory: [],
     collected: { eventAnswers: {} },
+    matterHistory: {},
+    currentMatterKey: null,
+    conversationSummary: '',
   }
 }

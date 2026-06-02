@@ -15,6 +15,8 @@ import type {
   ScoringParams,
   PalaceSystem,
 } from './types'
+import type { LimitDirectionConfig } from './limit-direction-types'
+import type { PersonalityTriadConfig } from './personality-triad-types'
 
 // ═══════════════════════════════════════════════════════════════════
 // 配置
@@ -27,10 +29,13 @@ const PALACE_SYSTEM_PATH = path.join(DATA_DIR, 'palace_system.json')
 const EVENT_DESCRIPTIONS_PATH = path.join(DATA_DIR, 'event_descriptions.json')
 const TAI_SUI_TABLES_PATH = path.join(DATA_DIR, 'tai_sui_rua_gua_tables.json')
 const SCORING_PATH = path.join(DATA_DIR, 'scoring.json')
-const ROUTING_PATH = path.join(DATA_DIR, 'routing.json')
+const ROUTER_PATH = path.join(DATA_DIR, 'router.json')
+const ROUTING_LEGACY_PATH = path.join(DATA_DIR, 'routing.json')
 const PATTERN_LIBRARY_PATH = path.join(DATA_DIR, 'pattern_library.json')
 const INTERACTION_RULES_PATH = path.join(DATA_DIR, 'interaction_rules.json')
 const LIMIT_DIRECTION_PATH = path.join(DATA_DIR, 'limit_direction.json')
+const PERSONALITY_TRIAD_PATH = path.join(DATA_DIR, 'personality_triad.json')
+const SIHUA_TRIGGER_RULES_PATH = path.join(DATA_DIR, 'sihua_trigger_rules.json')
 
 // ═══════════════════════════════════════════════════════════════════
 // 缓存与修改时间追踪
@@ -49,7 +54,9 @@ const scoringCache: CacheEntry<ScoringParams> = { data: null, mtime: 0 }
 const routingCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const patternLibraryCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 const interactionRulesCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
-const limitDirectionCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
+const limitDirectionCache: CacheEntry<LimitDirectionConfig> = { data: null, mtime: 0 }
+const personalityTriadCache: CacheEntry<PersonalityTriadConfig> = { data: null, mtime: 0 }
+const sihuaTriggerRulesCache: CacheEntry<Record<string, unknown>> = { data: null, mtime: 0 }
 
 // ═══════════════════════════════════════════════════════════════════
 // 核心加载函数
@@ -89,10 +96,13 @@ const DEFAULTS: Record<string, unknown> = {
     fixedDecay: { opposite: 0.8, trine: 0.7 },
     luCunDelta: { '旺': 0.5, '平': 0.3, '陷': 0.1 },
   },
-  [ROUTING_PATH]: {},
+  [ROUTER_PATH]: { branches: {}, intentDetection: [] },
+  [ROUTING_LEGACY_PATH]: { branches: {}, intentDetection: [] },
   [PATTERN_LIBRARY_PATH]: {},
   [INTERACTION_RULES_PATH]: {},
   [LIMIT_DIRECTION_PATH]: {},
+  [PERSONALITY_TRIAD_PATH]: { version: '1.0', star_yin_yang: { 阳星: [], 阴星: [] }, brightness_levels: {}, score_to_strength: {}, temperament_base: { rules: [] }, layers: {}, brightness_adverbs: {}, extra_stars_rules: { 吉星集: {}, 煞星集: {} }, pattern_effect: {}, synthesis_priority: { template: '' } },
+  [SIHUA_TRIGGER_RULES_PATH]: { version: '1.0', rules: {} },
 }
 
 function loadJsonFile<T>(filePath: string, cache: CacheEntry<T>): T {
@@ -157,9 +167,10 @@ export function getScoringParams(): ScoringParams {
   return raw ?? {} as ScoringParams
 }
 
-/** 获取路由配置（自动热加载） */
+/** 获取事项路由配置（自动热加载，优先 data/router.json） */
 export function getRouterTree(): Record<string, unknown> {
-  return loadJsonFile(ROUTING_PATH, routingCache)
+  const target = fs.existsSync(ROUTER_PATH) ? ROUTER_PATH : ROUTING_LEGACY_PATH
+  return loadJsonFile(target, routingCache)
 }
 
 /** 获取格局库配置（自动热加载） */
@@ -200,8 +211,18 @@ export function getInteractionQuXiang(): Record<string, unknown> {
 }
 
 /** 获取大限流年方向配置（自动热加载） */
-export function getLimitDirection(): Record<string, unknown> {
+export function getLimitDirection(): LimitDirectionConfig {
   return loadJsonFile(LIMIT_DIRECTION_PATH, limitDirectionCache)
+}
+
+/** 获取命身太岁性格三宫配置（自动热加载） */
+export function getPersonalityTriad(): PersonalityTriadConfig {
+  return loadJsonFile(PERSONALITY_TRIAD_PATH, personalityTriadCache)
+}
+
+/** 获取三代四化引动规则（自动热加载） */
+export function getSihuaTriggerRules(): Record<string, unknown> {
+  return loadJsonFile(SIHUA_TRIGGER_RULES_PATH, sihuaTriggerRulesCache)
 }
 
 /** 获取宫位系统数据（自动热加载） */
@@ -226,6 +247,8 @@ export function reloadAll() {
   patternLibraryCache.mtime = 0
   interactionRulesCache.mtime = 0
   limitDirectionCache.mtime = 0
+  personalityTriadCache.mtime = 0
+  sihuaTriggerRulesCache.mtime = 0
   getStarAttributes()
   getPalaceMeanings()
   getEventStarAttributes()
@@ -235,5 +258,7 @@ export function reloadAll() {
   getPatternConfig()
   getInteractionQuXiang()
   getLimitDirection()
+  getPersonalityTriad()
+  getSihuaTriggerRules()
   getPalaceInnateSkeleton()
 }

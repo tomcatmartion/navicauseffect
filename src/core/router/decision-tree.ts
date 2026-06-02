@@ -4,7 +4,7 @@
  * 职责：根据用户回答序列，确定事项类型、主看宫位、兼看宫位
  *       6分支决策树：求学/求爱/求财/求职/求健康/求名
  *
- * 数据来源：data/routing.json（支持热加载）
+ * 数据来源：data/router.json（支持热加载；兼容旧 routing.json）
  */
 
 import type { MatterType, MatterRouteResult, PalaceName } from '../types'
@@ -44,7 +44,14 @@ interface BranchResolver {
   needInteractionRules?: string[]
 }
 
+export interface MatterPreAnalysis {
+  type: string
+  source: string
+  description: string
+}
+
 interface BranchData {
+  pre_analysis?: MatterPreAnalysis
   resolver: BranchResolver
   questions: Record<string, RouteQuestion>
   firstQuestion: string
@@ -53,6 +60,8 @@ interface BranchData {
 interface RouterTreeData {
   branches: Record<string, BranchData>
   intentDetection: Array<{ keywords: string[]; type: string }>
+  /** 多关键词同时命中时的优先级（数值越大越优先） */
+  intentPriorities?: Record<string, number>
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -147,7 +156,10 @@ function splitByOperator(expr: string, op: string): string[] {
 
 /** 求值原子比较表达式 */
 function evaluateAtom(expr: string, answers: Record<string, string>): boolean {
-  expr = expr.trim()
+  const trimmed = expr.trim()
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  expr = trimmed
 
   // 支持 === 和 !==
   const eqMatch = expr.match(/^answers\[(['"`])(.+?)\1\]\s*===\s*(['"`])(.*?)\3$/)
@@ -169,10 +181,15 @@ function evaluateAtom(expr: string, answers: Record<string, string>): boolean {
   return false
 }
 
+function getBranchData(matterType: MatterType): BranchData | undefined {
+  const tree = getRouterTree() as unknown as RouterTreeData & {
+    detailedBranches?: Record<string, BranchData>
+  }
+  return tree.detailedBranches?.[matterType] ?? tree.branches[matterType]
+}
+
 function resolveBranch(matterType: MatterType, answers: Record<string, string>): RouteResult {
-  const tree = getRouterTree() as unknown as RouterTreeData
-  // 优先使用 detailedBranches（包含完整决策逻辑），回退到 branches
-  const branch = (tree as unknown as { detailedBranches?: Record<string, BranchData> }).detailedBranches?.[matterType] ?? tree.branches[matterType]
+  const branch = getBranchData(matterType)
   if (!branch) {
     return { primaryPalace: '命宫', secondaryPalaces: [], specialConditions: [], needInteraction: false }
   }
@@ -240,22 +257,51 @@ function resolveBranch(matterType: MatterType, answers: Record<string, string>):
 // 统一路由接口
 // ═══════════════════════════════════════════════════════════════════
 
-/** 获取各事项的问题集合 */
-export function getMatterQuestions(): Record<MatterType, Record<string, RouteQuestion>> {
+/** 获取各事项的 pre_analysis（性格三宫前置说明） */
+export function getMatterPreAnalysis(): Partial<Record<MatterType, MatterPreAnalysis>> {
   const tree = getRouterTree() as unknown as RouterTreeData
+  const result: Partial<Record<MatterType, MatterPreAnalysis>> = {}
+  for (const matterType of Object.keys(tree.branches) as MatterType[]) {
+    const branch = getBranchData(matterType)
+    if (branch?.pre_analysis) result[matterType] = branch.pre_analysis
+  }
+  return result
+}
+
+export function getMatterPreAnalysisFor(matterType: MatterType): MatterPreAnalysis | null {
+  return getBranchData(matterType)?.pre_analysis ?? null
+}
+
+/** 获取各事项的问题集合（branches 为主；兼容 detailedBranches） */
+export function getMatterQuestions(): Record<MatterType, Record<string, RouteQuestion>> {
+  const tree = getRouterTree() as unknown as RouterTreeData & {
+    detailedBranches?: Record<string, BranchData>
+  }
   const result: Record<string, Record<string, RouteQuestion>> = {}
-  for (const [matterType, branch] of Object.entries(tree.branches)) {
-    result[matterType] = branch.questions
+  const matterTypes = new Set([
+    ...Object.keys(tree.branches),
+    ...Object.keys(tree.detailedBranches ?? {}),
+  ])
+  for (const matterType of matterTypes) {
+    const branch = getBranchData(matterType as MatterType)
+    if (branch) result[matterType] = branch.questions
   }
   return result as Record<MatterType, Record<string, RouteQuestion>>
 }
 
-/** 获取各事项的首问题ID */
+/** 获取各事项的首问题 ID（branches 为主；兼容 detailedBranches） */
 export function getMatterFirstQuestion(): Record<MatterType, string> {
-  const tree = getRouterTree() as unknown as RouterTreeData
+  const tree = getRouterTree() as unknown as RouterTreeData & {
+    detailedBranches?: Record<string, BranchData>
+  }
   const result: Record<string, string> = {}
-  for (const [matterType, branch] of Object.entries(tree.branches)) {
-    result[matterType] = branch.firstQuestion
+  const matterTypes = new Set([
+    ...Object.keys(tree.branches),
+    ...Object.keys(tree.detailedBranches ?? {}),
+  ])
+  for (const matterType of matterTypes) {
+    const branch = getBranchData(matterType as MatterType)
+    if (branch) result[matterType] = branch.firstQuestion
   }
   return result as Record<MatterType, string>
 }
@@ -278,14 +324,48 @@ export function routeMatter(matterType: MatterType, answers: Record<string, stri
 /**
  * 意图识别 — 从用户文本识别事项类型
  */
-export function detectMatterIntent(text: string): MatterType | '互动关系' | '综合' | null {
-  const tree = getRouterTree() as unknown as RouterTreeData
+/** 亲属/伴侣词 — 优先判为求爱，避免被泛「互动关系」抢先 */
+const LOVE_PARTNER_KEYWORDS = [
+  '老婆',
+  '老公',
+  '男朋友',
+  '女朋友',
+  '男友',
+  '女友',
+  '另一半',
+  '爱人',
+  '配偶',
+  '对象',
+] as const
 
-  for (const rule of tree.intentDetection) {
-    if (rule.keywords.some((kw: string) => text.includes(kw))) {
-      return rule.type as MatterType | '互动关系' | '综合'
-    }
+type DetectedIntent = MatterType | '互动关系' | '综合' | '性格分析'
+
+export function detectMatterIntent(
+  text: string,
+): DetectedIntent | null {
+  const tree = getRouterTree() as unknown as RouterTreeData
+  const priorities = tree.intentPriorities ?? {}
+
+  if (LOVE_PARTNER_KEYWORDS.some((kw) => text.includes(kw))) {
+    return '求爱'
   }
 
-  return null
+  const matched = new Set<string>()
+  for (const rule of tree.intentDetection) {
+    if (rule.keywords.some((kw: string) => text.includes(kw))) {
+      matched.add(rule.type)
+    }
+  }
+  if (matched.size === 0) return null
+
+  let best: DetectedIntent | null = null
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const type of matched) {
+    const score = priorities[type] ?? 0
+    if (score > bestScore) {
+      bestScore = score
+      best = type as DetectedIntent
+    }
+  }
+  return best
 }

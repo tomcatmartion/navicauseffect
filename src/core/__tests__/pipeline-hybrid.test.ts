@@ -148,6 +148,7 @@ function buildChartAccessor(ctx: ScoringContext): ChartAccessor {
       }
       return count
     },
+    anchorPalaceIndex: 0,
   }
 }
 
@@ -273,6 +274,29 @@ describe('混合架构 Pipeline', () => {
           palaceAnnotations: [],
         },
         hasParentInfo: false,
+        chartSnapshot: {
+          birthGanZhi: '壬戌',
+          zodiac: '狗',
+          fiveElementsClass: '水二局',
+          soul: '巨门',
+          body: '天梁',
+          solarDate: '1982-09-24',
+          lunarDate: '八月初八',
+          mingGong: { name: '命宫', diZhi: '申', majorStars: ['紫微'], minorStars: [], adjectiveStars: [] },
+          shenGong: { name: '迁移', diZhi: '子', majorStars: [], minorStars: [], adjectiveStars: [] },
+          taiSuiGong: { name: '父母', diZhi: '酉', majorStars: [], minorStars: [], adjectiveStars: [] },
+          allPalaces: Array.from({ length: 12 }, (_, i) => ({
+            name: ['命宫','兄弟','夫妻','子女','财帛','疾厄','迁移','仆役','官禄','田宅','福德','父母'][i],
+            diZhi: ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'][i],
+            heavenlyStem: '甲',
+            majorStars: [] as string[],
+            minorStars: [] as string[],
+            adjectiveStars: [] as string[],
+            isBodyPalace: false,
+          })),
+          sihuaText: '',
+          decadalText: '',
+        },
       }
 
       const messages = buildPrompt(ir, [], '你好，请帮我看看命盘', STAGE1_HINT)
@@ -318,6 +342,38 @@ describe('混合架构 Pipeline', () => {
           inauspiciousEffect: '',
           minorEffect: '',
           summary: '中性',
+        },
+        palaceScores: [],
+        allPatterns: [],
+        mergedSihua: {
+          shengNian: { 禄: '天梁', 权: '紫微', 科: '左辅', 忌: '武曲' },
+          dunGan: { 禄: '太阳', 权: '武曲', 科: '太阴', 忌: '天同' },
+          entries: [],
+          specialOverlaps: [],
+          palaceAnnotations: [],
+        },
+        chartSnapshot: {
+          birthGanZhi: '壬戌',
+          zodiac: '狗',
+          fiveElementsClass: '水二局',
+          soul: '巨门',
+          body: '天梁',
+          solarDate: '1982-09-24',
+          lunarDate: '八月初八',
+          mingGong: { name: '命宫', diZhi: '申', majorStars: ['紫微'], minorStars: [], adjectiveStars: [] },
+          shenGong: { name: '迁移', diZhi: '子', majorStars: [], minorStars: [], adjectiveStars: [] },
+          taiSuiGong: { name: '父母', diZhi: '酉', majorStars: [], minorStars: [], adjectiveStars: [] },
+          allPalaces: Array.from({ length: 12 }, (_, i) => ({
+            name: ['命宫','兄弟','夫妻','子女','财帛','疾厄','迁移','仆役','官禄','田宅','福德','父母'][i],
+            diZhi: ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'][i],
+            heavenlyStem: '甲',
+            majorStars: [] as string[],
+            minorStars: [] as string[],
+            adjectiveStars: [] as string[],
+            isBodyPalace: false,
+          })),
+          sihuaText: '',
+          decadalText: '',
         },
       }
 
