@@ -26,6 +26,8 @@ type Props = {
     fullPromptLength?: number;
     timing: Record<string, number>;
     promptMessages?: PromptMessage[];
+    /** #2 IR 规范格式 JSON */
+    irDataJson?: string;
   };
 };
 
@@ -154,6 +156,49 @@ function PromptMessageCard({ message, index }: { message: PromptMessage; index: 
   );
 }
 
+/** #5 用户问题卡片（完整展示 user prompt） */
+function UserPromptCard({ message, index }: { message: PromptMessage; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const contentPreview = message.content.slice(0, 500);
+  const hasMore = message.content.length > 500;
+
+  return (
+    <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40">
+        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+          #{index + 1}
+        </span>
+        <span className="text-xs font-medium text-blue-900 dark:text-blue-100">
+          {message.label ?? "用户问题"}
+        </span>
+        <span className="ml-auto text-[10px] text-muted-foreground font-mono">
+          {message.content.length} 字符
+        </span>
+      </div>
+      <div className="px-3 py-2">
+        <pre
+          className={`text-[11px] leading-relaxed whitespace-pre-wrap font-mono text-blue-900 dark:text-blue-100 ${
+            expanded ? "" : "line-clamp-12"
+          }`}
+          style={{ wordBreak: "break-word" }}
+        >
+          {expanded ? message.content : contentPreview}
+          {!expanded && hasMore && "…"}
+        </pre>
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-1.5 text-[10px] text-muted-foreground hover:text-foreground underline"
+          >
+            {expanded ? "收起" : `展开全部 (${message.content.length} 字符)`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
   if (!open) return null;
 
@@ -268,6 +313,40 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
                   )}
                 </div>
               </Section>
+
+              {/* #2 IR 数据注入 — 规范格式 JSON */}
+              {debugInfo.irDataJson && (
+                <Section
+                  label="#2 IR 数据注入（计算结果）"
+                  icon={Cpu}
+                  badge={`${debugInfo.irDataJson.length} 字符`}
+                  defaultOpen={false}
+                >
+                  <pre
+                    className="max-h-[500px] overflow-auto rounded-lg bg-muted/50 p-3 text-[10px] leading-relaxed font-mono text-foreground whitespace-pre-wrap"
+                    style={{ wordBreak: "break-word" }}
+                  >
+                    {debugInfo.irDataJson}
+                  </pre>
+                </Section>
+              )}
+
+              {/* #5 用户问题 — 组装后的完整 Prompt */}
+              {debugInfo.promptMessages && debugInfo.promptMessages.some(m => m.role === "user") && (
+                <Section
+                  label="#5 用户问题（组装 Prompt）"
+                  icon={MessageSquare}
+                  defaultOpen={false}
+                >
+                  <div className="space-y-2">
+                    {debugInfo.promptMessages
+                      .filter(m => m.role === "user")
+                      .map((msg, idx) => (
+                        <UserPromptCard key={idx} message={msg} index={idx} />
+                      ))}
+                  </div>
+                </Section>
+              )}
 
               {/* 耗时分析 */}
               <Section

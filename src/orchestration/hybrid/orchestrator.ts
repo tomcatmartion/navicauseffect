@@ -33,7 +33,6 @@ import {
   buildStage3UserPrompt,
   buildStage4UserPrompt,
   buildEventAnalysisGovernorPrompt,
-  buildMatterAnalysisData,
   STAGE1_HINT,
   STAGE2_HINT,
   STAGE3_HINT,
@@ -41,6 +40,7 @@ import {
 } from '@/core/llm-wrapper/prompt-builder'
 import type { IRStage1, IRStage2, IRStage3or4, MatterType } from '@/core/types'
 import type { PipelineDebugInfo } from '@/types/hybrid-debug'
+import { formatMatterAnalysis } from '@/core/format/matter-analysis-formatter'
 
 import {
   createEmptyHybridPersisted,
@@ -300,6 +300,10 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
     allMessages = result.messages
     maxTokens = result.maxTokens
     effectiveTargetYear = result.effectiveTargetYear
+    // 将规范格式 JSON 传入调试信息（#2 IR 区块展示用）
+    if (result.matterDataJson) {
+      debugInfo.irDataJson = result.matterDataJson
+    }
   }
 
   // 调试信息
@@ -319,12 +323,15 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
     if (role === 'system') {
       if (index === 0) label = 'System Prompt（系统指令）'
       else if (m.content?.startsWith('【计算结果 IR】')) label = 'IR 数据注入（计算结果）'
-      else if (m.content?.startsWith('【知识库片段】')) label = '知识库片段'
+      else if (m.content?.startsWith('【知识库片段】')) {
+        if (m.content.includes('事项分析规范数据')) label = '#2 IR 规范数据注入（JSON）'
+        else label = '知识库片段'
+      }
       else if (m.content?.startsWith('【当前阶段指令】')) label = '当前阶段指令'
       else if (m.content?.startsWith('【对话摘要】')) label = '对话摘要'
       else label = 'System 消息'
     } else if (role === 'user') {
-      if (m.content?.startsWith('【命盘速览】') || m.content?.startsWith('【事项类型】') || m.content?.startsWith('【入卦数据')) {
+      if (m.content?.startsWith('【命盘速览】') || m.content?.startsWith('【事项类型】') || m.content?.startsWith('【入卦数据') || m.content?.startsWith('请根据以下事项分析数据')) {
         label = '用户 Prompt（结构化数据）'
       } else {
         label = '用户问题'
@@ -400,6 +407,8 @@ interface FreeChatResult {
   messages: ChatMessage[]
   maxTokens: number
   effectiveTargetYear: number
+  /** 规范格式 JSON 数据（用于 debug 面板 #2 区块） */
+  matterDataJson?: string
 }
 
 /**
@@ -431,11 +440,11 @@ async function handleFreeChat(
       cacheMatterRecord(hp, matterType, targetYear, stage3)
 
       // 构建 Stage3 的 Prompt（复用现有逻辑）
-      const { messages } = buildStage3Messages(
+      const { messages, matterDataJson } = buildStage3Messages(
         stage1, stage2, stage3, matterType, targetYear,
         chartData, question, routingAnswers,
       )
-      return { messages, maxTokens: 4500, effectiveTargetYear: targetYear }
+      return { messages, maxTokens: 4500, effectiveTargetYear: targetYear, matterDataJson }
     }
 
     case 'RE_CALC': {
@@ -449,11 +458,11 @@ async function handleFreeChat(
       // 更新 matterHistory
       cacheMatterRecord(hp, matterType, targetYear, stage3)
 
-      const { messages } = buildStage3Messages(
+      const { messages, matterDataJson } = buildStage3Messages(
         stage1, stage2, stage3, matterType, targetYear,
         chartData, question, routingAnswers,
       )
-      return { messages, maxTokens: 4500, effectiveTargetYear: targetYear }
+      return { messages, maxTokens: 4500, effectiveTargetYear: targetYear, matterDataJson }
     }
 
     case 'FOLLOW_UP': {
@@ -466,11 +475,11 @@ async function handleFreeChat(
         const stage3 = parseHybridStage3FromRecord(cachedRecord)
         if (stage3) {
           hp.stage3Output = stage3
-          const { messages } = buildStage3Messages(
+          const { messages, matterDataJson } = buildStage3Messages(
             stage1, stage2, stage3, matterKey as MatterType, cachedRecord.queryYear,
             chartData, question, routingAnswers,
           )
-          return { messages, maxTokens: 4500, effectiveTargetYear: cachedRecord.queryYear }
+          return { messages, maxTokens: 4500, effectiveTargetYear: cachedRecord.queryYear, matterDataJson }
         }
       }
 
@@ -690,7 +699,7 @@ function buildStage3Messages(
   chartData: Record<string, unknown>,
   question: string,
   routingAnswers?: Record<string, string>,
-): { messages: ChatMessage[] } {
+): { messages: ChatMessage[]; matterDataJson: string } {
   const chartSnapshot = buildChartSnapshotObject(chartData, {
     birthGan: stage1.scoringCtx?.birthGan,
     taiSuiZhi: stage1.scoringCtx?.taiSuiZhi,
@@ -769,35 +778,15 @@ function buildStage3Messages(
     governorStrategy: stage3.resilience?.strategy ?? stage3.scoreAction ?? '发展性咨询',
     crisisSuffix: stage3.resilience?.promptSuffix ?? '',
   })
-  // 按「输出给大模型的数据格式.json」结构组装完整数据
-  const matterAnalysisData = buildMatterAnalysisData({
+  // 按「通用单人事项分析数据格式规范」组装完整规范格式数据
+  const matterSpecData = formatMatterAnalysis({
+    stage1,
+    stage3,
     matterType,
     targetYear,
-    palaceScores: stage1.palaceScores,
-    mergedSihua: stage1.mergedSihua,
-    stage3: {
-      primaryAnalysis: stage3.primaryAnalysis,
-      allDaXianMappings: stage3.allDaXianMappings,
-      currentDaXianMapping: currentDaXianMapping ? {
-        index: currentDaXianMapping.index,
-        ageRange: currentDaXianMapping.ageRange,
-        daXianGan: currentDaXianMapping.daXianGan,
-        mutagen: currentDaXianMapping.mutagen,
-      } : undefined,
-      currentDaXianQualitative: stage3.currentDaXianQualitative,
-      liuNianSihuaPositions: stage3.liuNianSihuaPositions,
-      directionMatrix: stage3.directionMatrix,
-      directionWindow: stage3.directionWindow,
-      compositeScore: stage3.compositeScore,
-      scoreLabel: stage3.scoreLabel,
-      scoreAction: stage3.scoreAction,
-      sihuaLandingReport: stage3.sihuaLandingReport,
-      analysisSummary: stage3.analysisSummary,
-    },
     chartData,
-    primaryPalaceName: primaryPalace,
   })
-  const matterDataJson = JSON.stringify(matterAnalysisData, null, 2)
+  const matterDataJson = JSON.stringify(matterSpecData, null, 2)
 
   const userPrompt = buildStage3UserPrompt(
     matterType,
@@ -815,13 +804,23 @@ function buildStage3Messages(
     matterDataJson,
   )
 
+  // #2 IR 数据注入：将规范 JSON 作为知识片段注入
+  const irDataKnowledge = `【事项分析规范数据（JSON 格式，三层十二宫完整数据）】\n${matterDataJson}`
+  const allKnowledge = [
+    ...stage1.knowledgeSnippets,
+    ...stage2.knowledgeSnippets,
+    ...stage3.knowledgeSnippets,
+  ].map(s => s.content)
+  // 将规范 JSON 追加到知识片段末尾
+  allKnowledge.push(irDataKnowledge)
+
   const msgs = buildPrompt(
     ir,
-    [...stage1.knowledgeSnippets, ...stage2.knowledgeSnippets, ...stage3.knowledgeSnippets].map(s => s.content),
+    allKnowledge,
     userPrompt,
     STAGE3_HINT,
   )
-  return { messages: msgs as ChatMessage[] }
+  return { messages: msgs as ChatMessage[], matterDataJson }
 }
 
 /**

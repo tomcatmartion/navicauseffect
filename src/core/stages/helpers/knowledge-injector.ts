@@ -114,7 +114,7 @@ export function injectStage2Knowledge(
 }
 
 /**
- * Stage3 知识注入：事项宫位含义 + 星曜赋性 + 大限相关
+ * Stage3 知识注入：事项宫位含义 + 星曜赋性 + 大限/流年完整数据
  */
 export function injectStage3Knowledge(
   primaryPalace: PalaceName,
@@ -156,12 +156,46 @@ export function injectStage3Knowledge(
   const safeBirthYear = birthYear ?? 1990
   const currentDaXian = findCurrentDaXianFromChart(daXianMappings, year, safeBirthYear, chartData)
   if (currentDaXian) {
+    // 大限四化星赋性
     for (const star of currentDaXian.mutagen) {
       if (!seen.has(star)) {
         seen.add(star)
         const sSnip = starSnippet(star)
         if (sSnip) snippets.push(sSnip)
       }
+    }
+
+    // 大限十二宫摘要（天干、地支、星曜、四化、格局、评分）
+    const daXianSummaryLines = buildDaXianPalaceSummary(currentDaXian, palaceScores)
+    if (daXianSummaryLines.length > 0) {
+      snippets.push({
+        source: '大限数据',
+        key: `大限_${currentDaXian.ageRange[0]}-${currentDaXian.ageRange[1]}_十二宫摘要`,
+        content: `当前大限（第${currentDaXian.index}限，${currentDaXian.ageRange[0]}-${currentDaXian.ageRange[1]}岁），宫干${currentDaXian.daXianGan}，命宫在${currentDaXian.mingPalaceName}。\n四化：${currentDaXian.mutagen.join('、')}\n十二宫数据：\n${daXianSummaryLines.join('\n')}`,
+      })
+    }
+
+    // 大限格局列表
+    const daXianPatterns = currentDaXian.scores?.flatMap(s => s.patterns) ?? []
+    const uniquePatterns = [...new Map(daXianPatterns.map(p => [p.name, p])).values()]
+    if (uniquePatterns.length > 0) {
+      snippets.push({
+        source: '大限数据',
+        key: `大限_格局列表`,
+        content: `大限格局：${uniquePatterns.map(p => `${p.name}（${p.level}，乘数${p.multiplier}）`).join('；')}`,
+      })
+    }
+
+    // 大限两夹宫信息
+    const daXianFlanking = currentDaXian.scores?.flatMap(s =>
+      s.flankingPairs.map(fp => `${s.palace}：${fp.displayName}[${fp.pairType}]`)
+    ) ?? []
+    if (daXianFlanking.length > 0) {
+      snippets.push({
+        source: '大限数据',
+        key: `大限_两夹宫`,
+        content: `大限两夹宫：${daXianFlanking.join('；')}`,
+      })
     }
   }
 
@@ -185,6 +219,39 @@ export function injectStage3Knowledge(
   }
 
   return snippets
+}
+
+/**
+ * 构建大限十二宫摘要文本
+ *
+ * 从 natalScores 获取原局宫名和地支，从 daXian.scores 获取大限独立评分
+ */
+function buildDaXianPalaceSummary(
+  daXian: DaXianPalaceMapping,
+  natalScores: PalaceScore[],
+): string[] {
+  const lines: string[] = []
+  const scores = daXian.scores
+
+  // 大限命宫在原局的索引
+  const mingIdx = daXian.palaceIndex
+
+  for (let i = 0; i < 12; i++) {
+    // 大限第i宫对应的原局宫位索引
+    const originalIdx = (mingIdx + i) % 12
+    const natalScore = natalScores[originalIdx]
+    const daXianScore = scores?.[i]
+
+    const palaceName = natalScore?.palace ?? `宫${i + 1}`
+    const diZhi = natalScore?.diZhi ?? '?'
+    const majorStars = natalScore?.majorStars.map(s => s.star).join('+') ?? '空'
+    const score = daXianScore?.finalScore ?? natalScore?.finalScore ?? 0
+    const level = score >= 6.5 ? '吉旺' : score >= 3.5 ? '平' : '凶弱'
+
+    lines.push(`  ${palaceName}(${diZhi})：${majorStars}，评分${score.toFixed(1)}（${level}）`)
+  }
+
+  return lines
 }
 
 /**

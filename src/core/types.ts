@@ -703,7 +703,7 @@ export function getDirectionWindow(matrix: DirectionMatrix): DirectionWindow {
 /** 知识片段（从 M6 查询后注入 IR） */
 export interface KnowledgeSnippet {
   /** 查询来源 */
-  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量' | '性格三宫' | '限运方向'
+  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量' | '性格三宫' | '限运方向' | '大限数据'
   /** 查询键值 */
   key: string
   /** 知识内容 */

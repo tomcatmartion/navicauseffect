@@ -21,6 +21,8 @@ export interface HybridDebugInfo {
     /** 消息标签/分类，用于前端展示 */
     label?: string
   }>
+  /** #2 IR 数据注入 — 规范格式 JSON（三层十二宫完整数据） */
+  irDataJson?: string
 }
 
 export type PipelineDebugInfo = HybridDebugInfo
