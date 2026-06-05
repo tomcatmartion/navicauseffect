@@ -27,3 +27,4 @@ export {
   evaluatePalacePatternsOnly,
   buildChartAccessor,
 } from './pattern-scoring'
+export { PalaceEnergyIndex } from './palace-energy-index'
