@@ -16,6 +16,11 @@ export {
   getTrineIndices,
   getFlankingIndices,
   getWeakerBrightness,
+  classifyTone,
+  step3_classifyWarmCool,
+  getIntensityFactor,
+  getLuCunDeltaByLabel,
+  type WarmCoolLabel,
 } from './scoring-flow'
 export {
   getAllFlankingPairs,
@@ -28,3 +33,13 @@ export {
   buildChartAccessor,
 } from './pattern-scoring'
 export { PalaceEnergyIndex } from './palace-energy-index'
+export {
+  computeSingleLayerDelta,
+  computeAllLayerDeltas,
+  combineBaseWithDelta,
+  buildDeltaLayerBriefs,
+  scoreLayerByDelta,
+  type LayerDeltaInput,
+  type LayerDeltaResult,
+  type LayerDeltaConfig,
+} from './layer-delta-scoring'

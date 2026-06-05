@@ -41,8 +41,9 @@ import {
   buildLiuYueScoringContext,
   extractMonthlyHoroscope,
 } from './limit-scoring-context'
-import { evaluateAllPalaces } from '@/core/energy-evaluator/scoring-flow'
 import { PalaceEnergyIndex } from '@/core/energy-evaluator/palace-energy-index'
+import { evaluateAllPalaces } from '@/core/energy-evaluator/scoring-flow'
+import { scoreLayerByDelta } from '@/core/energy-evaluator/layer-delta-scoring'
 import { getAllFlankingPairs } from '@/core/energy-evaluator/jiagong-matcher'
 import { injectStage3Knowledge } from '@/core/stages/helpers/knowledge-injector'
 import {
@@ -51,7 +52,7 @@ import {
 } from './palace-weight-resolver'
 import { computePalaceFourDimension } from './palace-four-dimension'
 import { matchDaXianSihuaRule, matchLiuNianSihuaRule, buildSihuaLandingReport, buildYuanJuTriggerEntries, buildLayerTriggerEntries, buildTriggerEntriesFromMutagen, detectSihuaTriggers, applyTriggerActivationAdjust, getMatterFocusIndices } from './sihua-trigger-engine'
-import type { SihuaLandingReport, MutagenLandingRow, SihuaTrigger } from '@/core/types'
+import type { SihuaLandingReport, MutagenLandingRow, SihuaTrigger, Stage1Output } from '@/core/types'
 import { scorePalacesToBrief, mapToneToBriefLevel } from './limit-layer-scoring'
 
 /** 由实际四维投射生成与 outputTemplate 对齐的焦点文案 */
@@ -242,6 +243,7 @@ function buildDaXianTimeline(
   currentDaXian: Stage3Output['allDaXianMappings'][number] | undefined,
   primaryPalace: PalaceName,
   hasProtection: boolean,
+  natalPalaceScores: Stage1Output['palaceScores'],
 ): Stage3Output['daXianTimeline'] {
   const natalCtx = input.stage1.scoringCtx
   const currentIdx = currentDaXian
@@ -250,9 +252,16 @@ function buildDaXianTimeline(
   const start = Math.max(0, Math.min(currentIdx > 0 ? currentIdx - 1 : 0, mappings.length - 3))
   return mappings.slice(start, start + 3).map(d => {
     const daXianCtx = buildDaXianScoringContext(d, natalCtx)
-    const palaceScore = daXianCtx
-      ? new PalaceEnergyIndex(evaluateAllPalaces(daXianCtx)).getByLayerPalace(primaryPalace, d.palaceIndex).finalScore
-      : 5
+    // 增量模式：在原局基础上叠加
+    const daXianScores = daXianCtx
+      ? scoreLayerByDelta(natalPalaceScores, {
+          layerCtx: daXianCtx,
+          layerLabel: '大限',
+          palacePatterns: d.palacePatterns,
+        })
+      : natalPalaceScores
+    const palaceScore = new PalaceEnergyIndex(daXianScores)
+      .getByLayerPalace(primaryPalace, d.palaceIndex).finalScore
     const rule = matchDaXianSihuaRule(input, d.mutagen, hasProtection)
     return {
       index: d.index,
@@ -273,7 +282,7 @@ export function executeMatterLimitAnalysis(input: Stage3Input): Omit<Stage3Outpu
   const personalityAnchor = stage2.personalityTriad?.synthesis ?? stage2.overallTone
 
   const { table: threeLayerTable, daXianMappings: allDaXianMappings } =
-    buildThreeLayerTable(stage1.scoringCtx, chartData, targetYear)
+    buildThreeLayerTable(stage1.scoringCtx, chartData, targetYear, stage1.palaceScores)
 
   const currentDaXian = findCurrentDaXianFromChart(allDaXianMappings, targetYear, birthYear, chartData)
 
@@ -322,16 +331,27 @@ export function executeMatterLimitAnalysis(input: Stage3Input): Omit<Stage3Outpu
     stage1.scoringCtx.palaces.findIndex(p => p.diZhi === liuNianZhi),
   )
 
-  // 构建大限/流年 PalaceEnergyIndex（统一查询入口）
-  const daXianIndex = daXianCtx
-    ? new PalaceEnergyIndex(evaluateAllPalaces(daXianCtx))
-    : null
-  const liuNianIndex = yearlyCtx
-    ? new PalaceEnergyIndex(evaluateAllPalaces(yearlyCtx))
-    : null
+  // 构建大限/流年 PalaceEnergyIndex（增量模式：在原局基础上叠加）
+  const daXianScores = daXianCtx
+    ? scoreLayerByDelta(stage1.palaceScores, {
+        layerCtx: daXianCtx,
+        layerLabel: '大限',
+        palacePatterns: currentDaXian?.palacePatterns,
+      })
+    : stage1.palaceScores
+  const daXianIndex = new PalaceEnergyIndex(daXianScores)
 
-  const daXianPalaceScores = daXianIndex?.toLayerBriefs(daXianOffset) ?? []
-  const liuNianPalaceScores = liuNianIndex?.toLayerBriefs(liuNianOffset) ?? []
+  // 流年：在大限得分基础上叠加
+  const liuNianScores = yearlyCtx
+    ? scoreLayerByDelta(daXianScores, {
+        layerCtx: yearlyCtx,
+        layerLabel: '流年',
+      })
+    : daXianScores
+  const liuNianIndex = new PalaceEnergyIndex(liuNianScores)
+
+  const daXianPalaceScores = daXianIndex.toLayerBriefs(daXianOffset)
+  const liuNianPalaceScores = liuNianIndex.toLayerBriefs(liuNianOffset)
 
   const daXianPalaceScore = daXianIndex?.getByLayerPalace(routeResult.primaryPalace, daXianOffset).finalScore ?? 5
   const daXianRule = currentDaXian
@@ -511,6 +531,7 @@ export function executeMatterLimitAnalysis(input: Stage3Input): Omit<Stage3Outpu
     currentDaXian,
     routeResult.primaryPalace,
     hasProtection,
+    stage1.palaceScores,
   )
   const secondaryPalaceSnapshots = buildSecondaryPalaceSnapshots(
     routeResult.secondaryPalaces,

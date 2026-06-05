@@ -20,7 +20,8 @@ import { PALACE_NAMES, PALACE_NAME_TO_INDEX } from '@/core/types'
 import { getSihuaTable } from '@/core/sihua-calculator'
 import type { ScoringContext, PalaceForScoring } from '@/core/energy-evaluator/scoring-flow'
 import { evaluatePalacePatternsOnly } from '@/core/energy-evaluator/pattern-scoring'
-import { evaluateAllPalaces } from '@/core/energy-evaluator/scoring-flow'
+import { scoreLayerByDelta } from '@/core/energy-evaluator/layer-delta-scoring'
+import type { PalaceScore } from '@/core/types'
 import { buildDaXianScoringContext } from './limit-scoring-context'
 import {
   directionFromLayerScore,
@@ -271,16 +272,24 @@ export function buildThreeLayerTable(
   natalCtx: ScoringContext,
   chartData: Record<string, unknown>,
   targetYear: number,
+  natalPalaceScores?: PalaceScore[],
 ): { table: ThreeLayerPalaceTable; daXianMappings: DaXianPalaceMapping[] } {
   const daXianMappings = extractAllDaXianMappings(chartData, 0)
 
+  // 使用增量评分：大限得分 = 原局得分 + 大限四化增量
   for (const mapping of daXianMappings) {
     try {
       const daXianCtx = buildDaXianScoringContext(mapping, natalCtx)
       if (daXianCtx) {
         const palacePatterns = evaluatePalacePatternsOnly(daXianCtx)
-        const palaceScores = evaluateAllPalaces(daXianCtx)
-        mapping.scores = palaceScores
+        if (natalPalaceScores) {
+          // 增量模式：在原局基础上叠加
+          mapping.scores = scoreLayerByDelta(natalPalaceScores, {
+            layerCtx: daXianCtx,
+            layerLabel: '大限',
+            palacePatterns,
+          })
+        }
         mapping.palacePatterns = palacePatterns
         mapping.patterns = palacePatterns[mapping.palaceIndex] ?? palacePatterns[0] ?? []
       }

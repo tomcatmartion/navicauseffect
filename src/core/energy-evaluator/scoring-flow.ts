@@ -142,7 +142,7 @@ interface ScoringState {
   newBrightness: WarmCoolLabel
 }
 
-type WarmCoolLabel = '旺' | '旺偏磨炼' | '平' | '虚浮' | '凶危'
+export type WarmCoolLabel = '旺' | '旺偏磨炼' | '平' | '虚浮' | '凶危'
 
 // ═══════════════════════════════════════════════════════════════════
 // 辅助函数：宫位索引关系
@@ -184,7 +184,7 @@ function getBrightnessConfig(brightness: PalaceBrightness): { base: number; ceil
   return config
 }
 
-function getIntensityFactor(brightness: WarmCoolLabel): number {
+export function getIntensityFactor(brightness: WarmCoolLabel): number {
   const map: Record<WarmCoolLabel, number> = {
     '旺': 0.3,
     '旺偏磨炼': 0.5,
@@ -195,7 +195,7 @@ function getIntensityFactor(brightness: WarmCoolLabel): number {
   return map[brightness] ?? 0.7
 }
 
-function getLuCunDeltaByLabel(label: WarmCoolLabel): number {
+export function getLuCunDeltaByLabel(label: WarmCoolLabel): number {
   // 从 scoring.json params 加载 luCunDelta（旺 0.5 / 平 0.3 / 陷 0.1）
   const params = getScoringParams()
   let delta: number
@@ -425,7 +425,7 @@ function step2_bonus(palaceIdx: number, ctx: ScoringContext, state: ScoringState
 // 步骤3: 重新定性宫位旺弱
 // ═══════════════════════════════════════════════════════════════════
 
-function step3_classifyWarmCool(score: number): WarmCoolLabel {
+export function step3_classifyWarmCool(score: number): WarmCoolLabel {
   if (score >= 7.5) return '旺'
   if (score >= 6.0) return '旺偏磨炼'
   if (score >= 4.5) return '平'
@@ -599,19 +599,17 @@ function step6_ceiling_and_absoluteFail(
   let finalScore = Math.min(score, ceiling)
   finalScore = round2(finalScore)
 
-  // 路径二：特殊组合强制绝败 — 临时屏蔽，保留代码，观察路径一效果后再决定是否启用
-  // const { isAbsoluteFail, specialFlags } = detectAbsoluteFail(palaceIdx, ctx)
-  // if (isAbsoluteFail) {
-  //   finalScore = 1.0
-  // }
-  const isAbsoluteFail = false
-  const specialFlags: string[] = []
+  // 绝败降权：满足条件时 × 0.7 而非强制 1.0
+  const { isAbsoluteFail, specialFlags } = detectAbsoluteFail(palaceIdx, ctx)
+  if (isAbsoluteFail) {
+    finalScore = round2(finalScore * 0.7)
+  }
 
   return { finalScore, isAbsoluteFail, specialFlags }
 }
 
 /** 基调定论 */
-function classifyTone(score: number): PalaceTone {
+export function classifyTone(score: number): PalaceTone {
   if (score >= 7.5) return '实旺'
   if (score >= 6.0) return '实旺偏磨炼'
   if (score >= 4.5) return '磨炼'
