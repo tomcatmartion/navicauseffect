@@ -262,7 +262,7 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
   return (
     <Card className="border-primary/15">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 font-[var(--font-serif-sc)] text-xl text-primary">
+        <CardTitle className="flex items-center gap-2 font-serif-sc text-xl text-primary">
           <span className="text-2xl">☯</span>
           输入出生信息
         </CardTitle>

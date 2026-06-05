@@ -15,6 +15,7 @@ import { resolveMatterRoute } from '@/core/router/matter-route-resolver'
 import type { MatterType } from '@/core/types'
 import { guardZiweiDebugApi } from '@/lib/ziwei/debug-api-guard'
 import { hasValidChartPalaces } from '@/lib/ziwei/chart-data-validation'
+import { formatMatterAnalysis } from '@/core/format/matter-analysis-formatter'
 
 export async function POST(request: Request) {
   const guard = await guardZiweiDebugApi()
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       question?: string
       targetYear?: number
       routingAnswers?: Record<string, string>
+      includeSpecFormat?: boolean
     }
 
     if (!hasValidChartPalaces(body.chartData)) {
@@ -95,6 +97,16 @@ export async function POST(request: Request) {
       daXianTimeline: stage3.daXianTimeline,
       slimmedDescriptions: stage3.slimmedDescriptions,
       sihuaLandingReport: stage3.sihuaLandingReport,
+      // 规范格式输出（按需启用）
+      ...(body.includeSpecFormat ? {
+        specFormatted: formatMatterAnalysis({
+          stage1,
+          stage3,
+          matterType,
+          targetYear,
+          chartData: body.chartData,
+        }),
+      } : {}),
     })
   } catch (error) {
     console.error('[Stage3 API] 执行失败:', error)

@@ -13,8 +13,8 @@ export function MobileNav() {
   const mobileNavItems = [
     { label: "首页", href: "/", icon: "🏠" },
     { label: "排盘", href: "/chart", icon: "☯" },
-    { label: "会员", href: "/pricing", icon: "👑" },
-    { label: "我的", href: isLoggedIn ? "/profile" : "/auth/login", icon: "👤" },
+    { label: "报告", href: isLoggedIn ? "/reports" : "/auth/login", icon: "📄" },
+    { label: "个人", href: isLoggedIn ? "/user" : "/auth/login", icon: "👤" },
   ];
 
   return (
@@ -22,8 +22,10 @@ export function MobileNav() {
       <div className="flex items-center justify-around py-2">
         {mobileNavItems.map((item) => {
           const isActive =
-            item.href === "/profile"
-              ? pathname === "/profile"
+            item.href === "/user"
+              ? pathname === "/user"
+              : item.href === "/reports"
+              ? pathname === "/reports" || pathname.startsWith("/reports/")
               : item.href === "/auth/login"
               ? pathname === "/auth/login"
               : pathname === item.href;
@@ -39,8 +41,8 @@ export function MobileNav() {
             >
               <span className="text-lg">{item.icon}</span>
               <span>
-                {item.label === "我的" && isLoggedIn
-                  ? session.user.name?.slice(0, 3) || "我的"
+                {item.label === "个人" && isLoggedIn
+                  ? session.user.name?.slice(0, 3) || "个人"
                   : item.label}
               </span>
             </Link>

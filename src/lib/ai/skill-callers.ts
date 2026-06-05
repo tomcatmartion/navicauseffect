@@ -154,7 +154,7 @@ export async function callAI(params: {
           Authorization: `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(AI_STREAM_TIMEOUT_MS),
       })
 
       if (!response.ok) {

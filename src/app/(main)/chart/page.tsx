@@ -258,7 +258,7 @@ export default function ChartPage() {
     return (
       <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
         <div className="mb-8 text-center">
-          <h1 className="mb-2 font-[var(--font-serif-sc)] text-2xl font-bold text-primary md:text-3xl">
+          <h1 className="mb-2 font-serif-sc text-2xl font-bold text-primary md:text-3xl">
             微著排盘
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -278,7 +278,7 @@ export default function ChartPage() {
       {/* 标题栏 */}
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
-          <h1 className="font-[var(--font-serif-sc)] text-lg font-bold text-primary md:text-2xl">
+          <h1 className="font-serif-sc text-lg font-bold text-primary md:text-2xl">
             微著排盘
           </h1>
           <p className="text-xs text-muted-foreground">{trueSolarTimeInfo}</p>

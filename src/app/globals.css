@@ -137,3 +137,9 @@
     font-size: 16px;
   }
 }
+
+@layer utilities {
+  .font-serif-sc {
+    font-family: var(--font-serif-sc);
+  }
+}

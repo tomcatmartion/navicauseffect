@@ -160,7 +160,7 @@ export default function PricingPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 md:py-16">
       <div className="mb-12 text-center">
-        <h1 className="mb-3 font-[var(--font-serif-sc)] text-3xl font-bold text-primary md:text-4xl">
+        <h1 className="mb-3 font-serif-sc text-3xl font-bold text-primary md:text-4xl">
           会员服务
         </h1>
         <p className="text-muted-foreground">

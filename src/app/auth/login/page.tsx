@@ -27,6 +27,7 @@ function LoginForm() {
   const [regUsername, setRegUsername] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regNickname, setRegNickname] = useState("");
+  const [regInviteCode, setRegInviteCode] = useState("");
 
   const [wechatConfigured, setWechatConfigured] = useState<boolean | null>(null);
 
@@ -133,6 +134,7 @@ function LoginForm() {
           username: regUsername,
           password: regPassword,
           nickname: regNickname,
+          inviteCode: regInviteCode || undefined,
         }),
       });
 
@@ -185,7 +187,7 @@ function LoginForm() {
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground">
           ☯
         </div>
-        <CardTitle className="font-[var(--font-serif-sc)] text-2xl text-primary">
+        <CardTitle className="font-serif-sc text-2xl text-primary">
           微著
         </CardTitle>
         <p className="text-sm text-muted-foreground">观己观人观世界</p>
@@ -304,6 +306,16 @@ function LoginForm() {
                   value={regNickname}
                   onChange={(e) => setRegNickname(e.target.value)}
                   placeholder="给自己起个名字"
+                  className="border-primary/20"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>邀请码（选填）</Label>
+                <Input
+                  value={regInviteCode}
+                  onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                  placeholder="有邀请码可获赠星币"
+                  maxLength={8}
                   className="border-primary/20"
                 />
               </div>

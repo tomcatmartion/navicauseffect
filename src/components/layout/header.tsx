@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "首页", href: "/" },
   { label: "命理排盘", href: "/chart" },
+  { label: "报告", href: "/reports" },
   { label: "会员", href: "/pricing" },
 ];
 
@@ -47,7 +48,7 @@ export function Header() {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground text-xl">
             ☯
           </div>
-          <span className="hidden text-lg font-semibold text-primary font-[var(--font-serif-sc)] sm:block">
+          <span className="hidden text-lg font-semibold text-primary font-serif-sc sm:block">
             微著
           </span>
         </Link>
@@ -100,8 +101,11 @@ export function Header() {
                   </p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push("/profile")}>
+                <DropdownMenuItem onClick={() => router.push("/user")}>
                   个人中心
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/reports")}>
+                  我的报告
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/chart")}>
                   开始排盘

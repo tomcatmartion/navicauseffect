@@ -178,7 +178,7 @@ export default function MockPayPage() {
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10 md:py-14">
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h1 className="font-[var(--font-serif-sc)] text-2xl font-bold text-primary md:text-3xl">
+          <h1 className="font-serif-sc text-2xl font-bold text-primary md:text-3xl">
             模拟支付
           </h1>
           <Badge variant="secondary">开发 / 测试</Badge>

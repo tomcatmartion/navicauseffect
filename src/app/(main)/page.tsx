@@ -47,10 +47,10 @@ export default function HomePage() {
           <p className="mb-4 text-sm tracking-[0.3em] text-accent-foreground/60">
             传统智慧 × 现代科学
           </p>
-          <h1 className="mb-2 font-[var(--font-serif-sc)] text-4xl font-bold leading-tight text-primary md:text-6xl">
+          <h1 className="mb-2 font-serif-sc text-4xl font-bold leading-tight text-primary md:text-6xl">
             观己观人观世界
           </h1>
-          <h2 className="mb-8 font-[var(--font-serif-sc)] text-4xl font-bold leading-tight text-primary md:text-6xl">
+          <h2 className="mb-8 font-serif-sc text-4xl font-bold leading-tight text-primary md:text-6xl">
             知微知著知真如
           </h2>
           <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
@@ -76,7 +76,7 @@ export default function HomePage() {
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-16 md:py-24">
         <div className="mb-12 text-center">
-          <h2 className="mb-3 font-[var(--font-serif-sc)] text-2xl font-bold text-primary md:text-3xl">
+          <h2 className="mb-3 font-serif-sc text-2xl font-bold text-primary md:text-3xl">
             核心服务
           </h2>
           <p className="text-muted-foreground">
@@ -106,7 +106,7 @@ export default function HomePage() {
       {/* CTA */}
       <section className="bg-gradient-to-r from-primary/5 to-accent/10">
         <div className="mx-auto max-w-4xl px-4 py-16 text-center md:py-24">
-          <h2 className="mb-4 font-[var(--font-serif-sc)] text-2xl font-bold text-primary md:text-3xl">
+          <h2 className="mb-4 font-serif-sc text-2xl font-bold text-primary md:text-3xl">
             开启你的自我探索之旅
           </h2>
           <p className="mb-8 text-muted-foreground">

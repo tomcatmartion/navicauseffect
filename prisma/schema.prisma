@@ -41,6 +41,29 @@ enum AnalysisCategory {
   EMOTION
 }
 
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum TemplateType {
+  BASIC
+  ADVANCED
+}
+
+enum RelationType {
+  SELF
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  FRIEND
+  COLLEAGUE
+  OTHER
+}
+
 enum PaymentType {
   MEMBERSHIP
   PER_QUERY
@@ -62,6 +85,9 @@ enum PointSource {
   SHARE
   ADMIN_GRANT
   REDEEM
+  INVITE
+  RECHARGE
+  CONSUME
 }
 
 enum SharePlatform {
@@ -91,6 +117,10 @@ model User {
   pointRecords        PointRecord[]
   shareRecords        ShareRecord[]
   dailyUsages         DailyUsage[]
+  identities          Identity[]
+  reports             Report[]
+  redeemUsages        RedeemUsage[]
+  promoterProfile     PromoterProfile?
 
   @@map("users")
 }
@@ -347,4 +377,176 @@ model UserQuestionLog {
   @@index([createdAt])
   @@index([chartFingerprint])
   @@map("user_question_logs")
+}
+
+// ── 命主/身份档案 ──────────────────────────────────────────
+// 一个 User 可以创建多个命主（自己、家人、朋友等）
+model Identity {
+  id          String       @id @default(cuid())
+  userId      String       @map("user_id")
+  name        String       // 命主姓名
+  gender      Gender       // 性别
+  birthday    String       // 出生时间（阳历，如 "1990-05-15 14:00"）
+  birthCity   String?      @map("birth_city")   // 出生城市
+  region      String?      // 出生地区（省份/城市）
+  relation    RelationType @default(SELF)       // 与用户的关系
+  bazi        String?      // 八字摘要（如 "庚午 辛巳 甲寅 辛未"）
+  isActive    Boolean      @default(false) @map("is_active") // 是否为当前活跃命主
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports Report[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("identities")
+}
+
+// ── 报告模板 ──────────────────────────────────────────────
+// 管理员配置的报告模板（体验区/会员区）
+model ReportTemplate {
+  id           String       @id @default(cuid())
+  name         String       // 模板名称
+  slug         String       @unique // URL标识，如 "life-full-analysis"
+  description  String?      @db.Text // 模板描述
+  type         TemplateType @default(BASIC) // BASIC=体验区, ADVANCED=会员区
+  tags         Json?        // string[] 标签，如 ["热门","推荐"]
+  bgImage      String?      @map("bg_image") // 封面图URL
+  sortOrder    Int          @default(0) @map("sort_order") // 排序权重
+  isActive     Boolean      @default(true) @map("is_active")
+  pointCost    Int          @default(0) @map("point_cost") // 消耗积分
+  parentId     String?      @map("parent_id") // 父模板ID（子报告）
+  promptConfig String?      @map("prompt_config") @db.Text // 报告生成的 Prompt 配置
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  // 自关联：父模板 → 子报告模板
+  parent   ReportTemplate?  @relation("TemplateChildren", fields: [parentId], references: [id])
+  children ReportTemplate[] @relation("TemplateChildren")
+
+  reports Report[]
+
+  @@index([type, isActive])
+  @@index([parentId])
+  @@map("report_templates")
+}
+
+// ── 报告记录 ──────────────────────────────────────────────
+// 用户生成的报告，关联模板和命主
+model Report {
+  id             String       @id @default(cuid())
+  userId         String       @map("user_id")
+  identityId     String       @map("identity_id")
+  templateId     String       @map("template_id")
+  status         ReportStatus @default(PENDING)
+  progress       Int          @default(0) // 生成进度 0-100
+  content        String?      @db.LongText // 报告内容 JSON
+  coverImage     String?      @map("cover_image") // 封面图URL
+  parentReportId String?      @map("parent_report_id") // 父报告ID（子报告）
+  errorMessage   String?      @map("error_message") @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  identity   Identity       @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  template   ReportTemplate @relation(fields: [templateId], references: [id])
+  parent     Report?        @relation("ReportChildren", fields: [parentReportId], references: [id])
+  children   Report[]       @relation("ReportChildren")
+  questions  ReportQuestion[]
+
+  @@index([userId, status])
+  @@index([identityId])
+  @@index([templateId])
+  @@index([parentReportId])
+  @@map("reports")
+}
+
+// ── 报告问答 ──────────────────────────────────────────────
+// 基于报告内容的追问
+model ReportQuestion {
+  id        String   @id @default(cuid())
+  reportId  String   @map("report_id")
+  userId    String   @map("user_id")
+  question  String   @db.Text
+  answer    String?  @db.LongText
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_questions")
+}
+
+// ── 兑换码 ──────────────────────────────────────────────
+model RedeemCode {
+  id          String   @id @default(cuid())
+  code        String   @unique // 兑换码
+  pointValue  Int      @map("point_value") // 积分值
+  maxUses     Int      @default(1) @map("max_uses") // 最大使用次数
+  usedCount   Int      @default(0) @map("used_count") // 已使用次数
+  expiresAt   DateTime @map("expires_at")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  usages RedeemUsage[]
+
+  @@map("redeem_codes")
+}
+
+model RedeemUsage {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  codeId    String   @map("code_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code RedeemCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeId]) // 每个用户只能用一次
+  @@map("redeem_usages")
+}
+
+// ── 推广/邀请系统 ──────────────────────────────────────────
+model PromoterProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  inviteCode  String   @unique @map("invite_code") // 推广码
+  level       Int      @default(1) // 推广员等级
+  totalEarned Int      @default(0) @map("total_earned") // 累计收益（积分）
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      PromoterTeam[]
+  earnings  PromoterEarning[]
+
+  @@map("promoter_profiles")
+}
+
+model PromoterTeam {
+  id          String   @id @default(cuid())
+  promoterId  String   @map("promoter_id") // 推广人
+  memberId    String   @map("member_id")   // 被邀请人
+  joinAt      DateTime @default(now()) @map("join_at")
+
+  promoter PromoterProfile @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+
+  @@unique([promoterId, memberId])
+  @@map("promoter_teams")
+}
+
+model PromoterEarning {
+  id          String   @id @default(cuid())
+  promoterId  String   @map("promoter_id")
+  userId      String   @map("user_id") // 来源用户
+  eventType   String   // 事件类型：register, purchase, upgrade
+  points      Int      // 获得积分
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  promoter PromoterProfile @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+
+  @@index([promoterId])
+  @@map("promoter_earnings")
 }
