@@ -149,9 +149,6 @@ function createSseStream(
       let debugSent = false
       let fullReply = ''
 
-      const TAIL_BUFFER_SIZE = 300
-      let tailBuffer = ''
-
       const emitText = (text: string) => {
         if (!text) return
         if (!sessionIdSent) {
@@ -185,35 +182,28 @@ function createSseStream(
               if (chunk?.providerError) {
                 throw new Error(chunk.providerError)
               }
+              // 每个 delta 立即发送，不缓冲
               if (chunk?.deltaText) {
-                const deltaText = chunk.deltaText
-                fullReply += deltaText
-                tailBuffer += deltaText
-
-                if (tailBuffer.length > TAIL_BUFFER_SIZE) {
-                  const safeLen = tailBuffer.length - TAIL_BUFFER_SIZE
-                  emitText(tailBuffer.slice(0, safeLen))
-                  tailBuffer = tailBuffer.slice(safeLen)
-                }
+                fullReply += chunk.deltaText
+                emitText(chunk.deltaText)
               }
             }
           }
         }
 
+        // 流结束后解析 narrative 并发送长度标记（前端可按需截断多余内容）
         const { narrative } = parseHybridAssistantPayload(fullReply)
 
-        // 如果 AI 返回空内容，发送错误提示
         if (!narrative || narrative.length === 0) {
           console.warn('[SSE] AI 返回空内容，fullReply 长度:', fullReply.length)
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ error: 'AI 返回空内容，请重试' })}\n\n`),
           )
-        } else {
-          const alreadySent = fullReply.length - tailBuffer.length
-          const remaining = narrative.length - alreadySent
-          if (remaining > 0) {
-            emitText(tailBuffer.slice(0, remaining))
-          }
+        } else if (narrative.length < fullReply.length) {
+          // raw 比 narrative 长，发送 narrative 长度供前端截断
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'narrativeEnd', narrativeLength: narrative.length })}\n\n`),
+          )
         }
 
         if (!debugSent && debugInfo) {

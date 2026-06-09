@@ -16,12 +16,14 @@ import type { ZiweiSessionData } from '@/lib/ziwei/session/types'
 import { SessionManager } from '@/lib/ziwei/session/session-manager'
 import { callAIStream } from '@/lib/ai/skill-callers'
 import type { ChatMessage } from '@/lib/ai/skill-callers'
+import { redis } from '@/lib/redis'
 
 import { executeStage1 } from '@/core/stages/stage1-palace-scoring'
 import { executeStage2 } from '@/core/stages/stage2-personality'
 import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
 import { executeStage4 } from '@/core/stages/stage4-interaction'
 import { resolveMatterRoute } from '@/core/router/matter-route-resolver'
+import { buildChartFingerprint } from '@/core/services/scoring-service'
 import { resolveLiuNianGan, findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
 
 import {
@@ -55,8 +57,7 @@ import { applySlidingWindow } from '@/core/context/sliding-window'
 import { compileReportSkeleton, reportToMarkdown } from '@/core/report/report-compiler'
 import type { ReportCompilerInput } from '@/core/report/types'
 import { callAI } from '@/lib/ai/skill-callers'
-import { prisma } from '@/lib/db'
-import type { Prisma } from '@prisma/client'
+import { scoringService } from '@/core/services/scoring-service'
 
 const sessionManager = new SessionManager()
 const MAX_HISTORY_MESSAGES = 6  // 最近 3 轮（6 条消息）
@@ -67,8 +68,6 @@ function ensureHybrid(session: ZiweiSessionData): SessionPersisted {
     session.hybridPersisted = createEmptyHybridPersisted()
   }
   const hp = session.hybridPersisted!
-  if (hp.stage1Json === undefined && session.stageCache?.stage1) hp.stage1Json = session.stageCache.stage1
-  if (hp.stage2Json === undefined && session.stageCache?.stage2) hp.stage2Json = session.stageCache.stage2
   // 兼容旧会话：补充新字段默认值
   if (!hp.matterHistory) hp.matterHistory = {}
   if (hp.currentMatterKey === undefined) hp.currentMatterKey = null
@@ -78,14 +77,6 @@ function ensureHybrid(session: ZiweiSessionData): SessionPersisted {
 
 function persistHybrid(session: ZiweiSessionData, hp: SessionPersisted): void {
   session.hybridPersisted = hp
-  if (hp.stage1Json) {
-    if (!session.stageCache) session.stageCache = {}
-    session.stageCache.stage1 = hp.stage1Json
-  }
-  if (hp.stage2Json) {
-    if (!session.stageCache) session.stageCache = {}
-    session.stageCache.stage2 = hp.stage2Json
-  }
   void sessionManager.persistSessionSnapshot(session).catch(err =>
     console.error('[Hybrid] persistSessionSnapshot 失败:', err),
   )
@@ -93,67 +84,27 @@ function persistHybrid(session: ZiweiSessionData, hp: SessionPersisted): void {
 
 /**
  * 保存/更新 ConsultationRecord（Stage1+2 完成后异步执行）
- * 包含 Stage1/2 快照和最新报告
+ * 委托给 ScoringService.saveFullSnapshot()
  */
 function upsertConsultationRecord(
   userId: string,
   chartData: Record<string, unknown>,
   hp: SessionPersisted,
-  sessionId: string,
+  _sessionId: string,
   reportMarkdown?: string,
 ): void {
-  const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
-  const birthSolarDate = typeof birthInfo?.solarDate === 'string'
-    ? birthInfo.solarDate
-    : typeof chartData.solarDate === 'string'
-      ? chartData.solarDate
-      : ''
-  const gender = chartData.gender === 'male' || chartData.gender === '男' ? 'MALE' : 'FEMALE'
-  const timeIndex = typeof chartData.timeIndex === 'number' ? chartData.timeIndex : 0
+  if (!hp.stage1Output || !hp.stage2Output) return
 
-  // 生成指纹
-  const fingerprint = `${birthSolarDate}_${gender}_${timeIndex}`
-
-  const data: Record<string, unknown> = {
-    stage1Snapshot: hp.stage1Json ? JSON.parse(hp.stage1Json) : undefined,
-    stage2Snapshot: hp.stage2Json ? JSON.parse(hp.stage2Json) : undefined,
-    sourceSessionId: sessionId,
-    lastMatterType: hp.currentMatterKey,
-  }
-
-  if (reportMarkdown) {
-    data.latestReport = { markdown: reportMarkdown, generatedAt: Date.now() }
-  }
-
-  void (async () => {
-    try {
-      // 查找现有记录
-      const existing = await prisma.consultationRecord.findFirst({
-        where: { userId, chartFingerprint: fingerprint },
-      })
-
-      if (existing) {
-        await prisma.consultationRecord.update({
-          where: { id: existing.id },
-          data,
-        })
-      } else {
-        await prisma.consultationRecord.create({
-          data: {
-            userId,
-            chartFingerprint: fingerprint,
-            birthSolarDate,
-            gender: gender as 'MALE' | 'FEMALE',
-            timeIndex,
-            astrolabeData: chartData as unknown as Prisma.InputJsonValue,
-            ...data,
-          },
-        })
-      }
-    } catch (err) {
-      console.error('[Hybrid] ConsultationRecord 保存失败:', err)
-    }
-  })()
+  void scoringService.saveFullSnapshot({
+    userId,
+    chartData,
+    stage1: hp.stage1Output,
+    stage2: hp.stage2Output,
+    reportMarkdown,
+    matterType: hp.currentMatterKey ?? undefined,
+  }).catch(err =>
+    console.error('[Hybrid] ConsultationRecord 保存失败:', err),
+  )
 }
 
 export interface RunHybridPipelineParams {
@@ -207,19 +158,54 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
 
   tick('阶段计算')
 
+  // ── Redis 缓存 key（含版本号，计算逻辑变更时升级版本） ──
+  const cacheVersion = 'v1'
+  const fp = buildChartFingerprint(effectiveChartData)
+  const cacheKey1 = `stage1:${cacheVersion}:${fp}`
+  const cacheKey2 = `stage2:${cacheVersion}:${fp}`
+  const CACHE_TTL = 24 * 60 * 60 // 24 小时
+
   // 阶段 1：宫位评分（如果尚未执行）
   let stage1Output = hp.stage1Output
   if (!stage1Output) {
-    stage1Output = executeStage1({ chartData: effectiveChartData, parentBirthYears: params.parentBirthYears })
+    // 先查 Redis 缓存
+    try {
+      const cached1 = await redis.get(cacheKey1)
+      if (cached1) {
+        stage1Output = JSON.parse(cached1) as typeof stage1Output
+        console.log(`[Hybrid⏱] Stage1 Redis 缓存命中, key=${cacheKey1}`)
+      }
+    } catch { /* Redis 不可用时 fallback */ }
+
+    if (!stage1Output) {
+      stage1Output = executeStage1({ chartData: effectiveChartData, parentBirthYears: params.parentBirthYears })
+      // 异步写入 Redis（不阻塞）
+      redis.set(cacheKey1, JSON.stringify(stage1Output), 'EX', CACHE_TTL).catch(() => {})
+    }
     hp.stage1Output = stage1Output
+    hp.stage1Json = JSON.stringify(stage1Output)
     hp.sessionState.stage1Completed = true
   }
 
   // 阶段 2：性格定性（如果尚未执行）
   let stage2Output = hp.stage2Output
   if (!stage2Output) {
-    stage2Output = executeStage2({ stage1: stage1Output, question })
+    // 先查 Redis 缓存
+    try {
+      const cached2 = await redis.get(cacheKey2)
+      if (cached2) {
+        stage2Output = JSON.parse(cached2) as typeof stage2Output
+        console.log(`[Hybrid⏱] Stage2 Redis 缓存命中, key=${cacheKey2}`)
+      }
+    } catch { /* Redis 不可用时 fallback */ }
+
+    if (!stage2Output) {
+      stage2Output = executeStage2({ stage1: stage1Output, question })
+      // 异步写入 Redis（不阻塞）
+      redis.set(cacheKey2, JSON.stringify(stage2Output), 'EX', CACHE_TTL).catch(() => {})
+    }
     hp.stage2Output = stage2Output
+    hp.stage2Json = JSON.stringify(stage2Output)
     hp.sessionState.stage2Completed = true
   }
 
@@ -389,8 +375,8 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
   }
   persistHybrid(session, hp)
 
-  // Stage1+2 首次完成时保存命盘记录
-  if (freeChatReady && hp.stage1Json && hp.stage2Json) {
+  // Stage1+2 完成后保存命盘记录
+  if (freeChatReady && hp.stage1Output && hp.stage2Output) {
     upsertConsultationRecord(userId, effectiveChartData, hp, sessionId)
   }
 
@@ -643,6 +629,8 @@ function buildMessagesForStage(
         hasParentInfo: stage1.hasParentInfo,
         parentBirthYears: parentBirthYears,
         chartSnapshot,
+        allDaXianSummary: stage1.allDaXianSummary,
+        currentDaXian: stage1.currentDaXian,
       }
       const msgs = buildPrompt(
         ir,
@@ -667,6 +655,8 @@ function buildMessagesForStage(
         mergedSihua: stage1.mergedSihua,
         chartSnapshot,
         personalityTriadSummary: stage2.personalityTriad?.synthesis,
+        allDaXianSummary: stage1.allDaXianSummary,
+        currentDaXian: stage1.currentDaXian,
       }
 
       const chartSnapshotText = buildChartSnapshot(chartData as unknown as Parameters<typeof buildChartSnapshot>[0], {

@@ -139,6 +139,7 @@ export async function callAI(params: {
         temperature,
         max_tokens,
         stream: false,
+        thinking: { type: 'disabled' },
       }
 
       // 添加 tools 支持（Tool Calling 核心）
@@ -210,6 +211,8 @@ export async function callAIStream(params: {
         temperature,
         max_tokens,
         stream: true,
+        // GLM-5.1/5/4.7 默认开启思考模式，关闭以实现即时响应
+        thinking: { type: 'disabled' },
       }),
       signal: AbortSignal.timeout(AI_STREAM_TIMEOUT_MS),
     })
