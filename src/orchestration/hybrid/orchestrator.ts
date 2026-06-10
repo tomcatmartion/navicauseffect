@@ -757,10 +757,24 @@ function buildStage3Messages(
     return `${layer.layer}(${layer.stemLabel}) 方向${layer.direction}，得分${layer.layerScore.toFixed(1)}：${rows || '无数据'}`
   }).join('\n') ?? '（无四化落宫数据）'
   const route = resolveMatterRoute(matterType, question, routingAnswers)
+  // 逐大限梳理文本（全量大限）
+  const daXianTimelineText = (stage3.allDaXianMappings?.length ?? 0) > 0
+    ? stage3.allDaXianMappings.map(d => {
+        const isCur = currentDaXianMapping ? d.index === currentDaXianMapping.index : false
+        const cur = isCur ? ' ★当前' : ''
+        const tone = isCur
+          ? (stage3.currentDaXianQualitative ?? '转机期')
+          : (d.mutagen?.[3] ? '艰辛期' : '顺畅期')
+        return `第${d.index}大限 ${d.ageRange[0]}~${d.ageRange[1]}岁（${tone}）${cur}：宫干${d.daXianGan}，命宫→${d.mingPalaceName}，四化${d.mutagen?.join('、') ?? '—'}`
+      }).join('\n')
+    : '（无大限梳理数据）'
   const governorBlock = buildEventAnalysisGovernorPrompt({
     intent: matterType,
     primaryPalaceData: `${primaryPalace}（得分 ${primaryScore.toFixed(1)}，${brightness}）· ${stage3.primaryAnalysis.innateLevel ?? ''}`,
+    protectionStatus: stage3.primaryAnalysis.protectionStatus ?? '未检测',
+    fourDimensionResult: stage3.primaryAnalysis.fourDimensionResult ?? '未分析',
     slimmedDescriptions: slimmedText,
+    daXianTimeline: daXianTimelineText,
     causalChain: stage3.causalChain ?? structuredAnalysis ?? '（暂无因果链模板）',
     luluJiFlow: (stage3.luluJiFlow?.length ? stage3.luluJiFlow.join('；') : '（未检测到禄随忌走）'),
     sihuaLandingDetail,

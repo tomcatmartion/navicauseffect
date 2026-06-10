@@ -7,7 +7,7 @@
  * 已废弃：data/prompt_templates.json（不再使用）
  */
 
-import type { IR, IRStage1, IRStage2, IRStage3or4, MatterType } from '../types'
+import type { IR, IRStage1, IRStage2, IRStage3or4, MatterType, DaXianSummaryEntry, DaXianDetailForPrompt, PalaceName } from '../types'
 import { isIRStage1, isIRStage2, isIRStage3or4 } from './ir-schema'
 import { yearToGan, yearToZhi, yearToZodiac } from '../utils/gan-zhi'
 import {
@@ -107,23 +107,120 @@ export const STAGE1_HINT = `你正在阶段一：宫位评分。
 
 开场白建议：「${PHRASE_LIBRARY.greeting}」`
 
-export const STAGE2_HINT = `你现在进入【性格分析阶段】。请基于以下【命盘速览】和【性格定性数据】，输出一段详细的性格描述（不少于150字），语气要像兄长一样温暖、有共鸣。之后自然引导用户说出想了解的方向。
+export const STAGE2_HINT = `你现在进入【性格分析阶段】。请严格遵循以下三层递进结构：
+
+1. 表层（命宫）：外在表现、第一印象、社交面具。早年即凸显，终身有影响。
+2. 中层（身宫）：遇到问题时的实际应对手段和态度，是「真正的处理模式」。第三个大限（约25-35岁）开始比重逐渐增加。
+3. 内核层（太岁宫，即生年支所在宫位）：天性根底、潜意识执念、最本源的驱动力。终身存在，越晚或压力越大时越暴露。
+
+输出顺序：先表层，再中层，最后内核层，并合参说明三者是统一、互补还是矛盾。
+
+【格局引用要求】
+- 如果在命宫、身宫或太岁宫中触发了格局（特别是大吉/大凶格局），必须在对应层级分析中引用该格局的名称和简要描述，将其融入性格解读，让人物形象更丰满。
+- 例如：命宫有「君臣庆会」大吉格局，可描述为"你天生具有领袖气质，善于统筹资源"；命宫有「孤君在野」中凶格局，可描述为"你内心常有孤独感，不轻易信任他人"。
+- 格局信息会以 patterns 列表的形式提供，每个条目包含格局名称、等级和简要描述。
+
+【同宫特殊情况】
+- 命宫与身宫同宫：表层与中层高度重合，性情表里如一，遇到问题的反应就是外在表现。
+- 身宫与太岁宫同宫：中层与内核层重合，应对方式直接来自天性驱动，非常一致但缺乏缓冲。
+- 命宫与太岁宫同宫：表层与内核层重合，外在表现即天性，早年就很本色。
 
 核心要求：
 1. 先分析，再引导——必须先给出实质性分析，让用户感受到"说了对我有帮助"。
 2. 性格解读必须详细（不少于150字）。
 3. 每次只问一个问题。
-4. 严禁只提问不分析。`
+4. 严禁只提问不分析。
+5. 必须说明三宫的显现时机：命宫特质从小就明显；身宫特质约30岁后（第三大限）才逐渐凸显；太岁宫特质只在涉及核心利益或重大抉择时才爆发。避免让用户误以为所有特质当下完全体现。`
 
-export const STAGE3_HINT = `你现在进入【事项分析阶段】。请基于提供的事项分析数据，按照「原局气场→大限十年走势→流年分析→综合结论」的四章节结构输出分析报告。
+export const STAGE3_HINT = `你现在进入【事项分析阶段】。必须严格按照以下五阶段框架分析，不可跳过任何阶段。
 
-核心要求：
-1. 严格基于数据中的事实，不得编造宫位、星曜、四化、分数、等级。
-2. 分析时必须引用数据中的具体数值来支撑观点。
-3. 使用平实、亲切的语言，多用「你」来称呼用户。
-4. 不做具体预测（不预测金额、时间、事件结果）。
-5. 对四化引动用「因为…所以…」的因果句式解释。
-6. 每层分析先看命宫状态再看事项宫状态（合参规则）。`
+═══ 阶段一：原局底盘分析 ═══
+1. 命宫全息底色带入
+   - 从性格定性数据中提取命宫强弱、原局四化方向、六吉六煞、性格底色
+   - 这些信息统领后续所有宫位解读
+2. 识别原局关键格局
+   - 检查事项宫位是否存在护佑机制（双禄夹、禄存在宫、天府守财库等）
+   - 空宫规则：事项宫位空宫→借对宫星曜论，吉象减半、凶象更凶
+   - 护佑格局完整→凶限虽艰仍能全身而退；护佑格局破损→可能彻底崩盘
+3. 事项宫位四维合参（必须按以下顺序分析）
+   - 本宫：主星旺弱 + 所有星曜（四化/六吉/六煞），评估该宫本身能量等级
+   - 对宫：判断是加强本宫还是制约本宫
+   - 合宫：三合宫是强力后援还是侧翼受压
+   - 临宫：左右邻宫夹制，是激励还是压制
+   - 命宫调节：命强能驾驭凶象，命弱凶象直接穿透
+4. 得出先天格局定性：强旺顺遂 / 中等有阻 / 虚浮困难 / 凶危高风险
+
+═══ 阶段二：行运分析 ═══
+1. 逐大限梳理（从第一大限到当下大限）
+   - 每个大限：宫干四化落位 → 引动方向（吉化激活吉格 / 忌化激活凶象）
+   - 标记事项宫位在每个大限中的激活或沉寂状态
+2. 当下大限深析
+   - 大限命宫×原局命宫合参：这十年命主心性如何变化
+   - 大限四化完整落位：吉化激活什么，忌化激活什么
+   - 大限事项宫四维：该事项在这十年的被激活程度
+   - 检验护佑机制在大限中是否完整
+3. 当下大限定性：顺畅期 / 艰辛期 / 危机期 / 转机期
+
+═══ 阶段三：流年引动 ═══
+1. 重叠性验证：流年引动所作用宫位与事项核心宫位的重叠程度（直接相关/间接不相关）
+2. 流年命宫×大限命宫合参 → 定今年触发点
+3. 流年四化落位 → 今年引动哪些宫位
+4. 流年与大限方向判断（方向矩阵）
+   - 吉◇吉 → 最佳推进窗口，主动出击
+   - 吉◇凶 → 部分化解，谨慎推进
+   - 凶◇吉 → 有波折干扰，维持为主
+   - 凶◇凶 → 风险最高，预警规避
+5. 确定时间窗口：推进窗口 / 蛰伏期 / 挑战期 / 风险期
+
+═══ 阶段四：综合输出 ═══
+三层合参（原局基础+大限走向+今年表现），输出：
+- 综合结论（含综合分和等级）
+- 核心观点（3条，必须引用具体数据）
+- 调整建议（可调整的给出方向）或风险预警（不可调整的给出替代方案）
+
+═══ 阶段五：引导后续 ═══
+分析完成后，自然询问用户是否需要进一步细节或互动关系分析。
+
+【格局引用要求】
+- 在分析事项宫位及其相关宫位时，如果该宫位触发了格局（特别是大吉/大凶格局），必须引用该格局的名称和描述，将其融入事件解读中。
+- 例如：求职时官禄宫有「君臣庆会」大吉格局，可解读为"你天生适合管理岗位，这次求职可以主动争取领导角色"；求财时财帛宫有「火贪横发」中吉格局，可解读为"你的财运有突然爆发的机会，但需要注意把握时机"。
+- 格局信息会以 patterns 列表的形式提供。
+
+【问诊信息抽取】
+在生成分析报告时，请同时从对话上下文中提取以下问诊信息（如用户已提供），并在回复末尾附上 JSON 格式的抽取结果：
+
+各事项的抽取字段：
+- 求财：hasLabor(是否有劳力), hasPartner(是否有合伙), partnerBirthYear(合伙人生年), isRemote(是否异地), businessType(业务特点:劳力/销售)
+- 求爱：loveType(自由/相亲), relationshipStage(寻找中/已有对象)
+- 求学：isRemote(是否异地), isExam(是否备考)
+- 求职：isSwitch(是否跳槽), needManage(是否管理岗), isRemote(是否异地)
+- 求健康：isSpecific(是否具体症状)
+- 求名：isOnline(是否网络传播)
+
+格式示例（放在回复最后）：
+【问诊抽取】
+{"hasLabor": true, "hasPartner": true, "partnerBirthYear": 1985}
+如无法提取任何信息，可省略此段。
+
+═══ 分析禁令（必须遵守）═══
+⛔ 严禁跳过原局分析直接分析行运
+⛔ 严禁只做原局不做行运（三层缺一不完整）
+⛔ 严禁只做当下大限（必须从第一大限梳理到当下）
+⛔ 严禁忽略大限宫干四化
+⛔ 严禁忽略格局保护机制
+⛔ 严禁只看单宫（必须四维合参）
+⛔ 严禁以宫位旺衰直接判断（必须以命宫强弱为基准调节）
+⛔ 严禁脱离命主性格底色
+
+通用要求：
+1. 以聊天方式自然收集前提条件，再进行三层分析。不可用「请提供XXX」的填表语气。
+2. 每层分析先看命宫状态再看事项宫状态（合参规则）。
+3. 严格基于数据事实，不得编造宫位、星曜、四化、分数、等级。
+4. 分析时必须引用数据中的具体数值来支撑观点。
+5. 使用平实、亲切的语言，多用「你」来称呼用户。
+6. 不做具体预测（不预测金额、时间、事件结果）。
+7. 对四化引动用「因为…所以…」的因果句式解释。
+8. 结论要有温度，给出具体可感的建议。`
 
 export const STAGE4_HINT = `你现在进入【互动关系分析阶段】。请基于以下入卦数据和互动分析结果，描述双方互动模式、核心张力点，并给出可调整的建议或风险预警。
 
@@ -266,7 +363,7 @@ export function buildMatterAnalysisData(params: {
       mingPalaceName?: string
       palaceIndex?: number
     }>
-    currentDaXianMapping?: { index: number; ageRange: [number, number]; daXianGan: string; mutagen?: string[] }
+    currentDaXianMapping?: { index: number; ageRange: [number, number]; daXianGan: string; mutagen?: string[]; mingPalaceName?: string }
     currentDaXianQualitative?: string
     liuNianSihuaPositions?: string[]
     directionMatrix: string
@@ -420,8 +517,8 @@ export function buildMatterAnalysisData(params: {
   const secondaryPalaces: DataFormatPalace[] = []
   const currentDaXian = stage3.currentDaXianMapping
   if (currentDaXian) {
-    // 大限命宫通常落在迁移宫或其他宫位
-    const daXianMingName = findPalaceStars('迁移').majors ? '迁移' : '命宫'
+    // 大限命宫：动态从大限映射中获取实际宫位名
+    const daXianMingName = (currentDaXian.mingPalaceName as PalaceName | undefined) ?? '迁移'
     const daXianMingScore = findPalace(daXianMingName)
     if (daXianMingScore) {
       const stars = findPalaceStars(daXianMingName)
@@ -449,11 +546,12 @@ export function buildMatterAnalysisData(params: {
 
   // 大限命宫
   const daXianMingPalace = (() => {
-    // 大限命宫：从当前大限映射中获取
-    const daXianMingStars = findPalaceStars('迁移')
-    const daXianMingScoreEntry = findPalace('迁移')
+    // 动态从大限映射中获取大限命宫对应的原局宫位名
+    const daXianMingName = (currentDaXianMapping?.mingPalaceName as PalaceName | undefined) ?? '迁移'
+    const daXianMingStars = findPalaceStars(daXianMingName)
+    const daXianMingScoreEntry = findPalace(daXianMingName)
     return buildPalace(
-      daXianMingScoreEntry ? '迁移' : '命宫',
+      daXianMingName,
       daXianMingScoreEntry?.finalScore ?? 0,
       daXianMingScoreEntry ? toLevel(daXianMingScoreEntry.tone, daXianMingScoreEntry.finalScore) : '平',
       daXianMingStars.majors,
@@ -489,11 +587,17 @@ export function buildMatterAnalysisData(params: {
   const daXianTriggers: DataFormatTrigger[] = []
 
   // ── 流年数据 ──
-  // 流年命宫
-  const liuNianMingStars = findPalaceStars('夫妻') // 流年命宫会根据年份变化
-  const liuNianMingScore = findPalace('夫妻')
+  // 流年命宫：动态计算（流年地支对应的原局宫位名）
+  // 使用 stage3 中已有的 palaceIndex 或 fallback 到命宫
+  const liuNianMingName: string = (() => {
+    // 尝试从 allDaXianMappings 中找到流年信息
+    // 流年命宫不固定，这里用默认值；实际由 formatMatterAnalysis 处理
+    return '命宫'
+  })()
+  const liuNianMingStars = findPalaceStars(liuNianMingName)
+  const liuNianMingScore = findPalace(liuNianMingName)
   const liuNianMingPalace = buildPalace(
-    liuNianMingScore ? '夫妻' : '命宫',
+    liuNianMingName,
     liuNianMingScore?.finalScore ?? 0,
     liuNianMingScore ? toLevel(liuNianMingScore.tone, liuNianMingScore.finalScore) : '平',
     liuNianMingStars.majors,
@@ -614,7 +718,8 @@ ${scores}
 ${flankingLines || '无'}
 父母信息：${ir.hasParentInfo
     ? `父亲${ir.parentBirthYears?.father ? `${ir.parentBirthYears.father}年（${yearToZodiac(ir.parentBirthYears.father)}）生年干${yearToGan(ir.parentBirthYears.father)}太岁${yearToZhi(ir.parentBirthYears.father)}` : '未提供'}；母亲${ir.parentBirthYears?.mother ? `${ir.parentBirthYears.mother}年（${yearToZodiac(ir.parentBirthYears.mother)}）生年干${yearToGan(ir.parentBirthYears.mother)}太岁${yearToZhi(ir.parentBirthYears.mother)}` : '未提供'}`
-    : '无'}`
+    : '无'}
+${buildDaXianContextBlock(ir.allDaXianSummary, ir.currentDaXian)}`
 }
 
 function buildStage2Context(ir: IRStage2): string {
@@ -636,7 +741,8 @@ ${scores}
 身宫标签：${ir.shenGongTags.summary}
 太岁宫标签：${ir.taiSuiTags.summary}
 整体基调：${ir.overallTone}
-命宫全息底色：${ir.mingGongHolographic.summary}`
+命宫全息底色：${ir.mingGongHolographic.summary}
+${buildDaXianContextBlock(ir.allDaXianSummary, ir.currentDaXian)}`
 }
 
 function buildStage3or4Context(ir: IRStage3or4): string {
@@ -691,6 +797,45 @@ function formatChartSnapshot(snapshot: import('../types').ChartSnapshot): string
 ${palaceLines}
 四化：${snapshot.sihuaText}
 大限：${snapshot.decadalText.split('\n')[0] || '见详表'}`
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 大限数据展示（新增：Stage1/2 中展示全量大限评分）
+// ═══════════════════════════════════════════════════════════════════
+
+function buildDaXianContextBlock(
+  summary?: DaXianSummaryEntry[],
+  current?: DaXianDetailForPrompt,
+): string {
+  if (!summary?.length) return ''
+
+  const lines = summary.map(d => {
+    const marker = d.isCurrent ? ' ★当前' : ''
+    // 每个大限的十二宫评分
+    const scoreLine = d.palaceScores.length
+      ? d.palaceScores.map(p => `${p.palace}(${p.finalScore.toFixed(1)}${p.tone})`).join(' ')
+      : '无评分'
+    return `  第${d.index}大限 ${d.ageRange}岁：宫干${d.daXianGan}，命宫→${d.mingPalaceName}，四化${d.sihuaStars.join('、')}${d.topPatterns.length ? '，格局' + d.topPatterns.join('、') : ''}${marker}
+    ${scoreLine}`
+  }).join('\n')
+
+  let currentBlock = ''
+  if (current) {
+    const sorted = [...current.palaceScores].sort((a, b) => b.finalScore - a.finalScore)
+    const top3 = sorted.slice(0, 3).map(p => `${p.palace}(${p.finalScore.toFixed(1)}${p.tone})`).join('、')
+    const low3 = sorted.slice(-3).reverse().map(p => `${p.palace}(${p.finalScore.toFixed(1)}${p.tone})`).join('、')
+    currentBlock = `
+
+当前大限详情：第${current.index}大限（${current.ageRange}），宫干${current.daXianGan}，大限命宫在${current.mingPalaceName}
+四化：${current.sihuaPositions.join('、')}
+定性：${current.tone}
+强旺宫：${top3}
+偏弱宫：${low3}`
+  }
+
+  return `
+大限全景（${summary.length}步大限）：
+${lines}${currentBlock}`
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -853,14 +998,14 @@ export function buildPersonalityData(stage2Output: {
   overallTone?: string
   personalityTriad?: {
     synthesis?: string
-    mingLayer?: { description: string }
-    shenLayer?: { description: string }
-    taiSuiLayer?: { description: string }
+    mingLayer?: { description: string; manifestationTiming?: string }
+    shenLayer?: { description: string; manifestationTiming?: string }
+    taiSuiLayer?: { description: string; manifestationTiming?: string }
   }
 }): string {
   const triad = stage2Output.personalityTriad
   const triadBlock = triad
-    ? `\n【性格三宫 JSON 画像】\n命宫：${triad.mingLayer?.description ?? ''}\n身宫：${triad.shenLayer?.description ?? ''}\n太岁宫：${triad.taiSuiLayer?.description ?? ''}\n综合：${triad.synthesis ?? ''}`
+    ? `\n【性格三宫 JSON 画像】\n命宫：${triad.mingLayer?.description ?? ''}（显现时机：${triad.mingLayer?.manifestationTiming ?? '终身显现'}）\n身宫：${triad.shenLayer?.description ?? ''}（显现时机：${triad.shenLayer?.manifestationTiming ?? '第三大限后逐渐明显'}）\n太岁宫：${triad.taiSuiLayer?.description ?? ''}（显现时机：${triad.taiSuiLayer?.manifestationTiming ?? '涉及核心利益或重大抉择时爆发'}）\n综合：${triad.synthesis ?? ''}\n\n【显现时机提示】请根据以上三宫的显现时机，在性格解读中提示用户：命宫特质从小就明显；身宫特质约30岁后才逐渐显现；太岁宫特质只在涉及核心利益或重大抉择时才爆发。避免让用户误以为所有特质当下都完全体现。`
     : ''
   return `命宫：${stage2Output.mingGongTags?.summary || '待分析'}
 身宫：${stage2Output.shenGongTags?.summary || '待分析'}
@@ -904,12 +1049,15 @@ ${personalityData}
 }
 
 /**
- * 事项分析 Governor 参数
+ * 事项分析 Governor 参数（五阶段框架）
  */
 export interface EventAnalysisGovernorParams {
   intent: string
   primaryPalaceData: string
+  protectionStatus: string
+  fourDimensionResult: string
   slimmedDescriptions: string
+  daXianTimeline: string
   causalChain: string
   luluJiFlow: string
   sihuaLandingDetail: string
@@ -918,29 +1066,40 @@ export interface EventAnalysisGovernorParams {
   crisisSuffix: string
 }
 
-const GOVERNOR_TEMPLATE = `【命理运算结果】
-意图：{{INTENT}}
+const GOVERNOR_TEMPLATE = `【一、原局底盘】
+事项意图：{{INTENT}}
 主看宫位：{{PRIMARY_PALACE_DATA}}
-断语（整流）：
+护佑机制：{{PROTECTION_STATUS}}
+四维合参：{{FOUR_DIMENSION_RESULT}}
+断语参考：
 {{SLIMMED_DESCRIPTIONS}}
+
+【二、行运脉络】
+大限梳理：
+{{DAXIAN_TIMELINE}}
 行运因果：{{CAUSAL_CHAIN}}
 禄忌流转：{{LULU_JI_FLOW}}
 
-【四化落宫明细】
+【三、流年引动】
+四化落宫明细：
 {{SIHUA_LANDING_DETAIL}}
 
-【性格底色】{{HOLOGRAPHIC_BACKGROUND}}
+【四、性格底色】
+{{HOLOGRAPHIC_BACKGROUND}}
 
-【咨询策略】{{GOVERNOR_STRATEGY}}
+【五、咨询策略】{{GOVERNOR_STRATEGY}}
 
-请以温暖兄长的口吻，基于以上结构化数据生成分析报告，不得臆造未给出的宫位或四化。{{CRISIS_SUFFIX}}`
+请以温暖兄长的口吻，严格按照「原局底盘→行运脉络→流年引动→综合结论」的四章节结构生成分析报告，不得臆造未给出的宫位或四化。{{CRISIS_SUFFIX}}`
 
 /** 事项分析 governor 模板 */
 export function buildEventAnalysisGovernorPrompt(params: EventAnalysisGovernorParams): string {
   return GOVERNOR_TEMPLATE
     .replace(/\{\{INTENT\}\}/g, params.intent)
     .replace(/\{\{PRIMARY_PALACE_DATA\}\}/g, params.primaryPalaceData)
+    .replace(/\{\{PROTECTION_STATUS\}\}/g, params.protectionStatus)
+    .replace(/\{\{FOUR_DIMENSION_RESULT\}\}/g, params.fourDimensionResult)
     .replace(/\{\{SLIMMED_DESCRIPTIONS\}\}/g, params.slimmedDescriptions)
+    .replace(/\{\{DAXIAN_TIMELINE\}\}/g, params.daXianTimeline)
     .replace(/\{\{CAUSAL_CHAIN\}\}/g, params.causalChain)
     .replace(/\{\{LULU_JI_FLOW\}\}/g, params.luluJiFlow)
     .replace(/\{\{SIHUA_LANDING_DETAIL\}\}/g, params.sihuaLandingDetail)
