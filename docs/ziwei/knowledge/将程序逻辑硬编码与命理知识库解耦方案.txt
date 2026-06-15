@@ -1,0 +1,950 @@
+问：
+目前定性命主性格（性格分析）的功能已经基本实现，具体见.txt文件描述。但现在有个问题有点麻烦，就是现在我的程序是根据KB_前缀的md知识库文件内容进行了硬编码来实现的，就是把知识库中星曜赋性和宫位象义都转化成编码了。这样的结果就是程序运行起来可能不一定会再去查KB_前缀的md知识库文件了。但坏处就是一旦我的知识库有了更新，或者增加、删除等维护，对应的代码就要重写。
+
+所以，我的问题是：
+
+能不能让程序直接读知识库内容来获取星曜赋性和宫位特性这些，而不是把星曜赋性和宫位特性直接转化成硬编码（目前的知识字典模块文件），
+
+也就是让这些内容我可以用某种格式化的形式来维护星曜赋性和宫位特性这些（知识库的格式可以调整），以后如果有变化，我就手动维护这些星曜赋性和宫位特性，程序要用到的时候就直接读出来，不需要我再去改代码。 
+
+你能理解我的意思吗? 这种可行吗？
+
+
+答：
+## 完全可行：直接使用 JSON 维护知识库的方案
+
+您的决定非常明智。直接使用 JSON 维护知识库，**无需转换脚本**，结构清晰，人类可读写，程序可直接加载。这是最优雅、最可维护的方案。
+
+下面给出完整的实施方案，包括 JSON 结构设计、程序加载方式、以及与现有代码的整合路径。
+
+---
+
+## 一、总体架构
+
+```
+data/
+├── star_attributes.json        # 十四主星赋性（核心）
+├── palace_meanings.json        # 十二宫含义
+├── event_star_attributes.json  # 事项分类赋性（求学/求爱/求财等）
+├── attenuation.json            # 空间衰减系数（已存在）
+└── tai_sui_rua_gua_tables.json # 太岁入卦查表（整合表一~表四）
+
+src/core/knowledge-dict/
+├── index.ts                    # 导出
+├── query.ts                    # 查询函数（从 JSON 加载，提供 API）
+├── loader.ts                   # JSON 加载与缓存（新增）
+└── types.ts                    # 类型定义（新增）
+```
+
+**关键点**：程序不再有任何硬编码的知识内容，全部从 JSON 文件动态加载。
+
+---
+
+## 二、JSON 文件结构设计
+
+### 2.1 `star_attributes.json`（十四主星赋性）
+
+```json
+{
+  "紫微": {
+    "element": "阴土",
+    "coreTrait": "至尊帝座，司官贵爵禄，主事业与地位",
+    "positiveTrait": "领袖群伦，行事决断有魄力，统筹有力；见左辅右弼为君，能驾驭众星",
+    "negativeTrait": "孤君独断，疑心重爱面子，不见左右则孤僻偏激",
+    "specialNote": "入迁移不见吉主疑心重；化权有嘚瑟意味"
+  },
+  "天府": {
+    "element": "阳土",
+    "coreTrait": "令星财库，司权位财宅，主延寿解厄稳重",
+    "positiveTrait": "综合研判和管理能力强，财经稳健，善积累，有原则底线",
+    "negativeTrait": "过于保守，守成有余进取不足，虚伪狡诈，巧立名目",
+    "specialNote": "极忌空劫——土空则陷，财库漏底"
+  }
+}
+```
+
+**字段说明**：与现有 `StarAttribute` 接口完全一致，无需改动调用代码。
+
+### 2.2 `palace_meanings.json`（十二宫含义）
+
+```json
+{
+  "命宫": {
+    "meaning": "终身显现，早年即凸显",
+    "domains": ["外在表现", "待人接物", "第一印象", "应对方式"],
+    "modernContext": "个人品牌、社交形象、核心性格"
+  },
+  "父母": {
+    "meaning": "命主对父母的意识形态底盘",
+    "domains": ["父母关系", "遗传体质", "长辈贵人", "文书证件"],
+    "modernContext": "原生家庭影响、遗传健康、上司关系"
+  }
+}
+```
+
+### 2.3 `event_star_attributes.json`（事项分类赋性）
+
+这是目前硬编码中**缺失**但知识库中存在的部分。按事项 → 宫位 → 星曜 → 定性等级组织。
+
+```json
+{
+  "求学": {
+    "事业宫": {
+      "紫微": {
+        "实旺": "学习目标清晰，自律性强，能主导学习节奏，领导力体现在学业上，有望成为佼佼者",
+        "磨炼": "学习有主见，自律性较强，能够主导学习，但有小幅摩擦，需要克服固执倾向",
+        "虚浮": "学习中容易独断但实际无力，虚有其表，过度紧张造成学习受阻",
+        "凶危": "学习时独断专制但无实际能力，容易遭遇挫折，进退两难"
+      },
+      "武曲": {
+        "实旺": "学习态度端正，执行力强，按部就班，目标明确，容易通过坚持获得成果",
+        "磨炼": "学习态度端正，执行力较强，但可能过于刻板，有小幅灵活度不足"
+      }
+    },
+    "迁移宫": {},
+    "田宅宫": {}
+  },
+  "求爱": {
+    "夫妻宫": {
+      "紫微": {
+        "实旺": "感情中有主见，知道自己想要什么样的伴侣，容易成为感情中的主导者，婚姻稳定",
+        "磨炼": "感情有主见，但容易固执，需要伴侣的包容"
+      }
+    }
+  },
+  "求财": {
+    "财帛宫": {
+      "紫微": {
+        "实旺": "理财能力强，有经营眼光，善于管理资金和资源，容易通过正当途径积累财富"
+      }
+    }
+  }
+}
+```
+
+**定性等级映射**：`🟢实旺(7.5-8.5)` → `"实旺"`，`🟢磨炼(6.0-7.4)` → `"磨炼"`，`🟡磨炼(4.5-5.9)` → `"平"`（或保留 `"磨炼"`），`🟠虚浮(3.0-4.4)` → `"虚浮"`，`🔴凶危(1.5-2.9)` → `"凶危"`。
+
+### 2.4 `tai_sui_rua_gua_tables.json`（太岁入卦查表）
+
+整合 `KB_太岁入卦星曜直查表.md` 中的表一~表四。
+
+```json
+{
+  "shengNianSihua": {
+    "甲": { "lu": "廉贞", "quan": "破军", "ke": "武曲", "ji": "太阳" },
+    "乙": { "lu": "天机", "quan": "天梁", "ke": "紫微", "ji": "太阴" }
+  },
+  "luCunYangTuo": {
+    "甲": { "luCun": "寅", "qingYang": "卯", "tuoLuo": "丑" },
+    "乙": { "luCun": "卯", "qingYang": "辰", "tuoLuo": "寅" }
+  },
+  "tianKuiYue": {
+    "甲": { "tianKui": "丑", "tianYue": "未" },
+    "乙": { "tianKui": "子", "tianYue": "申" }
+  },
+  "hongLuanTianXi": {
+    "子": { "hongLuan": "卯", "tianXi": "酉" },
+    "丑": { "hongLuan": "寅", "tianXi": "申" }
+  },
+  "wuHuDunGan": {
+    "甲": ["丙寅","丁卯","戊辰","己巳","庚午","辛未","壬申","癸酉","甲戌","乙亥","丙子","丁丑"],
+    "乙": ["戊寅","己卯","庚辰","辛巳","壬午","癸未","甲申","乙酉","丙戌","丁亥","戊子","己丑"]
+  }
+}
+```
+
+---
+
+## 三、程序加载与查询实现
+
+### 3.1 新增 `loader.ts`（负责加载 JSON）
+
+```typescript
+// src/core/knowledge-dict/loader.ts
+import fs from 'fs';
+import path from 'path';
+
+let starAttributes: any = null;
+let palaceMeanings: any = null;
+let eventStarAttributes: any = null;
+let taiSuiTables: any = null;
+
+export function loadKnowledge() {
+  const dataDir = path.join(process.cwd(), 'data');
+  starAttributes = JSON.parse(fs.readFileSync(path.join(dataDir, 'star_attributes.json'), 'utf-8'));
+  palaceMeanings = JSON.parse(fs.readFileSync(path.join(dataDir, 'palace_meanings.json'), 'utf-8'));
+  eventStarAttributes = JSON.parse(fs.readFileSync(path.join(dataDir, 'event_star_attributes.json'), 'utf-8'));
+  taiSuiTables = JSON.parse(fs.readFileSync(path.join(dataDir, 'tai_sui_rua_gua_tables.json'), 'utf-8'));
+}
+
+export function getStarAttributes() { return starAttributes; }
+export function getPalaceMeanings() { return palaceMeanings; }
+export function getEventStarAttributes() { return eventStarAttributes; }
+export function getTaiSuiTables() { return taiSuiTables; }
+```
+
+### 3.2 修改 `query.ts`（从 JSON 读取，保持原有 API 不变）
+
+```typescript
+// src/core/knowledge-dict/query.ts
+import { loadKnowledge, getStarAttributes, getPalaceMeanings, getEventStarAttributes } from './loader';
+
+// 确保只加载一次
+let initialized = false;
+function ensureLoaded() {
+  if (!initialized) {
+    loadKnowledge();
+    initialized = true;
+  }
+}
+
+export function getStarAttr(star: string): StarAttribute | null {
+  ensureLoaded();
+  const data = getStarAttributes();
+  return data[star] || null;
+}
+
+export function getStarTraitByBrightness(star: string, brightness: string): string {
+  const attr = getStarAttr(star);
+  if (!attr) return '';
+  if (brightness === '极旺' || brightness === '旺') return attr.positiveTrait;
+  if (brightness === '陷' || brightness === '极弱') return attr.negativeTrait;
+  return attr.coreTrait;
+}
+
+export function getPalaceMeaning(palace: string): PalaceMeaning | null {
+  ensureLoaded();
+  const data = getPalaceMeanings();
+  return data[palace] || null;
+}
+
+// 新增：事项分类查询
+export function getEventStarTrait(
+  event: string,      // '求学' | '求爱' | '求财' ...
+  palace: string,     // '事业宫' | '夫妻宫' | '财帛宫' ...
+  star: string,
+  brightnessLevel: string  // '实旺' | '磨炼' | '虚浮' | '凶危'
+): string {
+  ensureLoaded();
+  const events = getEventStarAttributes();
+  return events[event]?.[palace]?.[star]?.[brightnessLevel] || '';
+}
+
+// 太岁入卦查表
+export function getTaiSuiShengNianSihua(gan: string) {
+  ensureLoaded();
+  return getTaiSuiTables()?.shengNianSihua?.[gan] || null;
+}
+// ... 其他查表函数
+```
+
+### 3.3 类型定义（确保调用方类型安全）
+
+```typescript
+// src/core/knowledge-dict/types.ts
+export interface StarAttribute {
+  element: string;
+  coreTrait: string;
+  positiveTrait: string;
+  negativeTrait: string;
+  specialNote: string;
+}
+
+export interface PalaceMeaning {
+  meaning: string;
+  domains: string[];
+  modernContext: string;
+}
+```
+
+---
+
+## 四、现有代码的迁移路径
+
+### 4.1 需要修改的文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `src/core/knowledge-dict/data/star-attributes.ts` | **删除**，内容移至 JSON |
+| `src/core/knowledge-dict/data/palace-meanings.ts` | **删除**，内容移至 JSON |
+| `src/core/knowledge-dict/query.ts` | 改为从 JSON 加载（如上） |
+| `src/core/knowledge-dict/loader.ts` | **新增** |
+| `src/core/knowledge-dict/types.ts` | **新增**（可选，但推荐） |
+| `src/core/knowledge-dict/index.ts` | 保持导出，无需修改 |
+
+### 4.2 调用方代码无需修改
+
+因为 `getStarAttr`, `getPalaceMeaning` 等函数的签名保持不变，所有调用它们的代码（`knowledge-injector.ts`, `four-dimension.ts`, `scoring-flow.ts` 等）**完全不需要改动**。
+
+---
+
+## 五、热加载机制（可选）
+
+为了实现知识库更新后无需重启服务，可以在每次查询时检查 JSON 文件是否被修改，重新加载。
+
+```typescript
+// loader.ts 增强版
+let lastModified: Record<string, number> = {};
+let cache: Record<string, any> = {};
+
+function shouldReload(filePath: string): boolean {
+  const stat = fs.statSync(filePath);
+  const mtime = stat.mtimeMs;
+  if (lastModified[filePath] !== mtime) {
+    lastModified[filePath] = mtime;
+    return true;
+  }
+  return false;
+}
+
+export function getStarAttributes() {
+  const filePath = path.join(dataDir, 'star_attributes.json');
+  if (shouldReload(filePath)) {
+    cache.starAttributes = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  }
+  return cache.starAttributes;
+}
+```
+
+**注意**：热加载会增加文件系统访问开销，但 JSON 文件很小，影响可忽略。如果追求极致性能，也可以在开发环境开启热加载，生产环境启动时加载一次。
+
+---
+
+## 六、维护体验
+
+维护 JSON 文件时，建议使用支持 JSON Schema 的编辑器（如 VS Code + 相应插件），可以获得自动补全和校验。
+
+**目录结构示例**：
+
+```
+project/
+├── data/
+│   ├── star_attributes.json        # 手动维护
+│   ├── palace_meanings.json        # 手动维护
+│   ├── event_star_attributes.json  # 手动维护
+│   ├── tai_sui_rua_gua_tables.json # 手动维护
+│   └── attenuation.json            # 已存在
+├── src/
+│   └── core/
+│       └── knowledge-dict/
+│           ├── loader.ts
+│           ├── query.ts
+│           ├── types.ts
+│           └── index.ts
+└── scripts/
+    └── validate-knowledge.js       # 可选：校验 JSON 结构一致性
+```
+
+---
+
+## 七、结论
+
+| 问题 | 答案 |
+|------|------|
+| 是否可行？ | ✅ **完全可行**，且是推荐做法 |
+| 需要改多少代码？ | 只改 `knowledge-dict` 内部实现，调用方**零改动** |
+| 维护成本如何？ | 极低，直接编辑 JSON，无需重启服务（如实现热加载） |
+| 性能影响？ | 一次性加载到内存，查询 O(1)，性能与硬编码常量无异 |
+| 是否支持热加载？ | 可选，简单实现即可 |
+
+**最终效果**：您或您的团队可以像维护配置文件一样维护知识库，程序启动时自动加载，无需任何代码修改。知识库与逻辑完全解耦，这才是真正可持续的架构。
+
+如果您需要，我可以帮您起草一份初始的 JSON 文件模板，以及完整的 `loader.ts` 代码。
+
+问
+可以，你帮我起草一份初始的 JSON 文件模板吧，以及完整的 loader.ts 代码。
+
+答：
+# 知识库 JSON 模板与完整 loader.ts 代码
+
+以下为您提供可直接使用的 JSON 模板和完整的 `loader.ts` 代码。您只需将现有硬编码内容迁移到这些 JSON 文件中，即可实现知识与代码的完全解耦。
+
+---
+
+## 一、JSON 文件模板（放在项目根目录的 `data/` 文件夹下）
+
+### 1.1 `star_attributes.json`（十四主星赋性）
+
+```json
+{
+  "紫微": {
+    "element": "阴土",
+    "coreTrait": "至尊帝座，司官贵爵禄，主事业与地位",
+    "positiveTrait": "领袖群伦，行事决断有魄力，统筹有力；见左辅右弼为君，能驾驭众星",
+    "negativeTrait": "孤君独断，疑心重爱面子，不见左右则孤僻偏激",
+    "specialNote": "入迁移不见吉主疑心重；化权有嘚瑟意味"
+  },
+  "天府": {
+    "element": "阳土",
+    "coreTrait": "令星财库，司权位财宅，主延寿解厄稳重",
+    "positiveTrait": "综合研判和管理能力强，财经稳健，善积累，有原则底线",
+    "negativeTrait": "过于保守，守成有余进取不足，虚伪狡诈，巧立名目",
+    "specialNote": "极忌空劫——土空则陷，财库漏底"
+  },
+  "天机": {
+    "element": "阴木",
+    "coreTrait": "益寿智谋，主兄弟智谋，善谋划",
+    "positiveTrait": "灵活变通，思维敏捷，先思后行",
+    "negativeTrait": "多虑焦躁，神经质，反复无常，难定决心，多虚少实，有欺诈倾向",
+    "specialNote": "机梁羊遇化忌主刑克"
+  },
+  "天同": {
+    "element": "阳水",
+    "coreTrait": "福德之主，主享受福泽健康",
+    "positiveTrait": "温和随和，享乐知足，善处人际",
+    "negativeTrait": "懒散被动，逃避现实，缺乏进取心，但态度好",
+    "specialNote": "戌宫逢化权转为坚毅理想主义；意志薄弱陷地会煞易为安逸沦落"
+  },
+  "太阳": {
+    "element": "阳火",
+    "coreTrait": "官禄之主，主事业博爱名声，解决问题灵活应变，积极任事",
+    "positiveTrait": "热情博爱，有公信力，能驱暗化解巨门，解决问题灵活应变，积极任事",
+    "negativeTrait": "落陷逃避担当，意外盲区，虎头蛇尾，抓小放大，虚荣",
+    "specialNote": "陷位煞重则主意外、光线盲区、突发危险"
+  },
+  "太阴": {
+    "element": "阴水",
+    "coreTrait": "田宅之主，司田宅财富，主不动产",
+    "positiveTrait": "细腻敏感，重情义，家宅稳，内省强",
+    "negativeTrait": "多离散，情绪起伏大，易情感受伤，虚荣，外表干净但家里乱，对社会秩序有叛逆倾向",
+    "specialNote": "太阴陷主离散；车祸物象指旧市井环境"
+  },
+  "武曲": {
+    "element": "阴金",
+    "coreTrait": "财帛之司，将星，金性内聚刚直；执行能力及资源资金调度筹措能力",
+    "positiveTrait": "果断执行，务实重财，行动力强，资源和资金的调度能力强",
+    "negativeTrait": "执拗固执，冷漠功利，易生是非，财务管理有问题",
+    "specialNote": "武破见昌曲：动态性强，思维发散，高动能跨界"
+  },
+  "天相": {
+    "element": "阳水",
+    "coreTrait": "官禄主宰，印星，主品位权威承诺；实务运作与策略规划能力",
+    "positiveTrait": "圆融处事，善协调，重情义，有原则，多助力",
+    "negativeTrait": "优柔寡断，依赖他人，难以主导，信誉/印信/征信出现问题，虚伪",
+    "specialNote": "印星主承诺与权威，破印则失信"
+  },
+  "天梁": {
+    "element": "阳土",
+    "coreTrait": "父母之主，庇荫寿星，主提拔关照谋略",
+    "positiveTrait": "正直重义，善庇护有担当，文梁振纪",
+    "negativeTrait": "清高固执，爱论是非，难融世俗，飘荡缺少原则",
+    "specialNote": "天梁主长辈贵人；见昌曲左右多为高阶管理"
+  },
+  "廉贞": {
+    "element": "阴火",
+    "coreTrait": "品秩权令，次桃花，囚宿，主原则法律；权令及典章制度运作能力",
+    "positiveTrait": "桀骜个性，敢于竞争，有魅力，吉则正直，风雅有情调",
+    "negativeTrait": "化忌见煞主血光规则失序，偏激执念情绪化，邪恶倾向",
+    "specialNote": "化忌物象：血光、红色旧载具、秩序混乱"
+  },
+  "贪狼": {
+    "element": "阳木",
+    "coreTrait": "解厄之神祸福桃花，主灵活敏锐欲望",
+    "positiveTrait": "欲望旺盛，多才多艺，善交际，灵活",
+    "negativeTrait": "贪婪放纵，难专一，易被诱惑，以自己为标准自以为是",
+    "specialNote": "见空劫反转为玄哲深度，冲淡物欲"
+  },
+  "巨门": {
+    "element": "阴水",
+    "coreTrait": "是非暗昧，化气曰暗，主是非迟疑",
+    "positiveTrait": "善分析，口才好，思辨强，心思细腻，挖掘力强",
+    "negativeTrait": "口舌是非多，多疑猜忌，沟通易生误解，孤，离祖破荡，人际关系断裂，暗度陈仓",
+    "specialNote": "陷+劫煞指向勾心斗角、压抑倾轧环境"
+  },
+  "七杀": {
+    "element": "阳金",
+    "coreTrait": "上将孤辰，成败斗柄，主肃杀生死成败",
+    "positiveTrait": "勇猛果断，开拓力强，不畏挑战",
+    "negativeTrait": "冲动莽撞，破坏性强，难合作，刚愎自用",
+    "specialNote": "身宫七杀者一生事业必经大起大落"
+  },
+  "破军": {
+    "element": "阴水",
+    "coreTrait": "耗星，主更替破坏，不利六亲",
+    "positiveTrait": "创新革新，突破边界，主物理位移拆建，讲义气，以小博大",
+    "negativeTrait": "破坏稳定，浪费挥霍，难守成，背叛无义，尤其伤六亲，暗度陈仓，借贷",
+    "specialNote": "现代主高动能跨界；武破昌曲为高动能精英"
+  }
+}
+```
+
+### 1.2 `palace_meanings.json`（十二宫含义）
+
+```json
+{
+  "命宫": {
+    "meaning": "终身显现，早年即凸显",
+    "domains": ["外在表现", "待人接物", "第一印象", "应对方式"],
+    "modernContext": "个人品牌、社交形象、核心性格"
+  },
+  "父母": {
+    "meaning": "命主对父母的意识形态底盘",
+    "domains": ["父母关系", "遗传体质", "长辈贵人", "文书证件"],
+    "modernContext": "原生家庭影响、遗传健康、上司关系"
+  },
+  "福德": {
+    "meaning": "现金流、理财眼光、动产管理",
+    "domains": ["精神世界", "理财投资", "现金流动", "生活质量"],
+    "modernContext": "投资判断力、现金流管理、精神健康"
+  },
+  "田宅": {
+    "meaning": "固定资产、场地资源、资金链",
+    "domains": ["不动产", "居住环境", "固定资产", "资金链"],
+    "modernContext": "房产投资、办公场所、公司资金池"
+  },
+  "官禄": {
+    "meaning": "做事理念、事业策略",
+    "domains": ["事业发展", "职业方向", "工作理念", "学业能力"],
+    "modernContext": "职业规划、专业技能、学术成就"
+  },
+  "仆役": {
+    "meaning": "下属配合",
+    "domains": ["下属关系", "员工管理", "奴欺主格局"],
+    "modernContext": "团队管理、人才招聘、外包合作"
+  },
+  "迁移": {
+    "meaning": "人脉网络、客户开拓、贸易销售",
+    "domains": ["外出发展", "人脉网络", "客户销售", "异地机会"],
+    "modernContext": "面试求职、社交拓展、外贸跨境、出差"
+  },
+  "疾厄": {
+    "meaning": "身体体质、抵抗力、疾病倾向",
+    "domains": ["健康状况", "体质强弱", "五行病理"],
+    "modernContext": "健康管理、遗传疾病、体质调理"
+  },
+  "财帛": {
+    "meaning": "来财方式、收入能力、劳力经营",
+    "domains": ["收入方式", "赚钱能力", "劳力经营"],
+    "modernContext": "工资收入、经营收入、赚钱方式"
+  },
+  "子女": {
+    "meaning": "命主对子女的意识形态底盘",
+    "domains": ["子女关系", "生育", "晚辈下属"],
+    "modernContext": "亲子关系、学生管理、晚辈培养"
+  },
+  "夫妻": {
+    "meaning": "感情关系、伴侣、婚姻的核心宫位",
+    "domains": ["感情婚姻", "亲密关系", "伴侣特质"],
+    "modernContext": "恋爱择偶、婚姻质量、感情走向"
+  },
+  "兄弟": {
+    "meaning": "兄弟姐妹、同辈关系",
+    "domains": ["手足关系", "合伙人", "同辈竞争"],
+    "modernContext": "兄弟关系、同辈合作、竞争对手"
+  }
+}
+```
+
+### 1.3 `event_star_attributes.json`（事项分类赋性，示例结构，内容可根据实际知识库填充）
+
+```json
+{
+  "求学": {
+    "事业宫": {
+      "紫微": {
+        "实旺": "学习目标清晰，自律性强，能主导学习节奏，领导力体现在学业上，有望成为佼佼者",
+        "磨炼": "学习有主见，自律性较强，能够主导学习，但有小幅摩擦，需要克服固执倾向",
+        "虚浮": "学习中容易独断但实际无力，虚有其表，过度紧张造成学习受阻",
+        "凶危": "学习时独断专制但无实际能力，容易遭遇挫折，进退两难"
+      },
+      "武曲": {
+        "实旺": "学习态度端正，执行力强，按部就班，目标明确，容易通过坚持获得成果",
+        "磨炼": "学习态度端正，执行力较强，但可能过于刻板，有小幅灵活度不足",
+        "虚浮": "学习显得生硬刻板，实际执行力虚华，容易钻牛角尖",
+        "凶危": "学习执行力名存实亡，呆板固执导致学习崩溃"
+      }
+    }
+  },
+  "求爱": {
+    "夫妻宫": {
+      "紫微": {
+        "实旺": "感情中有主见，知道自己想要什么样的伴侣，容易成为感情中的主导者，婚姻稳定",
+        "磨炼": "感情有主见，但容易固执，需要伴侣的包容",
+        "虚浮": "感情中虚有主见，实际无力主导，独断但孤立",
+        "凶危": "感情独断专制，伴侣受压，婚姻危机"
+      },
+      "武曲": {
+        "实旺": "感情中务实理性，对伴侣条件评估清晰，不容易被骗，感情基础稳定",
+        "磨炼": "感情理性，但有时过于冷漠，需要温度",
+        "虚浮": "感情理性虚浮，显得冷漠无情",
+        "凶危": "感情完全沦为交易，婚姻破裂"
+      }
+    }
+  },
+  "求财": {
+    "财帛宫": {
+      "紫微": {
+        "实旺": "理财能力强，有经营眼光，善于管理资金和资源，容易通过正当途径积累财富",
+        "磨炼": "理财有主见，但容易固执，需要听取意见",
+        "虚浮": "理财虚有其表，主张多但实力虚",
+        "凶危": "理财专制失败，财务危机"
+      },
+      "武曲": {
+        "实旺": "来财方式务实，执行力强，能够通过行动快速获得报酬，财务管理有条理",
+        "磨炼": "理财执行力强，但可能过于刻板，需要灵活",
+        "虚浮": "理财执行力虚弱，行动不足",
+        "凶危": "理财完全无力，资金崩溃"
+      }
+    }
+  }
+}
+```
+
+### 1.4 `tai_sui_rua_gua_tables.json`（太岁入卦查表）
+
+```json
+{
+  "shengNianSihua": {
+    "甲": { "lu": "廉贞", "quan": "破军", "ke": "武曲", "ji": "太阳" },
+    "乙": { "lu": "天机", "quan": "天梁", "ke": "紫微", "ji": "太阴" },
+    "丙": { "lu": "天同", "quan": "天机", "ke": "文昌", "ji": "廉贞" },
+    "丁": { "lu": "太阴", "quan": "天同", "ke": "天机", "ji": "巨门" },
+    "戊": { "lu": "贪狼", "quan": "太阴", "ke": "右弼", "ji": "天机" },
+    "己": { "lu": "武曲", "quan": "贪狼", "ke": "天梁", "ji": "文曲" },
+    "庚": { "lu": "太阳", "quan": "武曲", "ke": "太阴", "ji": "天同" },
+    "辛": { "lu": "巨门", "quan": "太阳", "ke": "文曲", "ji": "文昌" },
+    "壬": { "lu": "天梁", "quan": "紫微", "ke": "左辅", "ji": "武曲" },
+    "癸": { "lu": "破军", "quan": "巨门", "ke": "太阳", "ji": "贪狼" }
+  },
+  "luCunYangTuo": {
+    "甲": { "luCun": "寅", "qingYang": "卯", "tuoLuo": "丑" },
+    "乙": { "luCun": "卯", "qingYang": "辰", "tuoLuo": "寅" },
+    "丙": { "luCun": "巳", "qingYang": "午", "tuoLuo": "辰" },
+    "丁": { "luCun": "午", "qingYang": "未", "tuoLuo": "巳" },
+    "戊": { "luCun": "巳", "qingYang": "午", "tuoLuo": "辰" },
+    "己": { "luCun": "午", "qingYang": "未", "tuoLuo": "巳" },
+    "庚": { "luCun": "申", "qingYang": "酉", "tuoLuo": "未" },
+    "辛": { "luCun": "酉", "qingYang": "戌", "tuoLuo": "申" },
+    "壬": { "luCun": "亥", "qingYang": "子", "tuoLuo": "戌" },
+    "癸": { "luCun": "子", "qingYang": "丑", "tuoLuo": "亥" }
+  },
+  "tianKuiYue": {
+    "甲": { "tianKui": "丑", "tianYue": "未" },
+    "乙": { "tianKui": "子", "tianYue": "申" },
+    "丙": { "tianKui": "亥", "tianYue": "酉" },
+    "丁": { "tianKui": "亥", "tianYue": "酉" },
+    "戊": { "tianKui": "丑", "tianYue": "未" },
+    "己": { "tianKui": "子", "tianYue": "申" },
+    "庚": { "tianKui": "丑", "tianYue": "未" },
+    "辛": { "tianKui": "寅", "tianYue": "午" },
+    "壬": { "tianKui": "卯", "tianYue": "巳" },
+    "癸": { "tianKui": "卯", "tianYue": "巳" }
+  },
+  "hongLuanTianXi": {
+    "子": { "hongLuan": "卯", "tianXi": "酉" },
+    "丑": { "hongLuan": "寅", "tianXi": "申" },
+    "寅": { "hongLuan": "丑", "tianXi": "未" },
+    "卯": { "hongLuan": "子", "tianXi": "午" },
+    "辰": { "hongLuan": "亥", "tianXi": "巳" },
+    "巳": { "hongLuan": "戌", "tianXi": "辰" },
+    "午": { "hongLuan": "酉", "tianXi": "卯" },
+    "未": { "hongLuan": "申", "tianXi": "寅" },
+    "申": { "hongLuan": "未", "tianXi": "丑" },
+    "酉": { "hongLuan": "午", "tianXi": "子" },
+    "戌": { "hongLuan": "巳", "tianXi": "亥" },
+    "亥": { "hongLuan": "辰", "tianXi": "戌" }
+  },
+  "wuHuDunGan": {
+    "甲": ["丙寅","丁卯","戊辰","己巳","庚午","辛未","壬申","癸酉","甲戌","乙亥","丙子","丁丑"],
+    "乙": ["戊寅","己卯","庚辰","辛巳","壬午","癸未","甲申","乙酉","丙戌","丁亥","戊子","己丑"],
+    "丙": ["庚寅","辛卯","壬辰","癸巳","甲午","乙未","丙申","丁酉","戊戌","己亥","庚子","辛丑"],
+    "丁": ["壬寅","癸卯","甲辰","乙巳","丙午","丁未","戊申","己酉","庚戌","辛亥","壬子","癸丑"],
+    "戊": ["甲寅","乙卯","丙辰","丁巳","戊午","己未","庚申","辛酉","壬戌","癸亥","甲子","乙丑"],
+    "己": ["丙寅","丁卯","戊辰","己巳","庚午","辛未","壬申","癸酉","甲戌","乙亥","丙子","丁丑"],
+    "庚": ["戊寅","己卯","庚辰","辛巳","壬午","癸未","甲申","乙酉","丙戌","丁亥","戊子","己丑"],
+    "辛": ["庚寅","辛卯","壬辰","癸巳","甲午","乙未","丙申","丁酉","戊戌","己亥","庚子","辛丑"],
+    "壬": ["壬寅","癸卯","甲辰","乙巳","丙午","丁未","戊申","己酉","庚戌","辛亥","壬子","癸丑"],
+    "癸": ["甲寅","乙卯","丙辰","丁巳","戊午","己未","庚申","辛酉","壬戌","癸亥","甲子","乙丑"]
+  }
+}
+```
+
+---
+
+## 二、完整的 `loader.ts` 代码（支持热加载、类型安全）
+
+```typescript
+// src/core/knowledge-dict/loader.ts
+
+import fs from 'fs';
+import path from 'path';
+import type { StarAttribute, PalaceMeaning, EventStarAttributes, TaiSuiTables } from './types';
+
+// 配置：JSON 文件所在目录（可根据项目结构调整）
+const DATA_DIR = path.join(process.cwd(), 'data');
+
+// 文件路径
+const STAR_ATTR_PATH = path.join(DATA_DIR, 'star_attributes.json');
+const PALACE_MEANING_PATH = path.join(DATA_DIR, 'palace_meanings.json');
+const EVENT_STAR_ATTR_PATH = path.join(DATA_DIR, 'event_star_attributes.json');
+const TAI_SUI_TABLES_PATH = path.join(DATA_DIR, 'tai_sui_rua_gua_tables.json');
+
+// 缓存数据
+let starAttributesCache: Record<string, StarAttribute> | null = null;
+let palaceMeaningsCache: Record<string, PalaceMeaning> | null = null;
+let eventStarAttributesCache: EventStarAttributes | null = null;
+let taiSuiTablesCache: TaiSuiTables | null = null;
+
+// 记录文件最后修改时间（用于热加载）
+let lastStarMtime = 0;
+let lastPalaceMtime = 0;
+let lastEventMtime = 0;
+let lastTaiSuiMtime = 0;
+
+/**
+ * 读取 JSON 文件，支持热加载（如果文件修改则重新读取）
+ * @param filePath 文件路径
+ * @param lastMtime 上次修改时间（引用传递，内部更新）
+ * @param cache 缓存引用
+ */
+function loadJsonFile<T>(
+  filePath: string,
+  lastMtime: { value: number },
+  cache: { value: T | null }
+): T {
+  try {
+    const stat = fs.statSync(filePath);
+    const currentMtime = stat.mtimeMs;
+
+    if (currentMtime !== lastMtime.value) {
+      // 文件已修改，重新读取
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(content) as T;
+      cache.value = data;
+      lastMtime.value = currentMtime;
+      // 可选：控制台输出，便于调试
+      // console.log(`[knowledge] reloaded: ${path.basename(filePath)}`);
+    }
+  } catch (err) {
+    console.error(`Failed to load ${filePath}:`, err);
+    // 如果缓存为空，返回空对象
+    if (!cache.value) {
+      cache.value = {} as T;
+    }
+  }
+  return cache.value!;
+}
+
+/**
+ * 获取星曜赋性数据（自动处理热加载）
+ */
+export function getStarAttributes(): Record<string, StarAttribute> {
+  const mtimeObj = { value: lastStarMtime };
+  const cacheObj = { value: starAttributesCache };
+  return loadJsonFile(STAR_ATTR_PATH, mtimeObj, cacheObj);
+}
+
+/**
+ * 获取宫位含义数据（自动处理热加载）
+ */
+export function getPalaceMeanings(): Record<string, PalaceMeaning> {
+  const mtimeObj = { value: lastPalaceMtime };
+  const cacheObj = { value: palaceMeaningsCache };
+  return loadJsonFile(PALACE_MEANING_PATH, mtimeObj, cacheObj);
+}
+
+/**
+ * 获取事项分类赋性数据（自动处理热加载）
+ */
+export function getEventStarAttributes(): EventStarAttributes {
+  const mtimeObj = { value: lastEventMtime };
+  const cacheObj = { value: eventStarAttributesCache };
+  return loadJsonFile(EVENT_STAR_ATTR_PATH, mtimeObj, cacheObj);
+}
+
+/**
+ * 获取太岁入卦查表数据（自动处理热加载）
+ */
+export function getTaiSuiTables(): TaiSuiTables {
+  const mtimeObj = { value: lastTaiSuiMtime };
+  const cacheObj = { value: taiSuiTablesCache };
+  return loadJsonFile(TAI_SUI_TABLES_PATH, mtimeObj, cacheObj);
+}
+
+/**
+ * 手动重新加载所有知识库（可用于外部触发刷新）
+ */
+export function reloadAll() {
+  lastStarMtime = 0;
+  lastPalaceMtime = 0;
+  lastEventMtime = 0;
+  lastTaiSuiMtime = 0;
+  starAttributesCache = null;
+  palaceMeaningsCache = null;
+  eventStarAttributesCache = null;
+  taiSuiTablesCache = null;
+  // 触发重新读取
+  getStarAttributes();
+  getPalaceMeanings();
+  getEventStarAttributes();
+  getTaiSuiTables();
+}
+```
+
+---
+
+## 三、配套的 `types.ts`（类型定义）
+
+```typescript
+// src/core/knowledge-dict/types.ts
+
+export interface StarAttribute {
+  element: string;
+  coreTrait: string;
+  positiveTrait: string;
+  negativeTrait: string;
+  specialNote: string;
+}
+
+export interface PalaceMeaning {
+  meaning: string;
+  domains: string[];
+  modernContext: string;
+}
+
+export interface EventStarTraitMap {
+  [brightness: string]: string; // '实旺', '磨炼', '虚浮', '凶危' => 描述
+}
+
+export interface EventStarPalaceMap {
+  [star: string]: EventStarTraitMap;
+}
+
+export interface EventPalaceMap {
+  [palace: string]: EventStarPalaceMap;
+}
+
+export interface EventStarAttributes {
+  [event: string]: EventPalaceMap; // '求学', '求爱', '求财' ...
+}
+
+// 太岁入卦相关类型
+export interface ShengNianSihua {
+  lu: string;
+  quan: string;
+  ke: string;
+  ji: string;
+}
+
+export interface LuCunYangTuo {
+  luCun: string;
+  qingYang: string;
+  tuoLuo: string;
+}
+
+export interface TianKuiYue {
+  tianKui: string;
+  tianYue: string;
+}
+
+export interface HongLuanTianXi {
+  hongLuan: string;
+  tianXi: string;
+}
+
+export interface TaiSuiTables {
+  shengNianSihua: Record<string, ShengNianSihua>;
+  luCunYangTuo: Record<string, LuCunYangTuo>;
+  tianKuiYue: Record<string, TianKuiYue>;
+  hongLuanTianXi: Record<string, HongLuanTianXi>;
+  wuHuDunGan: Record<string, string[]>;
+}
+```
+
+---
+
+## 四、修改 `query.ts` 以使用新的 `loader`
+
+```typescript
+// src/core/knowledge-dict/query.ts
+import { getStarAttributes, getPalaceMeanings, getEventStarAttributes, getTaiSuiTables } from './loader';
+import type { StarAttribute, PalaceMeaning } from './types';
+
+export function getStarAttr(star: string): StarAttribute | null {
+  const data = getStarAttributes();
+  return data[star] || null;
+}
+
+export function getStarTraitByBrightness(star: string, brightness: string): string {
+  const attr = getStarAttr(star);
+  if (!attr) return '';
+  if (brightness === '极旺' || brightness === '旺') return attr.positiveTrait;
+  if (brightness === '陷' || brightness === '极弱') return attr.negativeTrait;
+  return attr.coreTrait;
+}
+
+export function getPalaceMeaning(palace: string): PalaceMeaning | null {
+  const data = getPalaceMeanings();
+  return data[palace] || null;
+}
+
+export function getEventStarTrait(
+  event: string,
+  palace: string,
+  star: string,
+  brightnessLevel: string // '实旺' | '磨炼' | '虚浮' | '凶危'
+): string {
+  const events = getEventStarAttributes();
+  return events[event]?.[palace]?.[star]?.[brightnessLevel] || '';
+}
+
+// 太岁入卦相关查询
+export function getShengNianSihua(gan: string) {
+  const tables = getTaiSuiTables();
+  return tables.shengNianSihua?.[gan] || null;
+}
+
+export function getLuCunYangTuo(gan: string) {
+  const tables = getTaiSuiTables();
+  return tables.luCunYangTuo?.[gan] || null;
+}
+
+export function getTianKuiYue(gan: string) {
+  const tables = getTaiSuiTables();
+  return tables.tianKuiYue?.[gan] || null;
+}
+
+export function getHongLuanTianXi(zhi: string) {
+  const tables = getTaiSuiTables();
+  return tables.hongLuanTianXi?.[zhi] || null;
+}
+
+export function getWuHuDunGan(gan: string): string[] | null {
+  const tables = getTaiSuiTables();
+  return tables.wuHuDunGan?.[gan] || null;
+}
+```
+
+---
+
+## 五、目录结构示意
+
+```
+your-project/
+├── data/
+│   ├── star_attributes.json
+│   ├── palace_meanings.json
+│   ├── event_star_attributes.json
+│   ├── tai_sui_rua_gua_tables.json
+│   └── attenuation.json          (已有)
+├── src/
+│   └── core/
+│       └── knowledge-dict/
+│           ├── index.ts
+│           ├── query.ts          (修改后)
+│           ├── loader.ts         (新增)
+│           ├── types.ts          (新增)
+│           └── data/             (可删除旧硬编码文件)
+└── package.json
+```
+
+---
+
+## 六、使用说明
+
+1. **首次运行**：确保 `data/` 目录下存在上述 JSON 文件（可从模板复制并填充内容）。
+2. **热加载**：运行时直接编辑 JSON 文件，下一次查询会自动读取最新内容（基于文件修改时间检测）。
+3. **手动刷新**：调用 `reloadAll()` 可强制重新加载所有 JSON。
+4. **向后兼容**：`query.ts` 的 API 保持不变，现有调用代码无需修改。
+
+这样，您就完全实现了**知识库与代码解耦**，以后只需维护 JSON 文件，无需触碰 TypeScript 代码。

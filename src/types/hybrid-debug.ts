@@ -12,7 +12,6 @@ export interface HybridDebugInfo {
   knowledgeSnippetCount?: number
   fullPromptLength?: number
   timing: Record<string, number>
-  baseIRCached?: boolean
   dslPatternHits?: string[]
   /** 组装后的完整 Prompt 消息列表（结构化展示用） */
   promptMessages?: Array<{

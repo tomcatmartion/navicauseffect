@@ -5,10 +5,11 @@
  *
  * 接收命盘数据，返回十二宫评分 + 格局 + 四化。
  * LLM 不参与本阶段计算。
+ * 内部通过 ScoringService 调用，支持 DB 缓存复用。
  */
 
 import { NextResponse } from 'next/server'
-import { executeStage1 } from '@/core/stages/stage1-palace-scoring'
+import { scoringService } from '@/core/services/scoring-service'
 import { guardZiweiDebugApi } from '@/lib/ziwei/debug-api-guard'
 import { hasValidChartPalaces } from '@/lib/ziwei/chart-data-validation'
 
@@ -29,8 +30,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const result = executeStage1({
-      chartData: body.chartData,
+    // 调试 API 直接计算，不走 DB 缓存
+    const result = scoringService.computeStage1({
+      chartData: body.chartData!,
       parentBirthYears: body.parentBirthYears,
     })
 

@@ -137,7 +137,7 @@ describe('JSON 与 KB 知识库一致性核验', () => {
       intentPriorities?: Record<string, number>
     }
 
-    const matterTypes = ['求学', '求爱', '求财', '求职', '求健康', '求名']
+    const matterTypes = ['求学', '求爱', '求财', '求职', '求健康', '求名', '创业']
     expect(Object.keys(tree.branches).sort()).toEqual([...matterTypes].sort())
 
     const validPalaces = [

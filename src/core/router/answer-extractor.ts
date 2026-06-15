@@ -321,6 +321,7 @@ function getExpectedFields(matterType: MatterType): string[] {
     '求职': ['career_1', 'career_2', 'career_3', 'career_4'],
     '求健康': ['health_1', 'health_2', 'health_3'],
     '求名': ['fame_1', 'fame_2'],
+    '创业': ['startup_1', 'startup_2', 'startup_3'],
   }
   return fields[matterType] ?? []
 }

@@ -45,6 +45,8 @@ interface ReportDetail {
   coverImage: string | null;
   createdAt: string;
   errorMessage: string | null;
+  /** 父报告 id（子报告场景）；主报告为 null */
+  parentReportId?: string | null;
   template: { id: string; name: string; slug: string; type: string };
   identity: { id: string; name: string; gender: string };
   children: {
@@ -59,6 +61,16 @@ interface ReportDetail {
     answer: string | null;
     createdAt: string;
   }[];
+}
+
+/** 报告是否处于可点击查看的终态 */
+function isViewable(status: string): boolean {
+  return status === "COMPLETED";
+}
+
+/** 报告是否还在生成（需要继续轮询） */
+function isPending(status: string): boolean {
+  return status === "GENERATING" || status === "PENDING";
 }
 
 // ---------------------------------------------------------------------------
@@ -151,11 +163,25 @@ export default function ReportDetailPage() {
     }
   }, [sessionStatus, router, reportId, fetchReport]);
 
-  // 自动轮询生成中的报告
+  // 自动轮询生成中的报告（含子报告未完成的情况）
   useEffect(() => {
-    if (!report || report.status === "COMPLETED" || report.status === "FAILED") return;
+    if (!report) return;
+    // 主报告已终态且无子报告，或全部子报告也已终态 → 停止轮询
+    const mainDone = !isPending(report.status);
+    const childrenAllDone = !report.children.some((c) => isPending(c.status));
+    if (mainDone && childrenAllDone) return;
 
-    const timer = setInterval(fetchReport, 5000);
+    // 总超时兜底：最多轮询 10 分钟（避免后端异常时无限轮询）
+    const startedAt = Date.now();
+    const MAX_POLL_MS = 10 * 60 * 1000;
+
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt > MAX_POLL_MS) {
+        clearInterval(timer);
+        return;
+      }
+      fetchReport();
+    }, 3000);
     return () => clearInterval(timer);
   }, [report, fetchReport]);
 
@@ -235,11 +261,18 @@ export default function ReportDetailPage() {
       <div className="sticky top-16 z-40 bg-background/90 backdrop-blur-md border-b border-primary/10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <button
-            onClick={() => router.push("/reports")}
+            onClick={() => {
+              // 子报告 → 返回父报告；主报告 → 返回列表
+              if (report.parentReportId) {
+                router.push(`/reports/${report.parentReportId}`);
+              } else {
+                router.push("/reports");
+              }
+            }}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            返回
+            {report.parentReportId ? "返回主报告" : "返回"}
           </button>
           <div className="flex items-center gap-2">
             <StatusDisplay status={report.status} progress={report.progress} />
@@ -297,25 +330,61 @@ export default function ReportDetailPage() {
           <div className="space-y-2">
             <h2 className="text-sm font-bold text-foreground">子报告</h2>
             <div className="space-y-1.5">
-              {report.children.map((child) => (
-                <div
-                  key={child.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-foreground">{child.template.name}</span>
+              {report.children.map((child) => {
+                const viewable = isViewable(child.status);
+                const rowClasses = `flex w-full items-center justify-between p-3 rounded-xl border transition-colors text-left ${
+                  viewable
+                    ? "bg-primary/5 border-primary/10 hover:bg-primary/10 hover:border-primary/30 cursor-pointer"
+                    : "bg-primary/5 border-primary/10 cursor-default"
+                }`;
+                const inner = (
+                  <>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm text-foreground truncate">{child.template.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <StatusDisplay status={child.status} progress={child.progress} />
+                      {viewable && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                  </>
+                );
+                if (viewable) {
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => router.push(`/reports/${child.id}`)}
+                      className={rowClasses}
+                    >
+                      {inner}
+                    </button>
+                  );
+                }
+                return (
+                  <div key={child.id} className={rowClasses}>
+                    {inner}
                   </div>
-                  <StatusDisplay status={child.status} progress={child.progress} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* 报告内容 — 支持章节JSON和纯文本两种格式 */}
         {isCompleted && report.content && (() => {
-          let parsed: { chapters?: Array<{ title: string; content?: string }>; content?: Array<{ paragraph: string; paragraph_id?: string; qa?: string[] }> } | null = null;
+          let parsed: {
+            chapters?: Array<{ title: string; content?: string }>;
+            content?: Array<{ paragraph: string; paragraph_id?: string; qa?: string[] }>;
+            dataPanel?: {
+              palaceScores: Array<{ palace: string; diZhi: string; majorStars: string[]; finalScore: number; level: string; isBodyPalace: boolean }>;
+              sihuaLanding: Array<{ layer: string; type: string; star: string; palace: string }>;
+              daXianTimeline: Array<{ index: number; ageRange: string; tone: string; daXianGan: string; mingPalace: string; mutagen: string[]; isCurrent: boolean }>;
+              patterns: Array<{ name: string; level: string; category: string }>;
+              matters: Array<{ matterType: string; primaryPalace: string; primaryScore: number; compositeScore: number; scoreLabel: string; direction: string }>;
+              personalityTriad: { overallTone: string; ming: string; shen: string; taiSui: string } | null;
+            };
+          } | null = null;
           try {
             parsed = JSON.parse(report.content);
           } catch {
@@ -326,6 +395,85 @@ export default function ReportDetailPage() {
           if (parsed?.chapters && Array.isArray(parsed.chapters)) {
             return (
               <div className="space-y-6">
+                {/* 命盘数据看板（程序生成的结构化可视化数据，确定性无幻觉） */}
+                {parsed.dataPanel && (
+                  <div className="rounded-xl border border-primary/15 bg-gradient-to-b from-primary/5 to-transparent p-5 space-y-4">
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="font-serif-sc text-sm font-bold text-foreground">命盘数据看板</h3>
+                      <span className="text-xs text-muted-foreground">紫微斗数程序计算 · 确定性数据</span>
+                    </div>
+
+                    {/* 性格三宫 */}
+                    {parsed.dataPanel.personalityTriad && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                        <div className="rounded-lg border border-border px-3 py-2"><span className="text-muted-foreground">命宫：</span>{parsed.dataPanel.personalityTriad.ming || '—'}</div>
+                        <div className="rounded-lg border border-border px-3 py-2"><span className="text-muted-foreground">身宫：</span>{parsed.dataPanel.personalityTriad.shen || '—'}</div>
+                        <div className="rounded-lg border border-border px-3 py-2"><span className="text-muted-foreground">太岁：</span>{parsed.dataPanel.personalityTriad.taiSui || '—'}</div>
+                      </div>
+                    )}
+
+                    {/* 十二宫强弱 */}
+                    {parsed.dataPanel.palaceScores?.length > 0 && (
+                      <div>
+                        <div className="text-xs font-bold text-muted-foreground mb-2">十二宫强弱</div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                          {parsed.dataPanel.palaceScores.map((p, i) => (
+                            <div key={i} className={`rounded-lg border px-3 py-2 text-xs ${p.isBodyPalace ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">{p.palace}{p.isBodyPalace && <span className="text-primary ml-1">身</span>}</span>
+                                <span className={`font-mono ${p.level === '强旺' ? 'text-green-600' : p.level === '偏弱' ? 'text-red-500' : 'text-muted-foreground'}`}>{p.finalScore}</span>
+                              </div>
+                              <div className="text-muted-foreground truncate">{p.majorStars.join('、') || '空宫'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 四化落宫 */}
+                    {parsed.dataPanel.sihuaLanding?.length > 0 && (
+                      <div>
+                        <div className="text-xs font-bold text-muted-foreground mb-2">四化落宫（原局·大限·流年）</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parsed.dataPanel.sihuaLanding.map((s, i) => (
+                            <span key={i} className={`px-2 py-0.5 rounded text-xs border ${s.type === '禄' ? 'border-green-500/30 text-green-700 bg-green-50 dark:bg-green-950/30' : s.type === '忌' ? 'border-red-500/30 text-red-700 bg-red-50 dark:bg-red-950/30' : s.type === '权' ? 'border-amber-500/30 text-amber-700 bg-amber-50 dark:bg-amber-950/30' : 'border-blue-500/30 text-blue-700 bg-blue-50 dark:bg-blue-950/30'}`}>
+                              {s.layer}·{s.type}{s.star}→{s.palace}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 大限走势 */}
+                    {parsed.dataPanel.daXianTimeline?.length > 0 && (
+                      <div>
+                        <div className="text-xs font-bold text-muted-foreground mb-2">大限十年走势</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parsed.dataPanel.daXianTimeline.map((d, i) => (
+                            <span key={i} className={`px-2 py-0.5 rounded text-xs border ${d.isCurrent ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border text-muted-foreground'}`}>
+                              {d.isCurrent && '★'}第{d.index}限({d.ageRange})·{d.mingPalace}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 格局 */}
+                    {parsed.dataPanel.patterns?.length > 0 && (
+                      <div>
+                        <div className="text-xs font-bold text-muted-foreground mb-2">命盘格局</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {parsed.dataPanel.patterns.map((p, i) => (
+                            <span key={i} className={`px-2 py-0.5 rounded text-xs border ${p.level.includes('吉') ? 'border-amber-500/30 text-amber-700 bg-amber-50 dark:bg-amber-950/30' : p.level.includes('凶') ? 'border-red-500/30 text-red-700 bg-red-50 dark:bg-red-950/30' : 'border-border'}`}>
+                              {p.name}({p.level})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* 目录导航 */}
                 {parsed.chapters.length > 3 && (
                   <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">

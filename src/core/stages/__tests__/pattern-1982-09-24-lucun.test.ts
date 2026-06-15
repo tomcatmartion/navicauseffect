@@ -6,7 +6,7 @@ import { describe, test, expect } from 'vitest'
 import { executeStage1 } from '../stage1-palace-scoring'
 import { bySolar } from 'iztro/lib/astro/astro'
 import { evaluateSinglePalace } from '@/core/energy-evaluator/scoring-flow'
-import { convertIztroToScoringContext } from '../helpers/chart-converter'
+import { readChartFromData, normalizedChartToScoringContext } from '@/core/data-reader/iztro-reader'
 import { calculateOriginalSihua } from '@/core/sihua-calculator'
 import { applySihuaAndAnnotate } from '../helpers/sihua-applier'
 
@@ -72,7 +72,8 @@ describe('1982年9月24日4点男性 — 官禄宫得分及禄存验证', () => 
 
   test('应计算并输出官禄宫详细得分', () => {
     // 手动构建评分上下文并计算官禄宫得分
-    const scoringCtx = convertIztroToScoringContext(chartData as Record<string, unknown>)
+    const chart = readChartFromData(chartData as Record<string, unknown>)
+    const scoringCtx = normalizedChartToScoringContext(chart)
     const rawSihua = calculateOriginalSihua(scoringCtx.birthGan, scoringCtx.taiSuiZhi)
     const mergedSihua = applySihuaAndAnnotate(scoringCtx, rawSihua)
 
@@ -118,7 +119,8 @@ describe('1982年9月24日4点男性 — 官禄宫得分及禄存验证', () => 
   })
 
   test('应验证禄存是否在三方四正及本宫分布', () => {
-    const scoringCtx = convertIztroToScoringContext(chartData as Record<string, unknown>)
+    const chart = readChartFromData(chartData as Record<string, unknown>)
+    const scoringCtx = normalizedChartToScoringContext(chart)
     const palaceNames = ['命宫', '父母', '福德', '田宅', '官禄', '仆役', '迁移', '疾厄', '财帛', '子女', '夫妻', '兄弟']
     const gongLuIdx = palaceNames.indexOf('官禄')
 

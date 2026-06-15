@@ -34,7 +34,7 @@ import {
   extractKeyPersonalityDimensions,
 } from '@/core/personality-analyzer/score-reason-to-personality'
 import { buildPalaceInput } from './helpers/palace-input-builder'
-import { injectStage2Knowledge } from './helpers/knowledge-injector'
+import { injectStage2Knowledge, injectStage2MinorStarKnowledge } from './helpers/knowledge-injector'
 import { buildPersonalityTriadProfile } from '@/core/personality-analyzer/triad-builder'
 
 /**
@@ -105,6 +105,33 @@ export function executeStage2(input: Stage2Input): Stage2Output {
   }
   const knowledgeSnippets = injectStage2Knowledge(focusPalaces)
 
+  // 丙丁级星曜赋性注入（从三宫及其三方四正的 minorStars 中收集）
+  const MINOR_STAR_NAMES = ['红鸾', '天喜', '天刑', '天姚', '天哭', '天虚', '华盖', '天马', '咸池', '破碎', '力士', '青龙', '将军', '伏兵', '官府']
+  const allMinorStars = new Set<string>()
+  // 收集函数：从指定宫位提取丙丁级星曜
+  const collectMinorFromPalace = (idx: number) => {
+    if (idx < 0) return
+    const palace = ctx.palaces[idx]
+    for (const star of palace.stars) {
+      if (MINOR_STAR_NAMES.includes(star.name)) {
+        allMinorStars.add(star.name)
+      }
+    }
+  }
+  // 对每个核心宫位（命宫/身宫/太岁宫），扫描本宫 + 对宫 + 三合 + 夹宫
+  for (const coreIdx of [mingIdx, shenIdx, taiSuiIdx >= 0 ? taiSuiIdx : -1]) {
+    if (coreIdx < 0) continue
+    collectMinorFromPalace(coreIdx) // 本宫
+    collectMinorFromPalace((coreIdx + 6) % 12) // 对宫
+    collectMinorFromPalace((coreIdx + 4) % 12) // 三合1
+    collectMinorFromPalace((coreIdx + 8) % 12) // 三合2
+    collectMinorFromPalace((coreIdx + 1) % 12) // 夹宫1
+    collectMinorFromPalace((coreIdx - 1 + 12) % 12) // 夹宫2
+  }
+  if (allMinorStars.size > 0) {
+    knowledgeSnippets.push(...injectStage2MinorStarKnowledge([...allMinorStars]))
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   // P0: 格局人格特质注入
   // ═══════════════════════════════════════════════════════════════════
@@ -137,8 +164,11 @@ export function executeStage2(input: Stage2Input): Stage2Output {
       key: '性格三宫基准',
       content: [
         `命宫：${personalityTriad.mingLayer.description}`,
+        `命宫显现时机：${personalityTriad.mingLayer.manifestationTiming}`,
         `身宫：${personalityTriad.shenLayer.description}`,
+        `身宫显现时机：${personalityTriad.shenLayer.manifestationTiming}`,
         `太岁宫：${personalityTriad.taiSuiLayer.description}`,
+        `太岁宫显现时机：${personalityTriad.taiSuiLayer.manifestationTiming}`,
         personalityTriad.synthesis,
       ].join('\n'),
     },

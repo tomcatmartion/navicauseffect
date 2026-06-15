@@ -1,0 +1,523 @@
+问：
+目前的管线四大步骤也是根据SKILL_前缀的md文件内容转换成硬编码实现的，如果这样的话，那以后我的解盘逻辑变了，也是要改动编码的。这时候有没有什么办法，也把专业解盘流程和技巧知识跟程序编码解耦？其实是跟之前知识库与硬编码解耦的逻辑一样。
+你能理解我的意思吗? 这种可行吗？
+
+答：
+# 紫微斗数 AI 解盘系统 — 最终完整实施方案
+
+> 本方案综合了您提供的所有 SKILL、KB、PROCESS 以及 TEMPLATE 文档，并融合了之前讨论的“骨架代码化 + 参数规则配置化”的务实架构。目标是交付一份可直接交给 Claude Code 开发的完整蓝图。
+
+---
+
+## 一、总体架构概览
+
+系统采用 **确定性计算引擎 + 轻量规则配置 + 大模型表达** 的分层架构。
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      前端 / 用户交互层                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                编排层 (Orchestrator)                         │
+│   - 严格遵循 PROCESS_智能解盘总体流程 的四阶段顺序            │
+│   - 会话状态机管理 (INIT → SCORING → PERSONALITY → ROUTING)  │
+│   - 调用各阶段模块，传递 IR（中间表示）                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│ 阶段一：评分  │ │ 阶段二：性格  │ │ 阶段三/四分析 │
+│ & 格局识别    │ │ & 全息底色    │ │ (事项/互动)   │
+│ (硬编码+参数) │ │ (硬编码+IR)   │ │ (IR+LLM)      │
+└───────────────┘ └───────────────┘ └───────────────┘
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            ▼
+              ┌─────────────────────────┐
+              │   知识库与规则配置层     │
+              │  JSON 配置文件          │
+              │  (评分参数、格局规则、   │
+              │   星曜赋性字典、路由树)  │
+              └─────────────────────────┘
+```
+
+**核心设计原则**：
+- **流程骨架硬编码**：阶段顺序、12宫循环、四维合参的空间计算等稳定逻辑写在 TypeScript 中。
+- **参数与规则可配置**：评分系数、亮度阈值、格局条件、问诊决策树、星曜赋性文本全部放入 JSON 文件。
+- **热加载**：支持配置文件修改后自动重载，无需重启服务。
+- **大模型仅用于表达**：只有最终的报告生成和用户问诊的自然语言交互调用 LLM，所有确定性判断由代码完成。
+
+---
+
+## 二、已有资产与待开发模块清单
+
+### 2.1 已实现的模块（可直接复用）
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 排盘接口 | `iztro` | 提供准确的命盘 JSON（宫位、主星、辅星、四化、大限流年等） |
+| 知识字典 | `src/core/knowledge-dict/` | 精确键值查询 `getStarAttr`, `getPalaceMeaning` 等，已支持从 JSON 加载 |
+| 太岁入卦表 | `data/tai_sui_rua_gua_tables.json` | 生年四化、禄存羊陀、魁钺、鸾喜等查表 |
+| 星曜赋性字典 | `data/star_attributes.json` | 十四主星的 coreTrait, positiveTrait, negativeTrait 等 |
+| 宫位含义字典 | `data/palace_meanings.json` | 十二宫的 meaning, domains, modernContext |
+| 衰减参数 | `data/attenuation.json` | 对宫、三合、夹宫衰减系数 |
+| 阶段知识注入器 | `src/core/stages/helpers/knowledge-injector.ts` | 各阶段调用知识字典生成 KnowledgeSnippet[] |
+| 四维合参标签 | `src/core/personality-analyzer/four-dimension.ts` | 生成本对合临标签 |
+| 大模型客户端 | `src/core/llm-wrapper/` | 调用 LLM API，支持流式输出 |
+| 编排层基础 | `src/lib/ziwei/hybrid/orchestrator.ts` | 会话状态机雏形 |
+
+### 2.2 需要新增/完善的核心模块
+
+| 模块 | 文件 | 职责 | 对应 SKILL |
+|------|------|------|-------------|
+| **宫位评分引擎** | `src/core/energy-evaluator/scoring-flow.ts` | 实现六步评分，使用参数配置 | SKILL_宫位原生能级评估 |
+| **格局匹配器** | `src/core/energy-evaluator/pattern-matcher.ts` | 加载 `patterns.json`，匹配84格局 | SKILL_宫位原生能级评估 格局库 |
+| **性格分析器** | `src/core/personality-analyzer/builder.ts` | 构建性格 IR（三宫数据、关键词、标签） | SKILL_定性命主性格 |
+| **事项路由决策树** | `src/core/router/decision-tree.ts` | 执行问诊流程，收集用户回答，确定主看宫位 | SKILL_求测事项路由 |
+| **三层合参分析器** | `src/core/limit-analysis/` | 原局-大限-流年三层分析，输出结构化标签 | SKILL_求测事项分析流程 |
+| **太岁入卦引擎** | `src/core/tai-sui-rua-gua/` | 构建虚拟命盘，输出注入星曜 | SKILL_互动关系解读 |
+| **互动分析器** | `src/core/interaction-analyzer.ts` | 三维合参（入卦者+命主+时间），输出互动 IR | SKILL_互动关系解读 + 取象规则 |
+| **Prompt 组装器** | `src/core/llm-wrapper/prompt-builder.ts` | 根据阶段和 IR 构建最终 prompt | TEMPLATE_词令prompt设计 |
+| **热加载配置** | `src/core/config-watcher.ts` | 监听 JSON 文件变化，自动重载 | — |
+
+---
+
+## 三、阶段一：宫位评分与格局识别
+
+### 3.1 实现方式
+
+- **骨架硬编码**：遍历12宫，对每一宫执行六步评分（S1-S6）。
+- **参数配置化**：评分系数、亮度阈值、衰减系数、禄存加分等从 `scoring-params.json` 读取。
+- **格局匹配**：加载 `patterns.json`，使用独立的 `PatternMatcher` 类进行条件求值，将匹配结果存入 `FinalIR`。
+
+### 3.2 参数文件 `scoring-params.json`（示例）
+
+```json
+{
+  "thresholds": {
+    "极旺": 8.0,
+    "旺": 7.5,
+    "平": 6.0,
+    "中平": 4.5,
+    "虚浮": 3.0,
+    "陷": 0
+  },
+  "initial_ceiling": {
+    "极旺": 8.5,
+    "旺": 8.5,
+    "平": 8.0,
+    "陷": 7.3,
+    "空宫": 5.3,
+    "极弱": 5.0
+  },
+  "decays": {
+    "opposite": 0.8,
+    "trine": 0.7,
+    "flanking": {
+      "旺": { "旺": 0.9, "平": 0.5, "弱": 0.2 },
+      "平": { "旺": 0.6, "平": 0.4, "弱": 0.2 },
+      "弱": { "旺": 0.3, "平": 0.1, "弱": 0 }
+    }
+  },
+  "star_scores": {
+    "化禄": 0.5, "左辅": 0.5, "右弼": 0.5, "文昌": 0.5, "文曲": 0.5, "天魁": 0.5, "天钺": 0.5,
+    "化忌": -0.5, "擎羊": -0.5, "陀罗": -0.5, "火星": -0.5, "铃星": -0.5, "地空": -0.5, "地劫": -0.5
+  },
+  "lu_cun_delta": {
+    "旺": 0.3, "平": 0, "中平": 0, "虚浮": -0.3, "陷": -0.3
+  }
+}
+```
+
+### 3.3 格局配置文件 `patterns.json`（部分示例）
+
+```json
+[
+  {
+    "id": "jun_chen_qing_hui",
+    "name": "君臣庆会",
+    "level": "大吉",
+    "multiplier": 1.5,
+    "condition": {
+      "and": [
+        { "type": "star_in_palace", "star": "紫微", "palace": "命宫" },
+        { "type": "any_star_in_triples", "stars": ["左辅", "右弼"] }
+      ]
+    },
+    "tags": ["天生领导", "贵人多助"]
+  },
+  {
+    "id": "zhong_shui_dong_liu",
+    "name": "众水东流格",
+    "level": "大凶",
+    "multiplier": 0.5,
+    "condition": {
+      "and": [
+        { "type": "star_in_palace", "star": "破军", "palace": "卯" },
+        { "type": "star_in_palace", "star": "文曲", "palace": "卯" }
+      ]
+    }
+  }
+]
+```
+
+### 3.4 评分流程伪代码（`scoring-flow.ts`）
+
+```typescript
+export function scorePalace(palace: PalaceData, params: ScoringParams, chart: Chart): ScoredPalace {
+  let score = getSkeletonScore(chart.skeletonId, palace.dizhi);
+  const maxScore = params.initial_ceiling[palace.initialBrightness];
+
+  // 加分（吉星 + 化禄）
+  score += sumStars(palace, params.star_scores, '本宫') * 1.0;
+  score += sumStars(palace.opposite, params.star_scores, '对宫') * params.decays.opposite;
+  // ... 三合、夹宫类似
+
+  // 重定亮度
+  const brightness = determineBrightness(score, params.thresholds);
+
+  // 减分（煞星）—— 根据新亮度查衰减系数
+  const badDecay = getBadStarDecay(brightness, params);
+  score += sumBadStars(palace, params.star_scores, '本宫') * badDecay;
+  // ... 对宫、三合、夹宫类似
+
+  // 禄存处理
+  if (palace.hasLuCun) score += params.lu_cun_delta[brightness];
+
+  return { ...palace, finalScore: Math.min(score, maxScore), brightness };
+}
+```
+
+### 3.5 格局匹配器（`pattern-matcher.ts`）
+
+实现递归条件求值函数 `evaluateCondition(cond, chart)`，支持 `and/or/not` 以及原子条件类型：
+- `star_in_palace`
+- `star_in_triples`
+- `any_star_in_triples`
+- `all_stars_in_triples`
+- `palace_dizhi`
+- `palace_brightness`
+- `special_structure`（如“羊陀夹忌”需额外实现检测函数）
+
+匹配结果写入 `FinalIR.patterns`。
+
+---
+
+## 四、阶段二：定性命主性格
+
+完全按照之前提供的《性格分析模块最终实现指南》执行。关键点：
+
+1. **空间定位函数** `getFourDimensions` 使用地支偏移，返回本对合临四宫。
+2. **能量加权函数** 根据本宫分数、对宫强弱、夹宫情况生成标签（如“外柔内刚”、“羊陀夹忌”）。
+3. **知识提取** 调用 `KnowledgeDict.getStarAttr` 和 `getStarTraitByBrightness`，并支持丙丁级星曜（需在 `star_attributes.json` 中补充丙丁级关键词）。
+4. **JSON 组装** 构建 `PersonalityIR`，包含 `layers`（命/身/太岁）、`holistic_background`。
+5. **大模型调用** 使用 `buildPersonalityPrompt` 生成 prompt，调用 LLM 返回自然语言报告。
+
+**补充实现要求**：
+- 空宫处理：若命宫为空，强制借对宫星曜，亮度降一级，并添加标签 `["容易受外界影响", "缺乏核心主见"]`。
+- 组合取象：六吉六煞不能单看，需检测主辅星化学反应（如紫微+左右→“君臣庆会”等），此逻辑在 `buildPersonalityIR` 中通过规则硬编码实现。
+- 负面标签包装：在 prompt 中指示 LLM 将风险解释为“性格防御机制”或“可转化的优势”。
+
+---
+
+## 五、阶段三：事项分析（含求财/求职/求爱等）
+
+### 5.1 事项路由（决策树）
+
+- 实现 `Router` 类，加载 `router_tree.json`（之前已设计），根据用户回答推进状态，最终输出 `{ primaryPalace, secondaryPalaces, partnerYear? }`。
+- 路由树完全配置化，可热更新。
+
+### 5.2 三层合参分析（原局-大限-流年）
+
+- **原局底盘**：使用阶段一结果（FinalIR）中的命宫全息底色、事项宫位的 finalScore、格局保护机制（双禄夹、禄存等）。
+- **大限分析**：从 iztro 获取大限列表，计算每个大限的命宫落位、大限四化，判断吉化/忌化对事项宫位的引动，输出大限定性标签（顺畅期/艰辛期/危机期/转机期）。
+- **流年分析**：获取流年命宫、流年四化，判断流年与大限的方向是否一致（吉吉/吉凶/凶吉/凶凶），给出时间窗口建议。
+
+**输出 IR**（示例）：
+```json
+{
+  "eventType": "wealth",
+  "primaryPalace": "财帛宫",
+  "origin": {
+    "score": 7.2,
+    "brightness": "旺",
+    "protection": ["双禄夹"],
+    "patterns": ["武府财臣"]
+  },
+  "daXian": {
+    "ageRange": "35-44",
+    "activation": "财帛宫被大限化禄引动",
+    "tone": "顺畅期"
+  },
+  "liuNian": {
+    "year": "2025",
+    "direction": "吉",
+    "window": "推进窗口"
+  }
+}
+```
+
+### 5.3 大模型报告生成
+
+`PromptBuilder` 将该 IR 与知识库片段（如“武曲在财帛宫旺”的赋性）合并，生成最终的用户回答。
+
+---
+
+## 六、阶段四：互动关系分析
+
+### 6.1 太岁入卦虚拟命盘
+
+- 复用 `tai_sui_rua_gua_tables.json`，根据对方生年生成 `PartnerInjection`（包含生年四化、遁干四化、禄存羊陀、魁钺、鸾喜）。
+- 以对方生年地支为虚拟命宫，将上述星曜映射到命主原盘对应宫位。
+
+### 6.2 三维合参
+
+- **入卦者维度**：分析对方四化落命主哪些宫位，调用 `KB_互动关系取象规则`（存于 JSON）中的取象模板。
+- **命主维度**：读取命主全息底色（阶段二结果），判断承载力。
+- **时间维度**：当前大限/流年四化是否引动关系宫位。
+
+输出 `InteractionIR`，由 LLM 生成自然语言报告。
+
+---
+
+## 七、配置热加载与调试
+
+实现 `ConfigWatcher` 监听 `data/` 目录下所有 JSON 文件的变化，重新加载配置并清除内部缓存。开发环境下可启用，生产环境可选。
+
+---
+
+## 八、开发步骤与优先级
+
+### Sprint 1：巩固知识字典与评分参数（2天）
+- 将 `scoring-params.json` 与现有评分代码集成，确保参数可配置。
+- 实现 `PatternMatcher` 基础版（支持10个核心格局），并编写单元测试。
+
+### Sprint 2：完善性格分析（3天）
+- 实现 `getFourDimensions`, `buildPersonalityIR`, `buildPersonalityPrompt`。
+- 补充丙丁级星曜关键词到 `star_attributes.json`。
+- 增加空宫借星、组合取象规则。
+- 集成大模型调用，生成性格报告。
+
+### Sprint 3：实现事项路由与三层合参（3天）
+- 开发 `Router` 决策树，加载 `router_tree.json`。
+- 实现大限/流年四化分析（直接从 iztro 读取，无需计算）。
+- 编写 `EventAnalyzer` 输出 IR。
+
+### Sprint 4：互动关系分析（2天）
+- 实现太岁入卦虚拟盘构建。
+- 集成 `KB_互动关系取象规则` 为 JSON，实现取象匹配。
+- 编写 `InteractionAnalyzer` 输出 IR。
+
+### Sprint 5：编排层整合与大模型 Prompt 优化（2天）
+- 完善 `Orchestrator` 状态机，严格按 PROCESS 执行四阶段。
+- 实现 `PromptBuilder` 统一组装所有 IR。
+- 测试完整对话流程，调整 LLM 输出风格。
+
+### Sprint 6：热加载、错误处理、部署（1天）
+- 实现配置监听。
+- 增加错误回退机制（如 LLM 失败时返回结构化 IR 而非崩溃）。
+
+---
+
+## 九、验收标准
+
+1. **宫位评分**：对至少10个已知命盘，手工计算分数与程序输出一致。
+2. **格局匹配**：能正确识别君臣庆会、众水东流等核心格局。
+3. **性格报告**：用户反馈“有共鸣”，不出现星曜术语堆砌，语气温暖。
+4. **事项分析**：能根据用户问诊正确锁定宫位，输出有层次的原局-大限-流年建议。
+5. **互动关系**：太岁入卦后能准确描述双方互动模式和张力点。
+6. **热加载**：修改 JSON 配置后，下一轮对话立即生效，无需重启。
+
+---
+
+## 十、给 AI工具的最终开发指令
+
+> 请严格遵循以上完整实施方案，按照 Sprint 1→6 的顺序进行开发。代码必须放在 `src/` 相应目录，保持 TypeScript 类型严格，所有业务规则优先通过 JSON 配置实现。开发过程中随时参考 `PROCESS_智能解盘总体流程.md` 及各 SKILL 文档中的禁令。完成每个 Sprint 后运行单元测试，并记录测试结果。
+
+叮嘱以下两点：
+
+类型安全 (Type Safety) 是第一道防线：在解析 patterns.json 和 scoring-params.json 时，务必使用 Zod 或类似的 Schema 校验库。因为配置脱离了代码编译器的检查，一旦 JSON 里少写了一个逗号或字段名拼错，系统启动时必须立即报错，绝不能带着错误的参数静默运行。
+
+保留“快照”能力 (Snapshot Debugging)：在 Orchestrator 流转时，建议实现一个 Debug 模式，能将各个阶段生成的 IR JSON（如 FinalIR, PersonalityIR）直接打印在日志里。这样在后期验收“大模型说话不准”的问题时，您可以立刻判断是 JSON 生成错了（修代码/配参数），还是大模型翻译偏了（调 Prompt）。
+
+
+补充问：
+你再补充一下代码架构目录呗
+
+答：
+
+# 代码架构目录（补充）
+
+基于上述完整实施方案，以下是推荐的 TypeScript 项目目录结构。所有新模块按职责分层放置，与已有资产兼容。
+
+```
+src/
+├── core/                               # 核心业务逻辑（确定性计算引擎）
+│   ├── energy-evaluator/               # 阶段一：宫位评分与格局匹配
+│   │   ├── scoring-flow.ts             # 六步评分流程（硬编码骨架，参数从 JSON 读取）
+│   │   ├── pattern-matcher.ts          # 格局匹配器（加载 patterns.json，条件求值）
+│   │   ├── types.ts                    # 评分相关类型定义
+│   │   └── __tests__/                  # 单元测试
+│   ├── personality-analyzer/           # 阶段二：性格分析（新）
+│   │   ├── builder.ts                  # buildPersonalityIR 主函数
+│   │   ├── four-dimension.ts           # 四维合参标签生成（复用现有）
+│   │   ├── weight-calculator.ts        # 能量加权（外柔内刚、羊陀夹忌等）
+│   │   ├── combination-rules.ts        # 主辅星组合取象规则（硬编码或配置）
+│   │   └── types.ts                    # PersonalityIR 类型
+│   ├── limit-analyzer/                 # 阶段三：原局-大限-流年合参（新）
+│   │   ├── origin-analyzer.ts          # 原局底盘（事项宫位 + 命宫全息底色）
+│   │   ├── decade-analyzer.ts          # 大限分析（读取 iztro 大限列表，激活方向）
+│   │   ├── year-analyzer.ts            # 流年分析（方向矩阵）
+│   │   ├── event-ir-builder.ts         # 组装 EventAnalysisIR
+│   │   └── types.ts
+│   ├── interaction-analyzer/           # 阶段四：互动关系分析（新）
+│   │   ├── virtual-chart.ts            # 虚拟命盘构建（已有 tai-sui-rua-gua 可复用）
+│   │   ├── three-dimension.ts          # 三维合参（入卦者+命主+时间）
+│   │   ├── qu-xiang-matcher.ts         # 取象规则匹配（加载取象 JSON）
+│   │   └── types.ts
+│   ├── router/                         # 事项路由决策树
+│   │   ├── decision-tree.ts            # 根据用户回答推进问诊
+│   │   ├── router-loader.ts            # 加载 router_tree.json
+│   │   └── types.ts
+│   ├── knowledge-dict/                 # M6 知识字典（已有，需补充热加载）
+│   │   ├── index.ts                    # 导出接口
+│   │   ├── query.ts                    # getStarAttr, getPalaceMeaning 等
+│   │   ├── loader.ts                   # 从 JSON 加载并支持热加载
+│   │   ├── types.ts                    # 星曜赋性、宫位含义等类型
+│   │   └── data/                       # 原始 JSON 配置文件（实际放在项目 data/ 目录）
+│   └── tai-sui-rua-gua/                # 太岁入卦基础（已有）
+│       ├── virtual-chart.ts            # 虚拟命盘
+│       └── tables.ts                   # 查表（已抽至 data/tai_sui_rua_gua_tables.json）
+│
+├── orchestration/                      # 编排层
+│   ├── orchestrator.ts                 # 主控器：管理状态机、调用各阶段、存储 IR
+│   ├── session-store.ts                # 会话状态存储（Redis/内存）
+│   ├── state-machines.ts               # 状态定义与转换逻辑
+│   └── error-handler.ts                # 错误处理与降级
+│
+├── llm/                                # 大模型调用模块
+│   ├── client.ts                       # LLM API 封装（已有）
+│   ├── prompt-builder.ts               # 根据阶段和 IR 组装最终 prompt（新）
+│   ├── personality-prompt.ts           # 性格分析专用 prompt 模板
+│   ├── event-prompt.ts                 # 事项分析专用 prompt 模板
+│   ├── interaction-prompt.ts           # 互动关系专用 prompt 模板
+│   └── response-parser.ts              # 解析 LLM 返回的结构化 JSON
+│
+├── config/                             # 配置加载与热加载
+│   ├── config-watcher.ts               # 监听 JSON 变化，触发重载
+│   ├── params-loader.ts                # 加载 scoring-params.json 等
+│   └── index.ts                        # 统一导出配置对象
+│
+├── adapters/                           # 外部接口适配
+│   └── iztro-adapter.ts                # 调用 iztro 排盘接口，转换为内部 BaseIR
+│
+├── lib/                                # 通用工具（已有，可能需要扩展）
+│   ├── logger.ts
+│   ├── date-utils.ts
+│   └── chart-utils.ts                  # 地支偏移、三方四正计算等
+│
+├── types/                              # 全局类型定义
+│   ├── chart.types.ts                  # 命盘、宫位、星曜等基础类型
+│   ├── ir.types.ts                     # 各阶段 IR 类型（BaseIR, FinalIR, PersonalityIR, EventIR, InteractionIR）
+│   ├── config.types.ts                 # 配置文件的 TypeScript 类型
+│   └── knowledge.types.ts              # 知识字典相关类型
+│
+├── api/                                # 对外接口层（已有）
+│   └── chat.ts                         # POST /api/chat
+│
+├── data/                               # 配置文件目录（位于项目根目录或 src/data）
+│   ├── scoring-params.json             # 评分系数、阈值
+│   ├── patterns.json                   # 84 格局条件
+│   ├── router_tree.json                # 问诊决策树
+│   ├── star_attributes.json            # 十四主星赋性（含丙丁级）
+│   ├── palace_meanings.json            # 十二宫含义
+│   ├── event_star_attributes.json      # 事项分类赋性（求学/求财/求爱）
+│   ├── tai_sui_rua_gua_tables.json     # 太岁入卦表（生年四化、禄存羊陀等）
+│   ├── interaction_qu_xiang.json       # 互动取象规则（原 KB_互动关系取象规则）
+│   └── attenuation.json                # 空间衰减系数（已有）
+│
+├── scripts/                            # 辅助脚本
+│   └── validate-configs.ts             # 校验 JSON 配置格式完整性
+│
+└── __tests__/                          # 集成测试与端到端测试
+    ├── scoring.test.ts
+    ├── patterns.test.ts
+    ├── personality.test.ts
+    └── e2e.test.ts
+```
+
+**目录说明**：
+- `core/` 下每个子模块对应一个解盘阶段，保持高内聚。已有 `energy-evaluator`、`knowledge-dict`、`tai-sui-rua-gua` 继续使用，新增 `personality-analyzer`、`limit-analyzer`、`interaction-analyzer`、`router`。
+- `orchestration/` 负责工作流控制，不包含业务计算逻辑。
+- `llm/` 仅负责 prompt 构建与 API 调用，不包含确定性计算。
+- `config/` 统一管理热加载和参数获取，避免各处直接 `require('../../data/xxx.json')`。
+- `data/` 目录建议放在项目根目录下，便于非开发人员直接编辑 JSON。若需热加载，`config-watcher` 会监听此目录。
+- `adapters/iztro-adapter.ts` 将 iztro 返回的原始 JSON 转换为内部的 `BaseIR` 格式（含标准化宫位数据）。
+
+**已有资产保留位置**：
+- `src/core/knowledge-dict/` 及其 `data/` 下的 JSON 文件目前已经部分存在，需调整为从根目录 `data/` 加载（通过 `loader.ts` 修改路径）。
+- `src/core/tai-sui-rua-gua/` 保留，但其查表数据迁移至 `data/tai_sui_rua_gua_tables.json`。
+- `src/lib/ziwei/` 中的 `chart-pipeline-debug.ts`, `hybrid/orchestrator.ts` 可以逐步迁移至新目录，或继续使用但遵循新接口。
+
+此目录结构满足**骨架代码化、规则配置化、热加载**的要求，并保持与现有代码的兼容性。可立即交予AI工具实施。
+
+补充明确核验项：
+明确回答：哪些已经配置化，哪些仍需代码维护
+您的理解基本正确，但需要澄清一个关键点：并不是 100% 的 SKILL_ 内容都能放到 JSON 里。我们采用的是 “骨架硬编码 + 参数/规则配置化” 的务实架构。下面详细拆解：
+
+一、已放入 data/ 目录（JSON 可配置）的内容
+SKILL_ 文档	可配置的内容	JSON 文件	维护方式
+SKILL_宫位原生能级评估	评分系数、亮度阈值、衰减系数、禄存加减分、吉星/煞星固定分值	scoring-params.json	改数值即可调整评分敏感度
+同上（84 格局）	格局的名称、级别、倍率、成格条件（星曜组合、宫位、三方等）	patterns.json	新增/修改格局只需改 JSON，无需改代码
+SKILL_定性命主性格	十四主星的 coreTrait, positiveTrait, negativeTrait, specialNote	star_attributes.json	调整星曜赋性文字或增加丙丁级星曜
+同上	十二宫含义、domains、modernContext	palace_meanings.json	修改宫位解读焦点
+同上（丙丁级星曜）	华盖、红鸾、天刑、天马等关键词	可合并到 star_attributes.json 或独立文件	增删改关键词
+SKILL_原局四化读取规则	生年四化表、五虎遁干表、禄存羊陀魁钺鸾喜表	tai_sui_rua_gua_tables.json	改四化对应关系或遁干规则
+SKILL_求测事项路由	问诊问题树、每个问题的选项、对应的主看/兼看宫位	router_tree.json	调整问诊逻辑或新增事项类型
+SKILL_互动关系取象规则	各种星曜组合对应的取象文字（如“机梁权落命主命宫→授权”）	interaction_qu_xiang.json	修改取象描述或新增案例
+SKILL_求测事项分析流程	原局-大限-流年的方向矩阵（吉吉/吉凶/凶吉/凶凶）的判断规则	limit_direction.json（新建）	可配置不同方向组合的权重或建议
+KB_星曜赋性与事项分类	求学、求财、求爱等事项下，特定星曜在不同亮度等级的断语	event_star_attributes.json	修改具体断语或增删事项分支
+以上 JSON 文件均放在 data/ 目录下，程序启动时加载，并且支持热加载（修改后自动生效，无需重启服务）。
+
+二、仍然保留在代码中（硬编码）的内容
+以下内容之所以没有配置化，是因为它们属于 极其稳定、极少变化 的流程骨架，且一旦配置化会引入不必要的复杂度（如 JSON 中写循环、条件分支会导致“内部平台效应”）。
+
+SKILL_ 文档	硬编码的内容	存放位置	为什么不改配置
+SKILL_宫位原生能级评估	六步评分的主顺序：骨架分 → 加吉星 → 重定亮度 → 减煞星 → 禄存 → 天花板	scoring-flow.ts	评分步骤顺序几百年不变，写代码更清晰可调试
+同上	12 宫循环遍历	scoring-flow.ts	for 循环写一行，用 JSON 描述要几十行且易错
+同上	对宫、三合、夹宫的空间衰减系数应用方式	scoring-flow.ts	衰减逻辑固定，只需从 JSON 读系数值
+SKILL_定性命主性格	四维合参的判断顺序（本→对→合→临）	four-dimension.ts	顺序固定，但判断结果中的标签（加强/制约）由代码生成
+同上	空宫借星的具体规则（借对宫、亮度降一级）	personality-analyzer/builder.ts	逻辑固定但涉及特殊处理，硬编码更可靠
+同上	组合取象（如紫微+左右 → “君臣庆会”）	combination-rules.ts	数量有限（几十个），硬编码加 unit test 比配置化更简单
+SKILL_求测事项分析流程	三层分析的整体框架：原局底盘 → 大限激活 → 流年引动	limit-analyzer/*.ts	框架固定，内部参数（方向矩阵）已配置化
+SKILL_互动关系解读	三维合参的分析逻辑：先入卦者维度，再命主维度，再时间维度	interaction-analyzer/three-dimension.ts	分析步骤固定，但取象文字已配置化
+PROCESS_智能解盘总体流程	四个阶段的先后顺序、状态机转换	orchestrator.ts	流程顺序固定，状态机需要代码控制跳转
+总结：变化频繁的业务规则（数值、系数、格局条件、问诊树、取象文字）→ JSON 配置；极少变化的流程骨架（步骤顺序、循环、空间计算）→ TypeScript 硬编码。
+
+三、您以后维护工作的真实情况
+您想修改的内容	需要改什么	是否需要改代码	难度
+调整评分时的吉星/煞星分值（如化禄从 0.5 改为 0.6）	scoring-params.json 中的 star_scores	❌ 否	极低
+修改亮度阈值（如原来“旺”是 7.5 分，改为 7.0）	scoring-params.json 中的 thresholds	❌ 否	极低
+增加一个新格局（如“新格”）	patterns.json 中添加一条对象	❌ 否	低（需了解 DSL 语法）
+修改一条星曜赋性文字（如紫微的 positiveTrait）	star_attributes.json 中对应字段	❌ 否	极低
+修改问诊问题（如“是否异地？”改成“是否跨省？”）	router_tree.json 中的节点文本	❌ 否	极低
+调整原局-大限-流年的方向矩阵（如“吉凶”组合改为“可尝试”）	limit_direction.json 中的 advice 字段	❌ 否	极低
+修改四维合参的判断规则（如“对宫加强”的条件从分数差>1改为>0.5）	需修改 four-dimension.ts 中的代码	✅ 是	中等（需懂 TS 逻辑）
+修改空宫借星规则（如借对宫后亮度不降级）	需修改 personality-analyzer/builder.ts	✅ 是	中等
+修改组合取象（如紫微+左右不再输出“君臣庆会”）	需修改 combination-rules.ts	✅ 是	低（改一个 if 条件）
+修改六步评分的整体顺序（如先减煞星再加吉星）	需修改 scoring-flow.ts 中的步骤顺序	✅ 是	中高（影响范围大，但不建议改）
+结论：95% 的日常维护（调系数、改格局、改取象文字、改问诊问题）都可以通过编辑 JSON 完成，无需改代码。只有那些底层的、极少变动的核心算法逻辑（如四维合参的判断公式、空宫处理规则）仍保留在代码中。这已经最大程度实现了“知识库与代码解耦”，同时避免了“用 JSON 写程序逻辑”的陷阱。
+
+四、程序如何读取并执行
+启动时：config-watcher 加载所有 data/ 下的 JSON 文件到内存。
+
+运行时：scoring-flow.ts 从内存中的 scoringParams 对象读取系数；pattern-matcher.ts 从 patterns 数组读取格局条件并求值；router 从 routerTree 对象读取决策树；等等。
+
+热加载：您修改任意 JSON 文件后，fs.watch 触发重载，下次调用相应模块时自动使用新值，无需重启 Node.js 进程。
+
+示例：您想调整“旺”宫的亮度阈值从 7.5 改为 7.0。编辑 scoring-params.json 中的 "旺": 7.0，保存。下一次用户请求时，评分函数会读到新阈值，评分结果立即变化。不需要重新编译或部署代码。
+
+最终答案：是的，所有 SKILL_ 文档中可变动的规则、参数、取象文本、问诊树都已迁移到 data/ 目录的 JSON 文件中。以后您的解盘规则、流程、技法发生变化时，只要变化的内容属于上述“可配置”范畴，就只需修改 JSON 文件，程序会动态读取并生效。只有极少数底层算法（如四维合参的计算公式）仍保留在代码中，但那些通常是百年不变的命理基础，不需要您频繁调整。

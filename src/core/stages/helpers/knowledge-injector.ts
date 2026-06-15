@@ -21,7 +21,7 @@ import type {
   MatterType,
 } from '@/core/types'
 import { getStarAttr, getStarTraitByBrightness, getPalaceMeaning } from '@/core/knowledge-dict/query'
-import { getInteractionQuXiang } from '@/core/knowledge-dict/loader'
+import { getInteractionQuXiang, getPersonalityTriad } from '@/core/knowledge-dict/loader'
 import { findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
 import {
   getMatterPersonalityInfluence,
@@ -54,9 +54,12 @@ function palaceSnippet(palace: PalaceName): KnowledgeSnippet | null {
 }
 
 /**
- * Stage1 知识注入：格局相关星曜 + 各宫位含义概览
+ * Stage1 知识注入：格局相关星曜 + 各宫位含义概览 + 当前大限四化星赋性
  */
-export function injectStage1Knowledge(palaceScores: PalaceScore[]): KnowledgeSnippet[] {
+export function injectStage1Knowledge(
+  palaceScores: PalaceScore[],
+  currentDaXianMapping?: import('@/core/types').DaXianPalaceMapping,
+): KnowledgeSnippet[] {
   const snippets: KnowledgeSnippet[] = []
   const seenStars = new Set<string>()
 
@@ -84,6 +87,17 @@ export function injectStage1Knowledge(palaceScores: PalaceScore[]): KnowledgeSni
     }
   }
 
+  // 当前大限四化星的赋性知识注入
+  if (currentDaXianMapping?.mutagen) {
+    for (const star of currentDaXianMapping.mutagen) {
+      if (star && !seenStars.has(star)) {
+        seenStars.add(star)
+        const sSnip = starSnippet(star)
+        if (sSnip) snippets.push(sSnip)
+      }
+    }
+  }
+
   return snippets
 }
 
@@ -107,6 +121,31 @@ export function injectStage2Knowledge(
         const sSnip = starSnippet(s.star, s.brightness)
         if (sSnip) snippets.push(sSnip)
       }
+    }
+  }
+
+  return snippets
+}
+
+/**
+ * Stage2 丙丁级星曜知识注入补充
+ * 数据来源：data/personality_triad.json → extra_stars_rules.丙丁级星曜集
+ */
+export function injectStage2MinorStarKnowledge(
+  minorStarNames: string[],
+): KnowledgeSnippet[] {
+  const snippets: KnowledgeSnippet[] = []
+  const minorConfig = getPersonalityTriad().extra_stars_rules.丙丁级星曜集
+  if (!minorConfig) return snippets
+
+  for (const name of minorStarNames) {
+    const trait = minorConfig[name]
+    if (trait) {
+      snippets.push({
+        source: '丙丁级星曜赋性',
+        key: name,
+        content: `${name}：${trait}`,
+      })
     }
   }
 

@@ -92,12 +92,6 @@ export interface ConversationMessage {
   content: string
 }
 
-/** 通用阶段计算缓存 */
-export interface StageCache {
-  stage1?: string  // JSON: Stage1Output（四化+评分+格局）
-  stage2?: string  // JSON: Stage2Output（性格定性+全息底色）
-}
-
 /** 事项记录 — 每个事项独立缓存 Stage3 输出和查询年份 */
 export interface MatterRecord {
   /** 事项类型 */
@@ -136,10 +130,6 @@ export interface SessionPersisted {
   /** Stage 输出 JSON 字符串（避免 Prisma Json 循环引用） */
   stage1Json?: string
   stage2Json?: string
-  stage3Json?: string
-  stage4Json?: string
-  /** ChartBridge 缓存（可选，可由 chartData 重建） */
-  baseIR?: BaseIR
   collected: HybridCollected
   /** 运行时 Stage 输出缓存（不持久化，仅内存使用） */
   stage1Output?: Stage1Output

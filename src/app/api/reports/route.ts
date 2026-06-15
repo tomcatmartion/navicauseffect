@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateReportContent } from '@/core/report/report-generator'
+import { buildReportContext } from '@/core/report/report-pipeline'
 
 // GET /api/reports — 获取当前用户的报告列表（按命主分组）
 export async function GET(req: NextRequest) {
@@ -183,18 +184,34 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ── 步骤 3：同步调用 AI 生成主报告内容 ──
+    // ── 步骤 3：构建紫微 IR（排盘 + Stage1/2/3 硬计算结论） ──
+    let ir: ReturnType<typeof buildReportContext>
+    try {
+      ir = buildReportContext(
+        {
+          name: identity.name,
+          gender: identity.gender,
+          birthday: identity.birthday,
+          birthCity: identity.birthCity,
+          region: identity.region,
+          bazi: identity.bazi,
+        },
+        template.slug,
+      )
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '排盘失败'
+      await prisma.report.update({
+        where: { id: report.id },
+        data: { status: 'FAILED', errorMessage: `紫微排盘失败：${msg}` },
+      })
+      return NextResponse.json({ error: `紫微排盘失败：${msg}` }, { status: 400 })
+    }
+
+    // ── 步骤 3b：AI 基于紫微 IR 生成报告（纯紫微理论） ──
     const genResult = await generateReportContent({
+      ir,
       templateSlug: template.slug,
       templateName: template.name,
-      identity: {
-        name: identity.name,
-        gender: identity.gender,
-        birthday: identity.birthday,
-        birthCity: identity.birthCity,
-        region: identity.region,
-        bazi: identity.bazi,
-      },
       extraInfo,
     })
 
@@ -238,17 +255,33 @@ export async function POST(req: NextRequest) {
           console.error(`[子报告] 更新状态失败: ${child.name}`, err)
         }
 
+        // 子报告：构建紫微 IR（复用命主排盘，按子模板主题映射事项）
+        let childIr: ReturnType<typeof buildReportContext>
+        try {
+          childIr = buildReportContext(
+            {
+              name: identity.name,
+              gender: identity.gender,
+              birthday: identity.birthday,
+              birthCity: identity.birthCity,
+              region: identity.region,
+              bazi: identity.bazi,
+            },
+            child.slug,
+          )
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : '排盘失败'
+          await prisma.report.update({
+            where: { id: childReport.id },
+            data: { status: 'FAILED', errorMessage: `紫微排盘失败：${msg}` },
+          })
+          return
+        }
+
         const childGen = await generateReportContent({
+          ir: childIr,
           templateSlug: child.slug,
           templateName: child.name,
-          identity: {
-            name: identity.name,
-            gender: identity.gender,
-            birthday: identity.birthday,
-            birthCity: identity.birthCity,
-            region: identity.region,
-            bazi: identity.bazi,
-          },
           extraInfo,
         })
 

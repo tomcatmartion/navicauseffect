@@ -11,6 +11,7 @@ import type { DiZhi, PalaceBrightness, MajorStar } from '../types'
 import { getOppositeGong, getTrineGong, getFlankingGong } from '../types'
 import type { FourDimensionTags, HolographicBase, PalaceScore } from '../types'
 import { getStarAttr, getStarTraitByBrightness, getSubdueLevel } from '../knowledge-dict'
+import { getPersonalityTriad } from '../knowledge-dict/loader'
 
 // ═══════════════════════════════════════════════════════════════════
 // 四维合参标签生成
@@ -39,11 +40,11 @@ export interface PalaceInput {
   /** 评分 */
   finalScore: number
   /** 对宫数据（简化） */
-  opposite: { majorStars: MajorStar[]; brightness: PalaceBrightness; auspiciousStars: string[]; inauspiciousStars: string[] }
+  opposite: { majorStars: MajorStar[]; brightness: PalaceBrightness; auspiciousStars: string[]; inauspiciousStars: string[]; minorStars: string[] }
   /** 三合宫数据（两个） */
-  trine: Array<{ majorStars: MajorStar[]; auspiciousStars: string[]; inauspiciousStars: string[] }>
+  trine: Array<{ majorStars: MajorStar[]; auspiciousStars: string[]; inauspiciousStars: string[]; minorStars: string[] }>
   /** 夹宫数据（两个） */
-  flanking: Array<{ majorStars: MajorStar[]; auspiciousStars: string[]; inauspiciousStars: string[]; brightness: PalaceBrightness }>
+  flanking: Array<{ majorStars: MajorStar[]; auspiciousStars: string[]; inauspiciousStars: string[]; minorStars: string[]; brightness: PalaceBrightness }>
 }
 
 /**
@@ -60,16 +61,16 @@ export function generateFourDimensionTags(input: PalaceInput): FourDimensionTags
   const isEmptyPalace = input.majorStars.length === 0
 
   if (isEmptyPalace) {
-    // 借对宫主星
+    // 借对宫所有主星（各自降一级）
     if (input.opposite.majorStars.length > 0) {
-      const borrowedStar = input.opposite.majorStars[0]
       const brightnessMap: Record<string, PalaceBrightness> = {
         '旺': '平',
         '平': '陷',
         '陷': '陷',
       }
       const borrowedBrightness = brightnessMap[input.opposite.brightness] || '陷'
-      selfTags.push(`空宫借星: ${borrowedStar}(${borrowedBrightness})`)
+      const borrowedStars = input.opposite.majorStars.map(s => `${s}(${borrowedBrightness})`).join('、')
+      selfTags.push(`空宫借星: ${borrowedStars}`)
       selfTags.push('容易受外界环境影响')
       selfTags.push('缺乏核心主见')
     } else {
@@ -103,6 +104,18 @@ export function generateFourDimensionTags(input: PalaceInput): FourDimensionTags
     selfTags.push(`煞星干扰: ${input.inauspiciousStars.join('、')}`)
   }
 
+  // 丙丁级星曜标签（从 personality_triad.json 配置读取）
+  if (input.minorStars.length > 0) {
+    selfTags.push(`丙丁级: ${input.minorStars.join('、')}`)
+    const minorConfig = getPersonalityTriad().extra_stars_rules.丙丁级星曜集
+    if (minorConfig) {
+      for (const ms of input.minorStars) {
+        const trait = minorConfig[ms]
+        if (trait) selfTags.push(trait)
+      }
+    }
+  }
+
   // ② 对宫投射标签
   if (input.opposite.majorStars.length > 0) {
     oppositeTags.push(`对宫: ${input.opposite.majorStars.join('、')}(${input.opposite.brightness})`)
@@ -115,6 +128,10 @@ export function generateFourDimensionTags(input: PalaceInput): FourDimensionTags
     }
   } else {
     oppositeTags.push('对宫无主星')
+  }
+  // 对宫丙丁级辅助参考
+  if (input.opposite.minorStars.length > 0) {
+    oppositeTags.push(`对宫丙丁级: ${input.opposite.minorStars.join('、')}`)
   }
 
   // ③ 三合宫支撑标签
@@ -131,13 +148,17 @@ export function generateFourDimensionTags(input: PalaceInput): FourDimensionTags
         trineTags.push(`三合${i + 1}: ${t.majorStars.join('、')} — 中性`)
       }
     }
+    // 三合丙丁级辅助参考
+    if (t.minorStars.length > 0) {
+      trineTags.push(`三合${i + 1}丙丁级: ${t.minorStars.join('、')}`)
+    }
   }
 
-  // ④ 夹宫标签
+  // ④ 夹宫标签（两侧有星=主星或辅星存在，空宫才算无星）
   const leftFlank = input.flanking[0]
   const rightFlank = input.flanking[1]
-  const leftHasStars = leftFlank.majorStars.length > 0
-  const rightHasStars = rightFlank.majorStars.length > 0
+  const leftHasStars = leftFlank.majorStars.length > 0 || leftFlank.auspiciousStars.length > 0 || leftFlank.inauspiciousStars.length > 0
+  const rightHasStars = rightFlank.majorStars.length > 0 || rightFlank.auspiciousStars.length > 0 || rightFlank.inauspiciousStars.length > 0
 
   if (leftHasStars && rightHasStars) {
     flankingTags.push('夹宫成立')
@@ -161,6 +182,12 @@ export function generateFourDimensionTags(input: PalaceInput): FourDimensionTags
     const allFlankStars = [...leftFlank.inauspiciousStars, ...rightFlank.inauspiciousStars]
     if (allFlankStars.includes('擎羊') && allFlankStars.includes('陀罗')) {
       flankingTags.push('羊陀夹制')
+    }
+
+    // 夹宫丙丁级（近距离影响，不可忽略）
+    const allFlankMinor = [...leftFlank.minorStars, ...rightFlank.minorStars]
+    if (allFlankMinor.length > 0) {
+      flankingTags.push(`夹宫丙丁级: ${allFlankMinor.join('、')}`)
     }
   } else if (leftHasStars || rightHasStars) {
     flankingTags.push('仅单侧有星，夹宫不成立')
@@ -210,21 +237,21 @@ function generatePalaceSummary(
   if (isEmptyPalace) {
     // 空宫：看借星情况
     if (input.opposite.majorStars.length > 0) {
-      const borrowedStar = input.opposite.majorStars[0]
       const brightnessMap: Record<string, PalaceBrightness> = {
         '旺': '平',
         '平': '陷',
         '陷': '陷',
       }
       const borrowedBrightness = brightnessMap[input.opposite.brightness] || '陷'
-      parts.push(`空宫借${borrowedStar}${borrowedBrightness}`)
+      const borrowedNames = input.opposite.majorStars.join('、')
+      parts.push(`空宫借${borrowedNames}${borrowedBrightness}`)
     } else {
       parts.push('空宫无借星')
     }
     parts.push('依赖外部投射')
   } else {
-    const mainStar = input.majorStars[0]
-    parts.push(`${mainStar.star}${mainStar.brightness}`)
+    const mainStarDescs = input.majorStars.map(ms => `${ms.star}${ms.brightness}`)
+    parts.push(mainStarDescs.join('、'))
   }
 
   // 四化影响
@@ -261,10 +288,15 @@ export function generateHolographicBase(input: PalaceInput): HolographicBase {
     ? `${inauspicious.join('、')}干扰，须注意方向`
     : '无煞星直接冲击'
 
-  // 丙丁级星曜
+  // 丙丁级星曜（本宫 + 三方四正汇总）
   const minorStars = input.minorStars ?? []
-  const minorEffect = minorStars.length > 0
-    ? `${minorStars.join('、')}，影响情感/社交/精神层面`
+  const allMinorSet = new Set(minorStars)
+  for (const m of input.opposite.minorStars ?? []) allMinorSet.add(m)
+  for (const t of input.trine) for (const m of t.minorStars ?? []) allMinorSet.add(m)
+  for (const f of input.flanking) for (const m of f.minorStars ?? []) allMinorSet.add(m)
+  const allMinor = [...allMinorSet]
+  const minorEffect = allMinor.length > 0
+    ? `${allMinor.join('、')}，影响情感/社交/精神层面`
     : '无特殊丙丁级星曜'
 
   // 综合底色定性

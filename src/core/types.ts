@@ -318,7 +318,7 @@ export interface ChartData {
 // ═══════════════════════════════════════════════════════════════════
 
 /** 事项类型 */
-export type MatterType = '求学' | '求爱' | '求财' | '求职' | '求健康' | '求名'
+export type MatterType = '求学' | '求爱' | '求财' | '求职' | '求健康' | '求名' | '创业'
 
 /** 事项路由结果 */
 export interface MatterRouteResult {
@@ -394,6 +394,10 @@ export interface IRStage1 {
   parentBirthYears?: { father?: number; mother?: number }
   /** 命盘快照（完整命盘信息，供 AI 参考） */
   chartSnapshot: ChartSnapshot
+  /** 全量大限摘要（含评分） */
+  allDaXianSummary?: DaXianSummaryEntry[]
+  /** 当前大限详情 */
+  currentDaXian?: DaXianDetailForPrompt
 }
 
 /** IR：阶段二性格定性结果 */
@@ -423,6 +427,10 @@ export interface IRStage2 {
   chartSnapshot: ChartSnapshot
   /** personality_triad.json 三宫画像摘要 */
   personalityTriadSummary?: string
+  /** 全量大限摘要（含评分） — 从 Stage1 透传 */
+  allDaXianSummary?: DaXianSummaryEntry[]
+  /** 当前大限详情 — 从 Stage1 透传 */
+  currentDaXian?: DaXianDetailForPrompt
 }
 
 /** 四维合参标签 */
@@ -612,6 +620,44 @@ export interface DaXianPalaceMapping {
   patterns?: PatternMatch[]
 }
 
+/** IR 中大限摘要条目（含评分） */
+export interface DaXianSummaryEntry {
+  /** 第几大限（1-based） */
+  index: number
+  /** 年龄范围，如 "24-33" */
+  ageRange: string
+  /** 大限天干 */
+  daXianGan: TianGan
+  /** 大限命宫落位宫名 */
+  mingPalaceName: PalaceName
+  /** 四化星名 */
+  sihuaStars: string[]
+  /** 是否当前大限 */
+  isCurrent: boolean
+  /** 大限十二宫评分 */
+  palaceScores: PalaceScore[]
+  /** 关键格局名列表 */
+  topPatterns: string[]
+}
+
+/** 当前大限详情（供 AI prompt 参考的完整信息，Stage1/2 用） */
+export interface DaXianDetailForPrompt {
+  /** 第几大限 */
+  index: number
+  /** 年龄范围，如 "24-33岁" */
+  ageRange: string
+  /** 大限天干 */
+  daXianGan: TianGan
+  /** 大限命宫落位宫名 */
+  mingPalaceName: PalaceName
+  /** 四化落宫详情，如 ["化禄天梁(迁移宫)", ...] */
+  sihuaPositions: string[]
+  /** 定性（顺畅期/转机期/艰辛期/危机期） */
+  tone: string
+  /** 大限十二宫评分 */
+  palaceScores: PalaceScore[]
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // 运限格局识别
 // ═══════════════════════════════════════════════════════════════════
@@ -703,7 +749,7 @@ export function getDirectionWindow(matrix: DirectionMatrix): DirectionWindow {
 /** 知识片段（从 M6 查询后注入 IR） */
 export interface KnowledgeSnippet {
   /** 查询来源 */
-  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量' | '性格三宫' | '限运方向' | '大限数据'
+  source: '星曜赋性' | '宫位含义' | '格局定义' | '互动取象' | '四化能量' | '性格三宫' | '限运方向' | '大限数据' | '丙丁级星曜赋性'
   /** 查询键值 */
   key: string
   /** 知识内容 */
@@ -779,6 +825,10 @@ export interface Stage1Output {
   knowledgeSnippets: KnowledgeSnippet[]
   /** 是否有父母信息 */
   hasParentInfo: boolean
+  /** 全量大限摘要（含评分） */
+  allDaXianSummary?: DaXianSummaryEntry[]
+  /** 当前大限详情 */
+  currentDaXian?: DaXianDetailForPrompt
 }
 
 /** 阶段二输入 */

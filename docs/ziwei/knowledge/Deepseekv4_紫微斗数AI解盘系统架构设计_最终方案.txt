@@ -1,0 +1,424 @@
+# 紫微斗数AI解盘系统 —— 完整实施方案（供 Claude Code / Cursor 开发）
+
+本方案融合了以下全部成果：
+- 原 `.md` 知识库的业务规则（宫位、星曜、四化等）
+- `iztro` 开源排盘库的精确数据
+- 三位AI（DeepSeek、Gemini、Claude）的架构评审与修正
+- 会话记忆与用户体验优化方案
+
+> **目标**：实现一个稳定、准确、有温度的紫微斗数AI解盘系统。规则引擎负责确定性计算，大模型负责意图识别与自然语言生成，后端会话管理负责记忆与流程控制。
+
+---
+
+## 一、总体架构与数据流
+
+```mermaid
+flowchart TD
+    User[用户输入出生信息] --> Iztro[iztro 排盘 API]
+    Iztro --> RawJSON[Raw Iztro JSON]
+    
+    RawJSON --> CB[ChartBridge 数据增强层]
+    
+    subgraph CB [ChartBridge]
+        direction LR
+        Extract[提取宫位/星曜/四化/大限/流年]
+        ExtraStars[查表补充禄存/羊陀/魁钺/鸾喜]
+        SihuaMerge[双四化合并 + 特殊叠加检测]
+        LayerMapping[三层宫位对照表]
+        PartnerInject[太岁入卦注入（可选）]
+    end
+    
+    CB --> BaseIR[BaseIR 结构化 JSON]
+    
+    BaseIR --> RuleEngine[确定性计算引擎]
+    
+    subgraph RuleEngine [确定性引擎]
+        Scoring[M2: 六步宫位评分]
+        Patterns[格局匹配器]
+        FourDim[M4: 四维合参标签]
+    end
+    
+    RuleEngine --> FinalIR[FinalIR<br>含 finalScore / patterns / 四维标签]
+    
+    FinalIR --> Session[(Session 存储<br>Redis/MySQL)]
+    Session --> PromptBuilder[PromptBuilder]
+    
+    subgraph Prompt [每轮 Prompt 构建]
+        Snapshot[固化命盘摘要]
+        Known[(已知信息快照)]
+        History[最近3轮对话]
+        Question[当前用户问题]
+    end
+    
+    PromptBuilder --> AI[大模型 API<br>Claude/GPT]
+    AI --> Response[自然语言回复<br>+ 结构化指令]
+    Response -->|流式| User
+    Response -->|解析 memory_update| Session
+```
+
+---
+
+## 二、核心模块职责与代码量
+
+| 模块 | 文件 | 职责 | 代码量 | 依赖 |
+|------|------|------|--------|------|
+| **ChartBridge** | `lib/chartBridge.ts` | 接收 iztro JSON，输出 BaseIR。包含：数据提取、禄存等星曜查表、双四化合并与特殊叠加检测、三层对照表、太岁入卦注入（可选）。 | 200 行 | iztro, 查表JSON |
+| **ExtraStarsTable** | `lib/extraStars.ts` | 根据生年干支查表返回禄存/羊陀/魁钺/鸾喜落位。数据来源于 `KB_太岁入卦星曜直查表.md`。 | 80 行 | 无 |
+| **SihuaMerger** | `lib/sihuaMerger.ts` | 合并生年四化与遁干四化，检测双忌/权忌交冲/双禄等特殊叠加。 | 100 行 | 无 |
+| **TaiSuiRuGua** | `lib/taiSuiRuGua.ts` | 为互动关系构建对方星曜注入数据，调用 ExtraStarsTable 和 iztro（获取对方四化）。 | 100 行 | iztro, ExtraStarsTable |
+| **宫位评分器 (M2)** | `lib/scoring.ts` | 六步评分法，输出每宫 finalScore (0-8.5) 和亮度定性（🟢🟡🟠🔴⚫）。依赖 `skeleton_scores.json`, `score_rules.json`。 | 150 行 | BaseIR, 规则JSON |
+| **格局匹配器** | `lib/patterns.ts` | 加载 `patterns.json`（DSL 描述的84格局），对 BaseIR 求值，返回命中格局列表。 | 120 行 | BaseIR, patterns.json |
+| **四维合参标签 (M4)** | `lib/fourDimension.ts` | 输入宫位名称，输出本对合临的定性标签（加强/制约、支撑度、夹宫状况、特殊夹格）。 | 80 行 | BaseIR |
+| **编排层+状态机** | `lib/orchestrator.ts` | 会话状态管理（WAITING_BIRTH, BASE_IR_READY, FINAL_IR_READY, PERSONALITY_DONE, ROUTING, EVENT_ANALYSIS, INTERACTION_ANALYSIS），调用各模块，控制流程。 | 150 行 | Session 存储, 所有引擎模块 |
+| **PromptBuilder** | `lib/promptBuilder.ts` | 根据当前阶段、FinalIR、已知信息快照、历史对话、用户问题，组装最终 prompt，并指定结构化输出格式。 | 100 行 | TEMPLATE 文档 |
+| **Session 管理** | `lib/session.ts` | 存储会话状态、FinalIR、collected 信息、对话历史。提供 get/set/update 方法。 | 80 行 | Redis/MySQL |
+| **AI 调用封装** | `lib/aiClient.ts` | 调用 Claude/GPT API，支持流式输出，解析结构化响应（含 message 和 memory_update）。 | 80 行 | API Key |
+| **API 路由** | `pages/api/chat.ts` 或 `app/api/chat/route.ts` | 接收用户消息，调用编排层，返回流式响应。 | 50 行 | 上述所有 |
+| **配置文件 (JSON)** | `config/` | skeleton_scores.json, score_rules.json, patterns.json, attenuation.json, router_tree.json, star_palace_dict.json, qu_xiang_rules.json | 由脚本生成 | 原始 MD 文件 |
+
+**总计核心代码：约 1190 行**（不含配置文件转换脚本）。开发预估：**8-12 人天**。
+
+---
+
+## 三、各模块详细实现要点
+
+### 3.1 ChartBridge（数据增强层）
+
+**输入**：iztro 返回的原始命盘 JSON（假设已包含 `palaces`, `shengNianSihua`, `dunGanSihua`, `daXian`, `liuNian`）。  
+**输出**：`BaseIR` 对象，结构见下表。
+
+**实现步骤**：
+
+1. 提取 `palaces` 数组，每个元素保留 `name`, `dizhi`, `tianGan`, `mainStars`, `minorStars`, `brightness`（仅供参考），以及 iztro 提供的 `sihua`（若 iztro 已将生年四化落位到各宫，则直接使用；否则需根据 `shengNianSihua` 自己分配）。
+2. 调用 `ExtraStarsTable.getByYear(birthYear)` 获取命主自身的禄存、擎羊、陀罗、天魁、天钺、红鸾、天喜的落位地支，并映射到对应宫位，存入 `extraStars`。
+3. 调用 `SihuaMerger.merge(shengNianSihua, dunGanSihua)` 获得合并后的四化列表 `mergedSihua`，并调用 `detectOverlaps` 获得 `specialOverlaps`。然后将这些四化信息按星曜更新到对应的宫位中（即宫位的 `sihua` 字段应是合并后的最终结果）。
+4. 调用 `buildLayerMapping()`，基于原局命宫地支、当前大限命宫地支、流年命宫地支，顺排12宫，生成映射关系。
+5. 如果有 `partnerYear` 参数，调用 `TaiSuiRuGua.buildInjection(partnerYear)` 获得对方星曜注入数据，存入 `partnerInjection`。
+6. 返回 `BaseIR`。
+
+**注意**：如果 iztro 不提供 `dunGanSihua`（遁干四化），则 ChartBridge 需要自己用五虎遁和四化表计算。但我们已确认 iztro 有此字段，直接读取即可。
+
+---
+
+### 3.2 ExtraStarsTable（查表模块）
+
+从 `KB_太岁入卦星曜直查表.md` 中提取出两张表：
+- **表一**（生年天干 → 禄存/擎羊/陀罗/天魁/天钺地支）
+- **表二**（生年地支 → 红鸾/天喜地支）
+
+实现两个函数：
+```typescript
+getSelfExtraStars(ganZhi: string): {
+  luCun: string, qingYang: string, tuoLuo: string,
+  tianKui: string, tianYue: string,
+  hongLuan: string, tianXi: string
+}
+getPartnerExtraStars(ganZhi: string): // 同上
+```
+
+为了方便，可以合并为一个，因为规则相同。
+
+**数据存储**：将表一、表二转为 JSON 字典，如：
+```json
+{
+  "甲": { "luCun": "寅", "qingYang": "卯", "tuoLuo": "丑", "tianKui": "丑", "tianYue": "未" },
+  ...
+  "子": { "hongLuan": "卯", "tianXi": "酉" },
+  ...
+}
+```
+
+---
+
+### 3.3 SihuaMerger（四化合并与叠加检测）
+
+```typescript
+interface SihuaItem { star: string; type: "禄"|"权"|"科"|"忌"; source: "生年"|"遁干"; }
+
+function merge(shengNian: Record<string,string>, dunGan: Record<string,string>): SihuaItem[]
+function detectOverlaps(items: SihuaItem[]): {
+  doubleJi: string[];    // 双忌叠压的星
+  quanJiChong: string[]; // 权忌交冲的星
+  doubleLu: string[];    // 双禄叠加的星
+  // 可选：权科禄齐会等
+}
+```
+
+**注意**：双忌是指同一颗星在生年和遁干中**都化忌**。权忌交冲是指同一颗星既化权又化忌（无论哪个来源）。
+
+---
+
+### 3.4 TaiSuiRuGua（太岁入卦器）
+
+为互动关系阶段准备：
+
+```typescript
+function buildInjection(partnerYearGanZhi: string): PartnerInjection {
+  // 1. 调用 iztro 获取对方的生年四化和遁干四化（可以传参只获取四化部分，避免全盘排布）
+  // 2. 调用 ExtraStarsTable.getPartnerExtraStars 获取对方的禄存等星曜
+  // 3. 以对方生年地支为虚拟命宫，顺排十二宫，计算出每个虚拟宫的地支
+  // 4. 返回对方星曜的落位映射表：{ [虚拟宫地支]: { stars: [...] } }
+  // 注意：不需要返回对方的所有主星，只返回四化和上述辅星。
+}
+```
+
+ChartBridge 接收到 `partnerInjection` 后，需要将其合并到 `BaseIR` 的对应宫位中（如将对方的禄存星放到对方虚拟命宫地支对应的宫位的 `minorStars` 中，并标记 `source: "partner"`），以便后续分析。
+
+---
+
+### 3.5 宫位评分器 (M2)
+
+按照 `SKILL_宫位原生能级评估.md` 的六步流程实现：
+
+1. **骨架基础分**：根据 `skeletonId`（由命宫主星组合决定）和宫位地支查表得到初始分和天花板。
+2. **吉星加分**：遍历本宫、对宫、三合宫、夹宫中的六吉星（左辅右弼文昌文曲天魁天钺）以及四化中的化禄，按衰减系数加分。
+   - 衰减系数：本宫×1.0，对宫×0.8，三合宫×0.7，夹宫动态（本宫旺弱×夹宫旺弱，查 `attenuation.json`）。
+3. **重定旺弱**：根据加分后的总分，重新划分旺弱等级（旺≥7.5，平6.0~7.4，中平4.5~5.9，虚浮3.0~4.4，陷<3.0）。
+4. **煞星减分**：扫描六煞（火星铃星地空地劫化忌）以及擎羊陀罗，按新的旺弱等级确定减分幅度（旺宫减分少，陷宫减分多），乘以衰减系数，扣分。
+5. **禄存特殊处理**：禄存在旺宫+0.3，平宫0，陷宫-0.3。
+6. **天花板截断**：最终分数不能超过第一步定的天花板。
+7. **输出**：每宫的 finalScore, brightnessFinal (🟢🟡🟠🔴⚫), 以及命中格局（由格局匹配器提供，可延后）。
+
+**依赖配置文件**：`skeleton_scores.json`, `score_rules.json`, `attenuation.json`。
+
+---
+
+### 3.6 格局匹配器
+
+- 加载 `patterns.json`，每个格局包含 `name`, `level`, `multiplier`, `condition`（DSL 对象）。
+- 实现 `evaluateCondition(condition, BaseIR)` 递归求值函数，支持 `and/or/not` 和原子条件（`star_in_palace`, `star_in_triples`, `count_stars_in_triples`, `all_stars_in_triples`, `palace_brightness`, `special_structure`）。
+- 遍历所有格局，对每个宫位（或全局）调用求值，收集匹配的格局。
+- 返回每个宫位命中的格局列表，以及全局格局。
+
+**简要实现**：可先实现最常见的 20-30 个格局，后续增量补充。复杂格局（如需要计算三方四正吉煞比例）可通过原子条件组合实现。
+
+---
+
+### 3.7 四维合参标签生成器 (M4)
+
+输入：宫位名称（如“命宫”），输出结构：
+
+```typescript
+{
+  benGong: string;               // 本宫主星+亮度简要
+  duiGongEffect: "加强"|"制约"|"中立";
+  sanHeSupport: "强力"|"中等"|"弱";
+  linGongStatus: "均衡"|"左强右弱"|"右强左弱";
+  specialClamp: string[];        // ["羊陀夹忌","双禄夹",...]
+}
+```
+
+实现逻辑：
+- 获取本宫、对宫、三合宫（两个）、左右邻宫的 finalScore。
+- 对宫效果：比较对宫分数与本宫分数，相差大于1分时为加强/制约，否则中立。
+- 三合支撑：两个三合宫平均分 ≥6 为强力，≤4 为弱，中间为中等。
+- 夹宫均衡性：计算左右邻宫分数差，若差绝对值 ≤1 为均衡，否则左强右弱或右强左弱。
+- 特殊夹格：检测 `specialClamp`（如左邻是擎羊且右邻是陀罗，且本宫有化忌 → "羊陀夹忌"；左右邻都是化禄或禄存 → "双禄夹"等）。
+
+---
+
+### 3.8 编排层与状态机
+
+状态定义：
+```typescript
+type SessionState =
+  | "INIT"               // 初始，等待出生信息
+  | "BASE_IR_READY"      // ChartBridge 完成，BaseIR 已存
+  | "FINAL_IR_READY"     // 规则引擎完成，FinalIR 已存
+  | "PERSONALITY_DONE"   // 性格报告已生成
+  | "ROUTING"            // 问诊进行中（收集事项细节）
+  | "EVENT_ANALYSIS"     // 事项分析中
+  | "INTERACTION_ANALYSIS"; // 互动关系分析中
+```
+
+核心流程（`orchestrator.handle(userInput, sessionId)`）：
+1. 从 Session 获取当前状态。
+2. 如果状态为 `INIT`：
+   - 解析出生信息 → 调用 iztro → 调用 ChartBridge → 得到 BaseIR → 存入 Session → 状态转为 `BASE_IR_READY`。
+   - 继续调用规则引擎得到 FinalIR → 存入 → 状态转为 `FINAL_IR_READY`。
+   - 自动触发性格分析：调用 PromptBuilder 构建性格分析 prompt，调用 AI 生成报告，将报告存入 Session，状态转为 `PERSONALITY_DONE`。
+   - 返回 AI 生成的性格报告给用户。
+3. 如果状态为 `PERSONALITY_DONE`：
+   - 调用 AI 进行意图识别（基于用户问题 + 已知信息）。意图包括 `personality_only`, `wealth`, `job`, `love`, `study`, `health`, `fame`, `relationship`, `general`。
+   - 如果意图是 `personality_only`，直接返回已存储的性格报告。
+   - 如果是 `relationship`，状态转为 `INTERACTION_ANALYSIS`，开始收集对方生年。
+   - 其他事项，状态转为 `ROUTING`，开始问诊流程。
+4. 如果状态为 `ROUTING`：
+   - 根据 `router_tree.json` 决策树，询问缺失的信息（如是否有实体店、是否合伙等）。
+   - 用户回答后，更新 Session 中的 `collected.eventAnswers`，并根据决策树判断是否还有下一个问题。若无，则锁定主看宫位，状态转为 `EVENT_ANALYSIS`。
+   - 调用 PromptBuilder 生成问诊问题，返回给用户。
+5. 如果状态为 `EVENT_ANALYSIS`：
+   - 调用 PromptBuilder 构建事项分析 prompt（含 FinalIR 切片 + 用户当前问题 + 已收集答案），调用 AI 生成分析报告，返回用户。状态保持 `EVENT_ANALYSIS`（可继续追问其他事项）。
+6. 如果状态为 `INTERACTION_ANALYSIS`：
+   - 如果没有对方生年，询问用户提供；否则调用 ChartBridge 的 partner injection 功能，生成包含对方信息的 FinalIR，再调用 PromptBuilder 构建互动分析 prompt，调用 AI 生成报告。
+
+**注意**：所有 AI 调用都必须要求返回结构化 JSON，包含 `message`（显示给用户的文本）和可选的 `memory_update`（用于更新 Session 中的 collected 信息）。
+
+---
+
+### 3.9 PromptBuilder（提示词构建）
+
+根据 `阶段` 和 `FinalIR` 以及 `collected` 信息，组装最终的 System Prompt 和 User Prompt。
+
+**System Prompt 固定部分**：来自 `TEMPLATE_词令prompt设计.md`（兄长风格、禁止事项等）。
+
+**User Prompt 包含**：
+- **命盘速览**（从 FinalIR 中提取的精简版，每轮都相同）
+- **已知信息快照**（父母生年、已收集的问诊答案、当前事项类型、是否有合伙人等）
+- **最近 3 轮对话**（从 Session.history 取）
+- **当前用户问题**
+- **任务指令**：根据当前阶段（性格/事项/互动）明确要求。
+- **输出格式约束**：要求 AI 在回复末尾输出 JSON 对象，至少包含 `intent`（如果是阶段识别），以及 `memory_update`（如有新信息需要存储）。
+
+**示例（阶段三事项分析）**：
+
+```text
+【命盘速览】
+命宫：天同旺+天梁陷（6.2分，🟢磨炼）→ 外柔内刚，有担当但易固执
+财帛宫：武曲庙（7.5分，🟢实旺）→ 来财务实
+夫妻宫：廉贞平（4.8分，🟡磨炼）→ 感情有要求
+当前大限（35-44岁）：命宫在子，天机化禄入财帛、太阴化权入田宅。
+流年（2025年）：命宫在午，廉贞化禄入迁移，破军化权入夫妻。
+
+【已知信息】
+- 用户已提供父母生年（父1965，母1968），已用于健康分析。
+- 当前事项：求财。已确认有实体店面，规模较大（兼看田宅宫），无合伙人。
+- 已完成性格分析。
+
+【最近对话】
+用户：我开了个餐厅，想看看能不能赚钱
+AI：...（上一轮回复）
+用户：那我明年要扩建，财运如何？
+
+【当前问题】
+用户：那我明年要扩建，财运如何？
+
+【要求】
+1. 基于命盘速览中财帛宫、田宅宫的评分，以及当前大限和流年的四化引动，分析明年的财运趋势。
+2. 不要重复询问已知信息。
+3. 在回复末尾附加一个 JSON 对象，格式如下：
+   {
+     "intent": "wealth",
+     "memory_update": null,
+     "key_points": ["扩建会成功", "注意年底资金压力"]
+   }
+```
+
+这样 AI 就能给出精准且不重复的回答。
+
+---
+
+### 3.10 Session 与记忆管理
+
+**数据结构（Redis）**：
+
+```
+session:{sessionId} = {
+  state: "FINAL_IR_READY",
+  baseIR: {...},
+  finalIR: {...},
+  collected: {
+    parentYears: { father: "1965", mother: "1968" },
+    eventType: "wealth",
+    eventAnswers: { hasStore: "yes", scale: "large" },
+    partnerYear: null
+  },
+  history: [
+    { role: "user", content: "我父亲1965年" },
+    { role: "assistant", content: "已记录父母生年..." }
+  ]
+}
+```
+
+**关键方法**：
+- `updateMemory(sessionId, updateObject)`：合并 `updateObject` 到 `collected`。
+- `addHistory(sessionId, role, content)`：追加对话，并保持最多 6 条（3 轮）。
+- `getContext(sessionId, currentUserMessage)`：返回命盘速览 + 已知信息快照 + 最近历史 + 当前消息。
+
+**在 AI 响应中解析 `memory_update`**：
+
+AI 返回的 JSON 如果包含 `memory_update` 字段（如 `{ key: "partnerYear", value: "1985" }`），后端自动调用 `updateMemory` 存入。这样 AI 无需自己记住任何信息，只管提出请求，后端负责存储。
+
+---
+
+## 四、开发优先级与里程碑
+
+### Sprint 1：数据接入与地基（2-3天）
+- [x] 搭建项目结构（Next.js / Node + TypeScript）。
+- [ ] 编写 `extraStars.ts` 查表模块，导入 JSON 数据。
+- [ ] 编写 `sihuaMerger.ts` 四化合并与叠加检测。
+- [ ] 编写 `chartBridge.ts` 基础版（不含 partner injection）。
+- [ ] 编写 `session.ts` 内存存储版（先不用 Redis）。
+
+### Sprint 2：确定性引擎核心（3-4天）
+- [ ] 编写 `scoring.ts` 六步评分，加载 `skeleton_scores.json`, `score_rules.json`, `attenuation.json`。
+- [ ] 编写 `patterns.ts` 格局匹配器（先实现 10-15 个常见格局）。
+- [ ] 编写 `fourDimension.ts` 四维合参标签生成。
+- [ ] 单元测试：验证几个已知命盘的评分结果与手工推算一致。
+
+### Sprint 3：编排层与 Prompt 构建（2-3天）
+- [ ] 编写 `promptBuilder.ts`，实现性格、事项、互动三类 prompt 的组装。
+- [ ] 编写 `aiClient.ts` 调用 Claude API，支持流式输出。
+- [ ] 编写 `orchestrator.ts` 状态机，串联所有模块。
+- [ ] 编写 API 路由。
+
+### Sprint 4：会话记忆与用户体验优化（2-3天）
+- [ ] 将 Session 存储改为 Redis（生产环境）。
+- [ ] 实现 `memory_update` 解析与自动存储。
+- [ ] 实现“已知信息快照”注入 prompt，避免重复提问。
+- [ ] 实现用户主动提供信息的正则提取（如父/母年份）。
+- [ ] 完善错误处理与日志。
+
+### Sprint 5：太岁入卦与互动关系（2天）
+- [ ] 编写 `taiSuiRuGua.ts`，实现对方星曜注入。
+- [ ] 扩展 `chartBridge` 支持 `partnerYear` 参数。
+- [ ] 扩展 `orchestrator` 互动关系分析分支。
+- [ ] 测试几个合盘案例。
+
+### Sprint 6：配置化与文档（1-2天）
+- [ ] 编写脚本将 MD 文档转换为 JSON 配置文件。
+- [ ] 补充 patterns.json 中剩余的格局条件（可逐步添加）。
+- [ ] 写技术文档和用户使用说明。
+
+---
+
+## 五、关键技术决策汇总
+
+| 决策点 | 结论 |
+|--------|------|
+| 是否让 AI 直接执行确定性计算？ | **否**。评分、格局、四维标签等由代码引擎完成。 |
+| 太岁入卦所需的禄存等星曜 | 由 `extraStars.ts` 查表补充，不依赖 iztro。 |
+| 双四化合并与叠加检测 | 由 `sihuaMerger.ts` 代码实现，不依赖 AI。 |
+| 会话记忆机制 | 后端 Session 存储，每次 prompt 显式注入已知信息快照，AI 通过 `memory_update` 请求存储。 |
+| Prompt 构建策略 | 固化的命盘摘要 + 已知快照 + 最近3轮对话 + 当前问题。 |
+| 三层宫位对照表 | ChartBridge 计算并存入 BaseIR。 |
+| 流年/大限四化 | 直接从 iztro 读取，不重复计算。 |
+| 84 格局实现 | 先用 DSL 配置 + 规则引擎实现 20-30 个核心格局，后续增量补充。 |
+
+---
+
+## 六、风险与应对
+
+| 风险 | 概率 | 应对措施 |
+|------|------|----------|
+| iztro 返回的 `dunGanSihua` 字段缺失 | 低 | 若缺失，ChartBridge 内用五虎遁和四化表自行计算。 |
+| 禄存等星曜查表数据有误 | 中 | 交叉核对 MD 文档，编写集成测试。 |
+| 评分引擎与手工推算不符 | 中 | 准备 5 个示例命盘，手工推算分数，作为单元测试基准。 |
+| AI 输出不稳定或重复提问 | 中 | 通过结构化输出约束 + 已知信息快照控制，若仍出现则用 few-shot 示例纠正。 |
+| 大上下文导致 token 超限 | 低 | 命盘速览控制在 800 token 以内；动态按阶段加载文档部分内容。 |
+
+---
+
+## 七、交付物清单
+
+完成后应提交：
+1. 完整的 TypeScript 代码库（按上述模块划分）。
+2. 配置文件 JSON（从 MD 转换而来）。
+3. 单元测试套件（关键模块评分、格局匹配）。
+4. API 文档（如何调用 `/api/chat`）。
+5. 部署指南（环境变量、Redis 配置等）。
+6. 示例对话记录（展示完整流程）。
+
+---
+
+以上是完整的实施方案。请 Claude Code 或 Cursor 按此文档进行开发，遇到问题及时反馈。祝开发顺利！

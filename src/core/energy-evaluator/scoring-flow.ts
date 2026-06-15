@@ -641,7 +641,6 @@ function detectAbsoluteFail(palaceIdx: number, ctx: ScoringContext): { isAbsolut
   const hasHuoLing = palace.stars.some(s => s.name === '火星' || s.name === '铃星')
   const hasYangTuo = palace.stars.some(s => s.name === '擎羊' || s.name === '陀罗')
   const hasHuaJi = palace.stars.some(s => s.sihua === '化忌')
-  const hasHuaLu = palace.stars.some(s => s.sihua === '化禄')
   const majorStarNames = palace.majorStars.map(ms => ms.star)
 
   const hasDeficientMajor = palace.majorStars.some(ms => ms.brightness === '陷' || ms.brightness === '极弱')
@@ -652,12 +651,7 @@ function detectAbsoluteFail(palaceIdx: number, ctx: ScoringContext): { isAbsolut
     return { isAbsoluteFail: true, specialFlags: ['陷宫主星+火铃+化忌'] }
   }
 
-  // 条件3：化禄与化忌同宫且主星陷
-  if (hasHuaLu && hasHuaJi && hasDeficientMajor) {
-    return { isAbsoluteFail: true, specialFlags: ['禄忌同宫主星陷'] }
-  }
-
-  // 条件4：陷宫主星 + 羊/陀 + 火/铃
+  // 条件3：陷宫主星 + 羊/陀 + 火/铃
   if (hasDeficientMajor && hasYangTuo && hasHuoLing) {
     const isZiweiOrTianfuOnly = majorStarNames.length === 1 && ['紫微', '天府'].includes(majorStarNames[0])
     if (isZiweiOrTianfuOnly) {
@@ -764,7 +758,7 @@ export function evaluateSinglePalace(palaceIndex: number, ctx: ScoringContext): 
     penaltyTotal: round2(scoreStep4 - scoreStep2),
     luCunDelta: round2(scoreStep5 - scoreStep4),
     finalScore,
-    tone: isAbsoluteFail ? '绝败' : tone,
+    tone,
     subdueLevel,
     patterns: ctx.palacePatterns?.[palaceIndex] ?? ctx.patterns,
     patternMultiplier: G,

@@ -60,7 +60,7 @@ import { callAI } from '@/lib/ai/skill-callers'
 import { scoringService } from '@/core/services/scoring-service'
 
 const sessionManager = new SessionManager()
-const MAX_HISTORY_MESSAGES = 6  // 最近 3 轮（6 条消息）
+const MAX_HISTORY_MESSAGES = 10  // 最近 5 轮（10 条消息）
 const MAX_MATTER_HISTORY = 8    // 最多 8 个事项
 
 function ensureHybrid(session: ZiweiSessionData): SessionPersisted {
@@ -266,7 +266,7 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
         ? (hp.matterHistory[hp.currentMatterKey]?.queryYear ?? null)
         : null,
       knownMatterKeys: Object.keys(hp.matterHistory),
-      recentMessages: hp.conversationHistory.slice(-6),
+      recentMessages: hp.conversationHistory.slice(-MAX_HISTORY_MESSAGES),
       initialized: true,
     }
     intentResult = classify(question, intentCtx)
@@ -470,7 +470,7 @@ async function handleFreeChat(
       }
 
       // 没有缓存 → 降级为 CHITCHAT
-      return buildChitChatMessages(stage1, stage2, hp, question)
+      return buildChitChatMessages(stage1, stage2, hp, question, chartData)
     }
 
     case 'INTERACTION': {
@@ -481,6 +481,20 @@ async function handleFreeChat(
 
       const msgs = buildStage4Messages(stage1, stage2, stage4, chartData, currentYear)
       return { messages: msgs, maxTokens: 4500, effectiveTargetYear: currentYear }
+    }
+
+    case 'NEW_CHART': {
+      // 为新命主流盘 → 引导用户前往排盘页（对话内自动排盘为后续增强）
+      const yearInfo = intent.newChartBirthYear ? `（识别到约 ${intent.newChartBirthYear} 年出生）` : ''
+      const guideMsgs: ChatMessage[] = [
+        {
+          role: 'system',
+          content: `用户想为一个新的命主${yearInfo}排盘分析。当前对话模式无法直接排新盘。请温暖地引导用户：点击页面上的「重新排盘」或「新命主」按钮，输入完整出生信息（公历/农历年月日时、性别、出生地）后即可开始分析。严禁把这个出生年份当作当前命主的流年来解读或分析。`,
+        },
+        ...buildHistoryMessages(hp),
+        { role: 'user', content: question },
+      ]
+      return { messages: guideMsgs, maxTokens: 800, effectiveTargetYear: currentYear }
     }
 
     case 'REPORT': {
@@ -495,12 +509,12 @@ async function handleFreeChat(
         return { messages: reportMessages, maxTokens: 100, effectiveTargetYear: currentYear }
       }
       // 没有可分析的事项 → 降级为 CHITCHAT
-      return buildChitChatMessages(stage1, stage2, hp, question)
+      return buildChitChatMessages(stage1, stage2, hp, question, chartData)
     }
 
     case 'CHITCHAT':
     default: {
-      return buildChitChatMessages(stage1, stage2, hp, question)
+      return buildChitChatMessages(stage1, stage2, hp, question, chartData)
     }
   }
 }
@@ -566,11 +580,21 @@ function buildChitChatMessages(
   stage2: ReturnType<typeof executeStage2>,
   hp: SessionPersisted,
   question: string,
+  chartData: Record<string, unknown>,
 ): FreeChatResult {
   const chartSnapshot = buildChartSnapshotObject(
-    { palaces: [] } as unknown as Record<string, unknown>,
+    chartData,
     { birthGan: stage1.scoringCtx?.birthGan, taiSuiZhi: stage1.scoringCtx?.taiSuiZhi },
   )
+  // 计算当前时间上下文（大限 + 流年），避免闲聊时 AI「失忆」反问出生年/大限缺失
+  const currentYear = new Date().getFullYear()
+  const birthInfo = chartData.birthInfo as Record<string, unknown> | undefined
+  const birthYear = typeof birthInfo?.year === 'number' ? birthInfo.year : 1990
+  const currentDaXian = findCurrentDaXianFromChart([], currentYear, birthYear, chartData)
+  const liuNianGan = resolveLiuNianGan(chartData, currentYear)
+  const timeContext = currentDaXian
+    ? `当前时间：${currentYear}年（${liuNianGan}干），用户处于第${currentDaXian.index}大限（${currentDaXian.ageRange[0]}~${currentDaXian.ageRange[1]}岁，大限命宫${currentDaXian.mingPalaceName}）。`
+    : `当前时间：${currentYear}年（${liuNianGan}干）。`
   const ir: IRStage2 = {
     stage: 2,
     mingGongTags: stage2.mingGongTags,
@@ -589,7 +613,7 @@ function buildChitChatMessages(
     ir,
     [...stage1.knowledgeSnippets, ...stage2.knowledgeSnippets].map(s => s.content),
     question,
-    '你已进入自由对话模式。用户可能在聊天、提问或准备提出新的分析需求。请温暖地回应，自然引导。',
+    `你已进入自由对话模式。用户可能在聊天、提问或准备提出新的分析需求。请温暖地回应，自然引导。\n${timeContext}\n注意：用户的命盘数据（命主信息、十二宫评分、大限范围）已在快照中提供，禁止询问出生年份等系统已掌握的信息。`,
   )
 
   return {

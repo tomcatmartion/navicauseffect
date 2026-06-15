@@ -44,10 +44,6 @@ export interface ZiweiSessionData {
   turnCount: number
   createdAt: number
   expiresAt: number
-  stageCache?: {
-    stage1?: string
-    stage2?: string
-  }
   hybridPersisted?: SessionPersisted
 }
 

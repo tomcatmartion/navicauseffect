@@ -101,7 +101,7 @@ const DEFAULTS: Record<string, unknown> = {
   [PATTERN_LIBRARY_PATH]: {},
   [INTERACTION_RULES_PATH]: {},
   [LIMIT_DIRECTION_PATH]: {},
-  [PERSONALITY_TRIAD_PATH]: { version: '1.0', star_yin_yang: { 阳星: [], 阴星: [] }, brightness_levels: {}, score_to_strength: {}, temperament_base: { rules: [] }, layers: {}, brightness_adverbs: {}, extra_stars_rules: { 吉星集: {}, 煞星集: {} }, pattern_effect: {}, synthesis_priority: { template: '' } },
+  [PERSONALITY_TRIAD_PATH]: { version: '1.0', star_yin_yang: { 阳星: [], 阴星: [] }, brightness_levels: {}, score_to_strength: {}, temperament_base: { rules: [] }, layers: {}, brightness_adverbs: {}, extra_stars_rules: { 吉星集: {}, 煞星集: {}, 丙丁级星曜集: {} }, pattern_effect: {}, synthesis_priority: { template: '' } },
   [SIHUA_TRIGGER_RULES_PATH]: { version: '1.0', rules: {} },
 }
 

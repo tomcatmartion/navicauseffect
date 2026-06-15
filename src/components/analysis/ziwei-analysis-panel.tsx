@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Sparkles, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import limitDirectionData from "../../../data/limit_direction.json";
 
 type AnalysisType =
@@ -25,6 +25,7 @@ type AnalysisType =
   | "all-palaces"
   | "personality"
   | "interaction"
+  | "ai-personality"
   | "affair"
   | "full"
   | "patterns"
@@ -81,6 +82,7 @@ const PRIMARY_ANALYSIS_OPTIONS = [
   { id: "personality" as const, label: "性格分析", icon: "🔮" },
   { id: "affair" as const, label: "事项分析", icon: "🎯" },
   { id: "interaction" as const, label: "互动分析", icon: "🤝" },
+  { id: "ai-personality" as const, label: "AI性格分析", icon: "🧠" },
 ] as const;
 
 const DEBUG_ANALYSIS_OPTIONS = [
@@ -575,6 +577,8 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
     patterns: {},
     palaces: {},
   });
+  const [aiPersonalityStreaming, setAiPersonalityStreaming] = useState(false);
+  const [aiPersonalityContent, setAiPersonalityContent] = useState("");
 
   const usePipeline = Boolean(chartData?.palaces);
 
@@ -680,6 +684,11 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
         setLoading(false);
         return;
       }
+      if (usePipeline && type === "ai-personality") {
+        setLoading(false);
+        runAiPersonalityAnalysis();
+        return;
+      }
       if (usePipeline && (type === "patterns" || type === "all-palaces" || type === "personality")) {
         const snap = await fetchPipelineSnapshot({
           affairType: selectedAffair,
@@ -713,6 +722,68 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
       setError(err instanceof Error ? err.message : "请求失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** AI 性格分析：流式调用大模型 */
+  const runAiPersonalityAnalysis = async () => {
+    if (!chartData) {
+      setError("请先排盘后再使用 AI 性格分析");
+      return;
+    }
+    setAiPersonalityContent("");
+    setAiPersonalityStreaming(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/ziwei/ai-personality-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chartData, targetYear, parentBirthYears }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error((errData as Record<string, string>).error || `请求失败 (${res.status})`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("无法读取响应流");
+
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let sseCarry = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        sseCarry += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+        const lines = sseCarry.split("\n");
+        sseCarry = done ? "" : (lines.pop() ?? "");
+
+        for (const raw of lines) {
+          const line = raw.replace(/\r$/, "").trimStart();
+          if (!line.toLowerCase().startsWith("data:")) continue;
+          const payload = line.slice(5).trimStart();
+          if (payload === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(payload) as { text?: string; error?: string };
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.text) {
+              accumulated += parsed.text;
+              setAiPersonalityContent(accumulated);
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Unexpected end of JSON input") throw e;
+          }
+        }
+
+        if (done) break;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI 性格分析失败");
+    } finally {
+      setAiPersonalityStreaming(false);
     }
   };
 
@@ -2240,7 +2311,47 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
         </Card>
       )}
 
-      {/* 错误 */}
+      {/* AI 性格分析 */}
+      {activeType === "ai-personality" && (
+        <Card className="border-primary/10">
+          <CardContent className="flex flex-col gap-3 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-muted-foreground">
+                基于宫位评分 + 性格定性数据，AI 生成三层性格分析。
+              </p>
+              {aiPersonalityContent && !aiPersonalityStreaming && (
+                <button
+                  type="button"
+                  onClick={() => void runAiPersonalityAnalysis()}
+                  className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted cursor-pointer"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  重新生成
+                </button>
+              )}
+            </div>
+            {!usePipeline && (
+              <p className="text-[11px] text-destructive">请先排盘后再使用 AI 性格分析。</p>
+            )}
+            {aiPersonalityStreaming && !aiPersonalityContent && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                正在计算并生成性格分析...
+              </div>
+            )}
+            {aiPersonalityContent && (
+              <ScrollArea className="h-[min(500px,60vh)] w-full rounded border bg-card p-3">
+                <div className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-foreground">
+                  {aiPersonalityContent}
+                  {aiPersonalityStreaming && (
+                    <span className="inline-block h-4 w-0.5 animate-pulse bg-primary ml-0.5" />
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {error && (
         <div className="rounded-md bg-destructive/5 border border-destructive/30 px-3 py-2 text-sm text-destructive">
           {error}

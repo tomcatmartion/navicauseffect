@@ -14,6 +14,7 @@ export type IntentAction =
   | 'CHITCHAT'       // 闲聊 → 纯 LLM
   | 'REPORT'         // 生成报告 → 程序编译 + LLM 润色
   | 'INTERACTION'    // 互动关系 → 运行 Stage4
+  | 'NEW_CHART'      // 为新命主流盘 → 引导排盘（避免误判流年）
 
 /** 分类结果 */
 export interface IntentResult {
@@ -24,6 +25,8 @@ export interface IntentResult {
   targetYear?: number
   /** 对方出生年份（INTERACTION 时有值） */
   partnerBirthYear?: number
+  /** 新命主出生年份（NEW_CHART 时可能有值） */
+  newChartBirthYear?: number
 }
 
 /** 分类上下文（从会话状态提取） */

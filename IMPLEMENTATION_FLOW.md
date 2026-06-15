@@ -14,8 +14,7 @@
 runHybridPipeline()（`src/orchestration/hybrid/orchestrator.ts`）
   │
   ├─ SessionManager.getOrCreate() ── Redis + MySQL（`hybrid_state` JSON）
-  ├─ hybridPersisted：状态机 + stage1–4 JSON + 对话历史（≤6 条）+ collected
-  ├─ 兼容恢复: stageCache.stage1/stage2 → hybridPersisted.stage1Json/stage2Json
+  ├─ hybridPersisted：状态机 + stage1/2 JSON + 对话历史（≤6 条）+ collected + matterHistory
   ├─ ChartBridge: buildBaseIR(chartData) → BaseIR
   │
   ├─ 状态机判断当前阶段 (1→2→3/4)
@@ -52,7 +51,7 @@ flowchart TB
   end
 
   subgraph PRE["前置"]
-    E["hybridPersisted.stage1Json / stageCache 恢复"]
+    E["hybridPersisted.stage1Json 恢复"]
   end
 
   subgraph STAGES["确定性阶段 executeStage1–4（无算分用 LLM）"]
@@ -236,7 +235,7 @@ Stage=2 (自动推进)
 
 - **L1 Redis**: `ziwei:session:{id}` 存完整 `ZiweiSessionData`（含 `hybridPersisted`）— 24h TTL
 - **L2 MySQL**: `ziwei_sessions.hybrid_state`（Json）与 `turns` 等字段同步
-- **Stage 缓存**: `session.stageCache` 与 `hybridPersisted.stage1Json/stage2Json` 双写兼容旧读路径
+- **Stage 缓存**: `hybridPersisted.stage1Json/stage2Json` 序列化存储，由 ScoringService 统一管理
 - **多轮 Hybrid 历史**: `appendAssistantReply` 解析尾部 JSON，合并 `memory_update` → `collected.eventAnswers`，`conversationHistory` 最多 6 条
 - **恢复顺序**: Redis 命中 → 缺 hybrid 时补读 DB `hybrid_state`；Redis 未命中 → DB 整包恢复
 

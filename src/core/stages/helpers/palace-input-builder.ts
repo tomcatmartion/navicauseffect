@@ -57,17 +57,20 @@ export function buildPalaceInput(
       brightness: opp?.brightness ?? '平',
       auspiciousStars: opp ? filterByNames(opp.stars, AUSPICIOUS) : [],
       inauspiciousStars: opp ? filterByNames(opp.stars, INAUSPICIOUS) : [],
+      minorStars: opp ? filterByNames(opp.stars, MINOR_STARS) : [],
     },
     trine: [
       {
         majorStars: tri1?.majorStars.map(ms => ms.star) ?? [],
         auspiciousStars: tri1 ? filterByNames(tri1.stars, AUSPICIOUS) : [],
         inauspiciousStars: tri1 ? filterByNames(tri1.stars, INAUSPICIOUS) : [],
+        minorStars: tri1 ? filterByNames(tri1.stars, MINOR_STARS) : [],
       },
       {
         majorStars: tri2?.majorStars.map(ms => ms.star) ?? [],
         auspiciousStars: tri2 ? filterByNames(tri2.stars, AUSPICIOUS) : [],
         inauspiciousStars: tri2 ? filterByNames(tri2.stars, INAUSPICIOUS) : [],
+        minorStars: tri2 ? filterByNames(tri2.stars, MINOR_STARS) : [],
       },
     ],
     flanking: [
@@ -75,12 +78,14 @@ export function buildPalaceInput(
         majorStars: flk1?.majorStars.map(ms => ms.star) ?? [],
         auspiciousStars: flk1 ? filterByNames(flk1.stars, AUSPICIOUS) : [],
         inauspiciousStars: flk1 ? filterByNames(flk1.stars, INAUSPICIOUS) : [],
+        minorStars: flk1 ? filterByNames(flk1.stars, MINOR_STARS) : [],
         brightness: flk1?.brightness ?? '平',
       },
       {
         majorStars: flk2?.majorStars.map(ms => ms.star) ?? [],
         auspiciousStars: flk2 ? filterByNames(flk2.stars, AUSPICIOUS) : [],
         inauspiciousStars: flk2 ? filterByNames(flk2.stars, INAUSPICIOUS) : [],
+        minorStars: flk2 ? filterByNames(flk2.stars, MINOR_STARS) : [],
         brightness: flk2?.brightness ?? '平',
       },
     ],

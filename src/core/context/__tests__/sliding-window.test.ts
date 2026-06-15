@@ -18,40 +18,40 @@ function makeMessages(count: number): Array<{ role: 'user' | 'assistant'; conten
 
 describe('slidingWindow', () => {
   describe('applySlidingWindow', () => {
-    it('少于 3 轮时不压缩', () => {
-      const msgs = makeMessages(4)  // 2 轮
-      const result = applySlidingWindow(msgs, '')
-      expect(result.trimmedHistory).toHaveLength(4)
-      expect(result.updatedSummary).toBe('')
-    })
-
-    it('恰好 3 轮时不压缩', () => {
+    it('少于 5 轮时不压缩', () => {
       const msgs = makeMessages(6)  // 3 轮
       const result = applySlidingWindow(msgs, '')
       expect(result.trimmedHistory).toHaveLength(6)
       expect(result.updatedSummary).toBe('')
     })
 
-    it('第 4 轮触发压缩', () => {
-      const msgs = makeMessages(8)  // 4 轮
+    it('恰好 5 轮时不压缩', () => {
+      const msgs = makeMessages(10)  // 5 轮
       const result = applySlidingWindow(msgs, '')
-      expect(result.trimmedHistory).toHaveLength(6)
+      expect(result.trimmedHistory).toHaveLength(10)
+      expect(result.updatedSummary).toBe('')
+    })
+
+    it('第 6 轮触发压缩', () => {
+      const msgs = makeMessages(12)  // 6 轮
+      const result = applySlidingWindow(msgs, '')
+      expect(result.trimmedHistory).toHaveLength(10)  // 保留最近 5 轮
       expect(result.updatedSummary).toBeTruthy()
       expect(result.updatedSummary).toContain('用户问')
     })
 
     it('摘要累积', () => {
-      const msgs = makeMessages(8)
+      const msgs = makeMessages(12)
       const result = applySlidingWindow(msgs, '之前的摘要')
       expect(result.updatedSummary).toContain('之前的摘要')
       expect(result.updatedSummary).toContain('用户问')
     })
 
-    it('摘要超过 300 字时截断', () => {
-      const longSummary = 'A'.repeat(350)
-      const msgs = makeMessages(8)
+    it('摘要超过 500 字时截断', () => {
+      const longSummary = 'A'.repeat(550)
+      const msgs = makeMessages(12)
       const result = applySlidingWindow(msgs, longSummary)
-      expect(result.updatedSummary.length).toBeLessThanOrEqual(350)  // 截断后应小于等于
+      expect(result.updatedSummary.length).toBeLessThanOrEqual(500)  // 截断到上限 500
     })
   })
 

@@ -10,8 +10,8 @@
 
 import type { ConversationMessage } from '../adapters/iztro/types'
 
-const MAX_KEEP_ROUNDS = 3         // 保留最近 3 轮（6 条消息）
-const MAX_SUMMARY_LENGTH = 300    // 摘要上限 300 字
+const MAX_KEEP_ROUNDS = 5         // 保留最近 5 轮（10 条消息）
+const MAX_SUMMARY_LENGTH = 500    // 摘要上限 500 字
 
 /**
  * 应用滑动窗口策略
@@ -80,13 +80,13 @@ function compressMessages(messages: ConversationMessage[]): string {
 
     if (!userMsg) continue
 
-    const userBrief = userMsg.content.length > 30
-      ? `${userMsg.content.slice(0, 30)}…`
+    const userBrief = userMsg.content.length > 40
+      ? `${userMsg.content.slice(0, 40)}…`
       : userMsg.content
 
     if (assistantMsg) {
-      const aiBrief = assistantMsg.content.length > 50
-        ? `${assistantMsg.content.slice(0, 50)}…`
+      const aiBrief = assistantMsg.content.length > 90
+        ? `${assistantMsg.content.slice(0, 90)}…`
         : assistantMsg.content
       rounds.push(`用户问「${userBrief}」→ 回答：${aiBrief}`)
     } else {

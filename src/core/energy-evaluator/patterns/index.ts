@@ -1,17 +1,9 @@
 /**
  * M2: 格局判定 — 统一导出
  *
- * 格局判定现在优先使用 JSON 动态解析（pattern_library.json + json-evaluator）。
- * 硬编码格局文件保留作为 fallback，但默认不再使用。
+ * 所有格局判定统一使用 JSON 动态解析（pattern_library.json + json-evaluator）。
+ * 硬编码格局文件已移除，JSON 格局是唯一的格局来源。
  */
-
-// 硬编码格局（保留但不默认使用）
-export { greatAuspiciousPatterns } from './great-auspicious'
-export { mediumAuspiciousPatterns } from './medium-auspicious'
-export { smallAuspiciousPatterns } from './small-auspicious'
-export { smallInauspiciousPatterns } from './small-inauspicious'
-export { mediumInauspiciousPatterns } from './medium-inauspicious'
-export { greatInauspiciousPatterns } from './great-inauspicious'
 
 export type { PatternPredicate, PatternLevel, ChartAccessor } from './types'
 export {

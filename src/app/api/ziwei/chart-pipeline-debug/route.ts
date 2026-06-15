@@ -9,7 +9,7 @@ import { buildChartPipelineDebugSnapshot } from '@/lib/ziwei/chart-pipeline-debu
 import { guardZiweiDebugApi } from '@/lib/ziwei/debug-api-guard'
 import { hasValidChartPalaces } from '@/lib/ziwei/chart-data-validation'
 
-const AFFAIRS = new Set<string>(['求学', '求爱', '求财', '求职', '求健康', '求名'])
+const AFFAIRS = new Set<string>(['求学', '求爱', '求财', '求职', '求健康', '求名', '创业'])
 
 export async function POST(request: NextRequest) {
   const guard = await guardZiweiDebugApi()
