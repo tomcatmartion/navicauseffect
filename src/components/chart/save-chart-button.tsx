@@ -63,7 +63,14 @@ export function SaveChartButton({
   const [fetchingIdentities, setFetchingIdentities] = useState(false);
 
   // 构建生日字符串（用于 API）
-  const birthdayStr = `${birthInfo.year}-${String(birthInfo.month).padStart(2, "0")}-${String(birthInfo.day).padStart(2, "0")} ${String(Math.floor(birthInfo.hour * 2)).padStart(2, "0")}:00`;
+  // birthInfo.hour 是 iztro timeIndex (0-12)，需要转回 24 小时制的中间点
+  // timeIndex: 0=子时早(00:30), 1=丑(02:00), ..., 6=午(12:00), ..., 12=子时晚(23:30) 等
+  // 为简化，直接用 timeIndex 映射到该时辰的"中间小时"作为代表
+  const TIME_INDEX_TO_HOUR: Record<number, number> = {
+    0: 0, 1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 22, 12: 0,
+  }
+  const hour24 = TIME_INDEX_TO_HOUR[birthInfo.hour] ?? 12
+  const birthdayStr = `${birthInfo.year}-${String(birthInfo.month).padStart(2, "0")}-${String(birthInfo.day).padStart(2, "0")} ${String(hour24).padStart(2, "0")}:00`;
 
   // 加载命主列表
   const fetchIdentities = async () => {
@@ -118,6 +125,7 @@ export function SaveChartButton({
             gender: birthInfo.gender,
             birthday: birthdayStr,
             birthCity: birthInfo.birthCity,
+            region: birthInfo.birthCity, // 兼容字段（region 字段也用同值，便于真太阳时校正匹配）
           },
           note: chartNote.trim() || undefined,
         }),

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
@@ -76,6 +77,7 @@ export default function ChartPage() {
     day: number;
     hour: number;
     solar?: boolean;
+    birthCity?: string;
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
@@ -161,6 +163,61 @@ export default function ChartPage() {
     })();
   }, []);
 
+  // 处理 URL 参数 ?chartRecordId=xxx：从已保存命盘加载 birthInfo 并自动排盘
+  // 用途：/charts/[id] 页点「AI 解盘」跳转过来时，自动加载该命盘
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const chartRecordId = searchParams.get("chartRecordId");
+    if (!chartRecordId) return;
+    // 已有 astrolabe 则不重复加载（避免覆盖用户当前排的盘）
+    if (astrolabe) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/charts/${chartRecordId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const snap = data.chart?.chartSnapshot;
+        if (!snap?.birthInfo) return;
+        const bi = snap.birthInfo;
+        const astro = await getAstro();
+        const dateStr = `${bi.year}-${String(bi.month).padStart(2, "0")}-${String(bi.day).padStart(2, "0")}`;
+        const result = astro.bySolar(
+          dateStr,
+          bi.hour,
+          bi.gender === "MALE" ? "男" : "女",
+          true,
+          "zh-CN",
+        );
+        setAstrolabe(result);
+        const restoredBirth = {
+          gender: bi.gender,
+          year: bi.year,
+          month: bi.month,
+          day: bi.day,
+          hour: bi.hour,
+          solar: bi.solar,
+          birthCity: data.chart?.birthCity ?? undefined,
+        };
+        setBirthData(restoredBirth);
+        setBirthTimeIndex(bi.hour);
+        setHoroscopeTimeIndex(bi.hour);
+        const horo = result.horoscope(new Date(), bi.hour);
+        setHoroscope(horo);
+        setTrueSolarTimeInfo(bi.trueSolarTimeInfo ?? "");
+        // 写入 sessionStorage 保持刷新一致性
+        sessionStorage.setItem(
+          CHART_STATE_KEY,
+          JSON.stringify({
+            ...restoredBirth,
+            trueSolarTimeInfo: bi.trueSolarTimeInfo ?? "",
+          }),
+        );
+      } catch {
+        // 静默失败，回退到表单输入
+      }
+    })();
+  }, [searchParams, astrolabe]);
+
   // horoscope 运限由 Iztrolabe 内部管理；本页仅维护 horoscopeTimeIndex 与初始 horoscope 供面板
 
   const handleGenerateChart = async (data: {
@@ -209,6 +266,7 @@ export default function ChartPage() {
         day: dateMatch ? parseInt(dateMatch[3], 10) : 1,
         hour: data.timeIndex,
         solar: !data.isLunar,
+        birthCity: data.city,
       };
 
       // 必须先 setBirthData，再渲染 AI 分析面板（否则显示"暂无出生数据"）
@@ -294,6 +352,8 @@ export default function ChartPage() {
               day: birthData!.day,
               hour: birthData!.hour,
               solar: birthData!.solar,
+              birthCity: birthData!.birthCity,
+              trueSolarTimeInfo,
             }}
           />
           <Button variant="outline" size="sm" onClick={handleReenter}>

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateReportContent } from '@/core/report/report-generator'
 import { buildReportContext, buildReportContextFromSnapshot } from '@/core/report/report-pipeline'
-import { getChartSnapshot } from '@/core/chart/chart-record-service'
+import { getChartSnapshot, saveChart } from '@/core/chart/chart-record-service'
 
 // GET /api/reports — 获取当前用户的报告列表（按命主分组）
 export async function GET(req: NextRequest) {
@@ -319,6 +319,28 @@ export async function POST(req: NextRequest) {
       Promise.allSettled(childPromises).then(() => {
         // 重新查询 updatedReport 以刷新 children 状态（不阻塞响应）
       }).catch(() => { /* ignore */ })
+    }
+
+    // ── 步骤 6：报告成功后异步沉淀 ChartRecord（source=REPORT） ──
+    // 让用户在「我的命盘」看到报告来源的盘，避免重复排盘
+    // 仅当本次报告未使用 chartRecordId（即用户首次没保存过）时沉淀
+    if (genResult.status === 'COMPLETED' && !chartRecordId) {
+      saveChart({
+        userId: session.user.id,
+        identityId,
+        name: `${identity.name}-${new Date().toLocaleDateString('zh-CN')}`,
+        birthInfo: {
+          gender: identity.gender as 'MALE' | 'FEMALE',
+          birthday: identity.birthday,
+          birthCity: identity.birthCity ?? undefined,
+          region: identity.region ?? undefined,
+        },
+        source: 'REPORT',
+        note: `报告「${template.name}」生成时自动沉淀`,
+      }).catch((e) => {
+        // 自动沉淀失败不影响主流程（可能是同指纹已存在，幂等会跳过）
+        console.warn('[reports] 自动沉淀 ChartRecord 失败（不影响报告）:', e instanceof Error ? e.message : e)
+      })
     }
 
     return NextResponse.json({ report: updatedReport }, { status: 201 })

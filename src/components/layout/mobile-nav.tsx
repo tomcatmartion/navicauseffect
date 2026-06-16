@@ -13,6 +13,7 @@ export function MobileNav() {
   const mobileNavItems = [
     { label: "首页", href: "/", icon: "🏠" },
     { label: "排盘", href: "/chart", icon: "☯" },
+    { label: "命盘", href: isLoggedIn ? "/charts" : "/auth/login", icon: "📊" },
     { label: "报告", href: isLoggedIn ? "/reports" : "/auth/login", icon: "📄" },
     { label: "个人", href: isLoggedIn ? "/user" : "/auth/login", icon: "👤" },
   ];
@@ -26,6 +27,8 @@ export function MobileNav() {
               ? pathname === "/user"
               : item.href === "/reports"
               ? pathname === "/reports" || pathname.startsWith("/reports/")
+              : item.href === "/charts"
+              ? pathname === "/charts" || pathname.startsWith("/charts/")
               : item.href === "/auth/login"
               ? pathname === "/auth/login"
               : pathname === item.href;

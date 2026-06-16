@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Star,
   Crown,
@@ -448,6 +448,8 @@ export default function ReportsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [selectedIdentityId, setSelectedIdentityId] = useState<string>("");
+  /** 来自 URL 参数 ?chartRecordId=（从 /charts/[id] 跳转时携带，生成时一起提交以复用 snapshot） */
+  const [selectedChartRecordId, setSelectedChartRecordId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [extraInfo, setExtraInfo] = useState("");
 
@@ -521,6 +523,23 @@ export default function ReportsPage() {
     }
   }, [sessionStatus, router, fetchTemplates, fetchReports, fetchIdentities]);
 
+  // 处理 URL 参数 ?chartRecordId=xxx&identityId=xxx：从 /charts/[id] 跳转过来时
+  // 预选命主 + 记录 chartRecordId（POST 时一起提交以复用 snapshot）
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    const urlIdentityId = searchParams.get("identityId");
+    const urlChartRecordId = searchParams.get("chartRecordId");
+    if (urlChartRecordId) {
+      setSelectedChartRecordId(urlChartRecordId);
+    }
+    if (urlIdentityId) {
+      setSelectedIdentityId(urlIdentityId);
+      // 打开生成对话框第一步（让用户立即看到预选状态）
+      setDialogOpen(true);
+    }
+  }, [searchParams, sessionStatus]);
+
   // 切换到"我的报告"时刷新列表
   useEffect(() => {
     if (activeTab === "my" && sessionStatus === "authenticated") {
@@ -572,6 +591,7 @@ export default function ReportsPage() {
           templateId: selectedTemplate.id,
           identityId: selectedIdentityId,
           extraInfo: extraInfo.trim() || undefined,
+          ...(selectedChartRecordId ? { chartRecordId: selectedChartRecordId } : {}),
         }),
       });
 
