@@ -18,6 +18,15 @@ enum Gender {
   FEMALE
 }
 
+// ── 命盘来源 ──────────────────────────────────────────────
+// ChartRecord 的来源标记，便于后续审计和分类管理
+enum ChartSource {
+  MANUAL       // 用户主动排盘保存
+  IMPORTED     // 从 ConsultationRecord 导入
+  CHAT         // 对话中自动存
+  REPORT       // 报告生成时存
+}
+
 enum MembershipPlan {
   FREE
   MONTHLY
@@ -397,10 +406,63 @@ model Identity {
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   reports Report[]
+  charts  ChartRecord[]
 
   @@index([userId])
   @@index([userId, isActive])
   @@map("identities")
+}
+
+// ── 命盘档案 ──────────────────────────────────────────────
+// 一个 Identity 可有多张盘（多版本/多来源），其中一张为 isPrimary
+// chartSnapshot 存完整命盘数据（astrolabe + reading + stage1/2），用于：
+//   - AI 对话直接调出（无需重排盘）
+//   - 报告生成复用（性能优化）
+//   - 合盘分析（双方完整命盘）
+model ChartRecord {
+  id               String      @id @default(cuid())
+  identityId       String      @map("identity_id")
+  userId           String      @map("user_id") // 冗余加速查询
+  name             String // 盘别名："本人-午时-真太阳时校正" / "母亲-不知时辰猜测版"
+  chartSnapshot    Json        @map("chart_snapshot") // { astrolabe, reading, stage1, stage2, computedAt, iztroVersion }
+  chartFingerprint String      @map("chart_fingerprint") // sha256(birthday+city+gender+timeIndex)
+  birthSolarDate   String      @map("birth_solar_date")
+  birthCity        String?     @map("birth_city")
+  timeIndex        Int         @map("time_index")
+  gender           Gender
+  isPrimary        Boolean     @default(false) @map("is_primary")
+  note             String?     @db.Text // 用户备注（如"母亲提供的是阴历"）
+  source           ChartSource @default(MANUAL)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  identity        Identity              @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  compatAsSelf    CompatibilityAnalysis[] @relation("CompatSelf")
+  compatAsPartner CompatibilityAnalysis[] @relation("CompatPartner")
+
+  @@index([userId])
+  @@index([identityId, isPrimary])
+  @@index([chartFingerprint])
+  @@map("chart_records")
+}
+
+// ── 合盘分析 ──────────────────────────────────────────────
+// 同一对组合只存一份（selfChartId + partnerChartId 唯一）
+model CompatibilityAnalysis {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  selfChartId    String   @map("self_chart_id")
+  partnerChartId String   @map("partner_chart_id")
+  result         Json // executeStage4Full 输出（宫位对照/四化交叉/星曜互动/5维评分）
+  aiSummary      String?  @db.LongText // AI 完整合盘解读
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  selfChart    ChartRecord @relation("CompatSelf", fields: [selfChartId], references: [id], onDelete: Cascade)
+  partnerChart ChartRecord @relation("CompatPartner", fields: [partnerChartId], references: [id], onDelete: Cascade)
+
+  @@unique([selfChartId, partnerChartId])
+  @@index([userId])
+  @@map("compatibility_analyses")
 }
 
 // ── 报告模板 ──────────────────────────────────────────────

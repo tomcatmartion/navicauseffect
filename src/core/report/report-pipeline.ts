@@ -485,3 +485,38 @@ export function buildReportContext(identity: ReportIdentity, templateSlug: strin
   const { stage1, stage2, stage3List } = runReportStages(chartData, tmpl.matters, targetYear)
   return buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
 }
+
+/**
+ * 基于 ChartSnapshot 构建报告 IR（避免重排盘，复用 stage1/2 快照）
+ *
+ * 与 buildReportContext 等价输出，但 chartData 和 stage1/2 来自持久化快照，
+ * 节省 ~200-500ms 排盘时间，且多次报告生成保证命盘一致
+ */
+export function buildReportContextFromSnapshot(
+  identity: ReportIdentity,
+  templateSlug: string,
+  snapshot: {
+    reading: Record<string, unknown>
+    stage1: unknown
+    stage2: unknown
+  },
+): ReportIR {
+  const tmpl = TEMPLATE_MAP[templateSlug] ?? { matters: [] as MatterType[], focus: '命宫与十二宫整体格局' }
+  const chartData = snapshot.reading
+  const targetYear = new Date().getFullYear()
+  // stage1/2 来自 snapshot，避免重算；stage3 仍需计算（依赖 matterType）
+  const stage1 = snapshot.stage1 as ReturnType<typeof executeStage1>
+  const stage2 = snapshot.stage2 as ReturnType<typeof executeStage2>
+  const stage3List = tmpl.matters.map(matterType => {
+    const route = resolveMatterRoute(matterType, '')
+    const stage3 = executeStage3({ stage1, stage2, matterType, routeResult: route, chartData, targetYear })
+    let matterSpec: MatterAnalysisSpec | null = null
+    try {
+      matterSpec = formatMatterAnalysis({ stage1, stage3, matterType, targetYear, chartData })
+    } catch (e) {
+      console.error(`[report-pipeline] formatMatterAnalysis 失败 (${matterType}):`, e instanceof Error ? e.message : e)
+    }
+    return { matterType, stage3, matterSpec }
+  })
+  return buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
+}

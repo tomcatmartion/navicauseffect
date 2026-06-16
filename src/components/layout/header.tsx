@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "首页", href: "/" },
   { label: "命理排盘", href: "/chart" },
+  { label: "我的命盘", href: "/charts" },
   { label: "报告", href: "/reports" },
   { label: "会员", href: "/pricing" },
 ];
@@ -106,6 +107,12 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/reports")}>
                   我的报告
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/charts")}>
+                  我的命盘
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/compatibility")}>
+                  合盘分析
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push("/chart")}>
                   开始排盘

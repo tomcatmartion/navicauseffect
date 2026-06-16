@@ -2,7 +2,8 @@ import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { generateReportContent } from '@/core/report/report-generator'
-import { buildReportContext } from '@/core/report/report-pipeline'
+import { buildReportContext, buildReportContextFromSnapshot } from '@/core/report/report-pipeline'
+import { getChartSnapshot } from '@/core/chart/chart-record-service'
 
 // GET /api/reports — 获取当前用户的报告列表（按命主分组）
 export async function GET(req: NextRequest) {
@@ -84,13 +85,25 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { templateId, identityId, extraInfo } = body
+    const { templateId, identityId, extraInfo, chartRecordId } = body
 
     if (!templateId || !identityId) {
       return NextResponse.json(
         { error: '缺少 templateId 或 identityId' },
         { status: 400 }
       )
+    }
+
+    // 验证 chartRecordId（可选；若提供则用快照替代重排盘）
+    let chartSnapshot: Awaited<ReturnType<typeof getChartSnapshot>> = null
+    if (chartRecordId) {
+      chartSnapshot = await getChartSnapshot(chartRecordId, session.user.id)
+      if (!chartSnapshot) {
+        return NextResponse.json(
+          { error: '指定命盘不存在或无权使用' },
+          { status: 400 }
+        )
+      }
     }
 
     // 验证命主归属
@@ -185,19 +198,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 步骤 3：构建紫微 IR（排盘 + Stage1/2/3 硬计算结论） ──
+    // 优先用 chartRecordId 对应的快照（避免重排盘，复用 stage1/2）
     let ir: ReturnType<typeof buildReportContext>
     try {
-      ir = buildReportContext(
-        {
-          name: identity.name,
-          gender: identity.gender,
-          birthday: identity.birthday,
-          birthCity: identity.birthCity,
-          region: identity.region,
-          bazi: identity.bazi,
-        },
-        template.slug,
-      )
+      const identityInput = {
+        name: identity.name,
+        gender: identity.gender,
+        birthday: identity.birthday,
+        birthCity: identity.birthCity,
+        region: identity.region,
+        bazi: identity.bazi,
+      }
+      ir = chartSnapshot
+        ? buildReportContextFromSnapshot(identityInput, template.slug, chartSnapshot)
+        : buildReportContext(identityInput, template.slug)
     } catch (e) {
       const msg = e instanceof Error ? e.message : '排盘失败'
       await prisma.report.update({
@@ -255,20 +269,20 @@ export async function POST(req: NextRequest) {
           console.error(`[子报告] 更新状态失败: ${child.name}`, err)
         }
 
-        // 子报告：构建紫微 IR（复用命主排盘，按子模板主题映射事项）
+        // 子报告：构建紫微 IR（复用主报告的 chartSnapshot，避免重排盘）
         let childIr: ReturnType<typeof buildReportContext>
         try {
-          childIr = buildReportContext(
-            {
-              name: identity.name,
-              gender: identity.gender,
-              birthday: identity.birthday,
-              birthCity: identity.birthCity,
-              region: identity.region,
-              bazi: identity.bazi,
-            },
-            child.slug,
-          )
+          const identityInput = {
+            name: identity.name,
+            gender: identity.gender,
+            birthday: identity.birthday,
+            birthCity: identity.birthCity,
+            region: identity.region,
+            bazi: identity.bazi,
+          }
+          childIr = chartSnapshot
+            ? buildReportContextFromSnapshot(identityInput, child.slug, chartSnapshot)
+            : buildReportContext(identityInput, child.slug)
         } catch (e) {
           const msg = e instanceof Error ? e.message : '排盘失败'
           await prisma.report.update({

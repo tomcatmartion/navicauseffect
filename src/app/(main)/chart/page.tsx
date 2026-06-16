@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
+import { SaveChartButton } from "@/components/chart/save-chart-button";
 import { Button } from "@/components/ui/button";
 import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 
@@ -283,9 +284,22 @@ export default function ChartPage() {
           </h1>
           <p className="text-xs text-muted-foreground">{trueSolarTimeInfo}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleReenter} className="shrink-0">
-          重新排盘
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <SaveChartButton
+            visible={!!birthData}
+            birthInfo={{
+              gender: birthData!.gender,
+              year: birthData!.year,
+              month: birthData!.month,
+              day: birthData!.day,
+              hour: birthData!.hour,
+              solar: birthData!.solar,
+            }}
+          />
+          <Button variant="outline" size="sm" onClick={handleReenter}>
+            重新排盘
+          </Button>
+        </div>
       </div>
 
       {/* 主体：左右分栏 */}
