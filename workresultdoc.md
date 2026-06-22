@@ -73,6 +73,7 @@
 | 2025-03-07 | 命盘解析存档         | ConsultationRecord 增加 chartFingerprint；同一用户同一命盘同一模块先查存档，命中直接返回不调 AI；新解析结果写入 DB。                           | 新增   |
 | 2025-03-05 | 方案B 双 Fork 集成   | 清空既有 iztro 依赖，克隆 iztro + react-iztro 至 packages/，根项目 file: + overrides 单实例；chart 页接回 Iztrolabe，SSR/React19 兼容。          | 新增   |
 | 2025-03-04 | Alpha 首版实现       | 命理排盘与命盘展示（iztro 接入）、AI 智能解析 7 模块与限流、会员体系与定价、微信/支付宝支付与回调、手机/微信/邮箱登录、推广分享与积分、管理后台（模型/用户/短信/支付/价格/统计）。 | 新增   |
+| 2026-06-22 | 项目全面核查修复（5 阶段） | 5 阶段全面整改（基于 3 个 Explore agent 核查 30+ 问题点）：1) 阶段 1 删除 16 个 0 引用文件（hooks/layout/orphan API）+ 抽 generateInviteCode 公共工具；2) 阶段 2 API 加固（3 个 rate limit + 10 个 try-catch + env 校验）；3) 阶段 3 chart 组件群 shadcn/lucide → testUI；4) 阶段 4 analysis 组件群（8 个文件 ~4700 行）shadcn/lucide/硬编码色 → testUI + CSS 变量；5) 阶段 5 全量验证 tsc 0 错误 + 9/9 路由存活 + 6/6 bad JSON 400 + wx-minipay 5/min 限流生效。 | 重构   |
 
 ---
 
