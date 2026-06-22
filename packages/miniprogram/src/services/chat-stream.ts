@@ -1,19 +1,22 @@
 /**
- * AI 对话流式响应 —— 小程序 SSE 替代方案
+ * AI 对话流式响应 —— 小程序 HTTP 长轮询实现
  *
- * 小程序不支持 EventSource（fetch + ReadableStream）。
- * 替代方案：
- *   方案 A（推荐）：WebSocket
- *     wx.connectSocket → 后端 /api/ziwei/reading-ws（需后端新增）
- *   方案 B：短轮询
- *     每 500ms 调 /api/ziwei/reading-poll?sessionId=xxx 增量拉取
+ * 小程序不支持 EventSource / fetch + ReadableStream（SSE 不可用）。
+ * 后端方案：HTTP 长轮询（POST 启动后台 AI 流 + Redis stream 缓存 + GET 轮询消费）
+ * 端点：POST /api/ziwei/reading-poll + GET /api/ziwei/reading-poll
  *
- * 本文件实现方案 A（WebSocket），方案 B 作为 fallback 注释。
+ * 本文件实现长轮询客户端：
+ *   1. POST 启动对话 → 拿 sessionId
+ *   2. 每 600ms GET 轮询 → 增量拉取 text/error/done
+ *   3. done=true 时停止轮询
  */
 
 import Taro from "@tarojs/taro";
+import { api } from "./api";
 
-const WS_URL = "wss://ziwei.app/api/ziwei/reading-ws";
+const POLL_INTERVAL_MS = 600;
+const MAX_POLL_DURATION_MS = 120_000; // 2 分钟超时
+const MAX_CONSECUTIVE_EMPTY = 50; // 连续 50 次空响应（30s）后超时
 
 export interface ChatStreamCallbacks {
   onMessage: (text: string) => void;
@@ -21,59 +24,108 @@ export interface ChatStreamCallbacks {
   onClose: () => void;
 }
 
+export interface ChatStreamPayload {
+  question: string;
+  chartData?: Record<string, unknown>;
+  chartRecordId?: string;
+  sessionId?: string;
+}
+
+/**
+ * 打开 AI 对话流（长轮询版）
+ *
+ * @returns 控制器：含 close() 方法停止轮询
+ */
 export function openChatStream(
-  payload: { question: string; chartData?: Record<string, unknown>; sessionId?: string },
+  payload: ChatStreamPayload,
   callbacks: ChatStreamCallbacks,
-) {
-  const socket = Taro.connectSocket({ url: WS_URL, header: { "content-type": "application/json" } });
+): { close: () => void } {
+  let closed = false;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
-  socket.onOpen(() => {
-    socket.send({ data: JSON.stringify(payload) });
-  });
+  const startPolling = async (sessionId: string) => {
+    if (closed) return;
+    let offset = 0;
+    const startedAt = Date.now();
+    let consecutiveEmpty = 0;
 
-  socket.onMessage((res) => {
-    try {
-      const parsed = JSON.parse(res.data as string) as {
-        type?: string;
-        text?: string;
-        error?: string;
-        sessionId?: string;
-      };
-      if (parsed.error) {
-        callbacks.onError(new Error(parsed.error));
+    const pollOnce = async () => {
+      if (closed) return;
+
+      // 超时保护
+      if (Date.now() - startedAt > MAX_POLL_DURATION_MS) {
+        callbacks.onError(new Error("AI 响应超时（>2 分钟）"));
+        callbacks.onClose();
         return;
       }
-      if (parsed.text) {
-        callbacks.onMessage(parsed.text);
+
+      try {
+        const res = await api.get<{
+          items: Array<{ text?: string; error?: string; type?: string; ts: number }>;
+          nextOffset: number;
+          done: boolean;
+        }>(`/api/ziwei/reading-poll?sessionId=${sessionId}&offset=${offset}`);
+
+        if (closed) return;
+
+        if (res.items.length === 0) {
+          consecutiveEmpty++;
+          if (consecutiveEmpty > MAX_CONSECUTIVE_EMPTY) {
+            callbacks.onError(new Error("AI 响应超时（连续 30s 无增量）"));
+            callbacks.onClose();
+            return;
+          }
+        } else {
+          consecutiveEmpty = 0;
+          for (const item of res.items) {
+            if (item.error) {
+              callbacks.onError(new Error(item.error));
+              callbacks.onClose();
+              return;
+            }
+            if (item.text) {
+              callbacks.onMessage(item.text);
+            }
+          }
+          offset = res.nextOffset;
+        }
+
+        if (res.done) {
+          callbacks.onClose();
+          return;
+        }
+
+        // 继续下一轮
+        pollTimer = setTimeout(pollOnce, POLL_INTERVAL_MS);
+      } catch (err) {
+        if (!closed) {
+          callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+          callbacks.onClose();
+        }
       }
-    } catch {
-      // 非 JSON，按纯文本处理
-      callbacks.onMessage(res.data as string);
-    }
-  });
+    };
 
-  socket.onError((err) => {
-    callbacks.onError(new Error(err.errMsg || "WebSocket 错误"));
-  });
+    pollOnce();
+  };
 
-  socket.onClose(() => {
-    callbacks.onClose();
-  });
+  // 启动：POST 创建 session
+  api
+    .post<{ sessionId: string }>("/api/ziwei/reading-poll", payload)
+    .then((res) => {
+      if (closed) return;
+      startPolling(res.sessionId);
+    })
+    .catch((err) => {
+      if (!closed) {
+        callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+        callbacks.onClose();
+      }
+    });
 
   return {
-    close: () => socket.close({}),
+    close: () => {
+      closed = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    },
   };
 }
-
-/*
-// 方案 B（短轮询 fallback）—— 当 WebSocket 不可用时使用
-export async function pollChatStream(
-  sessionId: string,
-  lastOffset: number,
-): Promise<{ text: string; offset: number; done: boolean }> {
-  const res = await api.get<{ text: string; offset: number; done: boolean }>(
-    `/api/ziwei/reading-poll?sessionId=${sessionId}&offset=${lastOffset}`,
-  );
-  return res;
-}
-*/
