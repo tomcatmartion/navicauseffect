@@ -1278,3 +1278,32 @@ input:checked + .slider::before { transform: translateX(20px); background: #fff;
   .compat-avatar { width: 48px; height: 48px; font-size: 20px; }
   .compat-score { font-size: 36px; }
 }
+
+/* ===== H5 响应式：与 Tailwind md: 断点对齐（768px） =====
+ * - rail 在 < 768px 由 hidden md:flex 隐藏
+ * - chart-panel 改为底部滑入抽屉（70vh）
+ * - topbar 简化：title 居中、actions 仅 coin-badge
+ * - 内容区给底部 tabbar 让出 64px + safe-area
+ */
+@media (max-width: 767px) {
+  .chart-panel {
+    top: auto; right: 0; left: 0; bottom: 0;
+    width: 100%; max-width: 100vw;
+    height: 70vh; max-height: 70vh;
+    border-left: none; border-top: 1px solid var(--line);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -10px 36px rgba(0, 0, 0, .08);
+    transform: translateY(100%);
+  }
+  .chart-panel.open { transform: translateY(0); }
+  .topbar { padding: 0 14px; }
+  .topbar-title { font-size: 14px; }
+  .topbar-sub { display: none; }
+  .topbar-actions { gap: 6px; }
+  .reading-main { width: 100%; }
+  .main { padding-bottom: 64px; }
+  .theme-switcher { bottom: 80px; }
+  .home-slogan { font-size: 32px !important; }
+  [data-theme="newspaper"] .home-slogan { font-size: 28px !important; }
+  .home-features { grid-template-columns: repeat(2, 1fr) !important; }
+}

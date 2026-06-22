@@ -1,7 +1,7 @@
 import { Rail } from "@/components/layout/rail";
 import { Topbar } from "@/components/layout/topbar";
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
-import { MobileNav } from "@/components/layout/mobile-nav";
+import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 
 /**
  * (main) 路由组的根布局。
@@ -14,11 +14,8 @@ import { MobileNav } from "@/components/layout/mobile-nav";
  *       <div class="content">{children}</div>
  *     </div>
  *     <ThemeSwitcher />        (右下角悬浮)
- *     <MobileNav />            (md:hidden, 阶段 5 改造为 testUI tabbar)
+ *     <MobileTabbar />         (flex md:hidden，H5 底部 5 项)
  *   </div>
- *
- * 注：未引入 Suspense fallback 因为 Rail/Topbar/ThemeSwitcher 都是轻量客户端组件，
- * 没有异步依赖；HeaderFallback 已不需要。
  */
 export default function MainLayout({
   children,
@@ -35,7 +32,7 @@ export default function MainLayout({
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
       <ThemeSwitcher />
-      <MobileNav />
+      <MobileTabbar />
     </div>
   );
 }
