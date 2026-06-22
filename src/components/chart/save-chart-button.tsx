@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 import { TIME_INDEX_TO_HOUR } from "@/lib/ziwei/time-index";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -156,15 +153,22 @@ export function SaveChartButton({
 
   if (!visible) return null;
 
+  // variant 映射到 testUI btn 类
+  const btnClass = [
+    "btn",
+    variant === "default" ? "btn-primary" : "btn-ghost",
+    size === "sm" ? "btn-sm" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <>
-      <Button variant={variant} size={size} onClick={handleClick} className="shrink-0">
-        <Bookmark className="w-4 h-4 mr-1" />
+      <button type="button" onClick={handleClick} className={`${btnClass} shrink-0`}>
+        <i className="ti ti-bookmark" style={{ marginRight: 4 }} />
         保存为命盘
-      </Button>
+      </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="paywall-dialog max-w-md">
           <DialogHeader>
             <DialogTitle>保存为命盘</DialogTitle>
             <DialogDescription>
@@ -172,34 +176,34 @@ export function SaveChartButton({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
             {/* 命主选择 */}
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">归属命主</label>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>归属命主</label>
               {fetchingIdentities ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="w-3 h-3 animate-spin" /> 加载命主列表...
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                  <i className="ti ti-loader-2 ti-spin" /> 加载命主列表...
                 </div>
               ) : identities.length === 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">还没有命主，请先创建</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs"
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>还没有命主，请先创建</p>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 12, alignSelf: "flex-start" }}
                     onClick={() => {
                       setOpen(false);
                       router.push("/profile?from=chart");
                     }}
                   >
                     去创建命主
-                  </Button>
+                  </button>
                 </div>
               ) : (
                 <select
                   value={selectedIdentityId}
                   onChange={(e) => setSelectedIdentityId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
+                  className="select"
                 >
                   {identities.map((identity) => (
                     <option key={identity.id} value={identity.id}>
@@ -213,26 +217,34 @@ export function SaveChartButton({
 
             {/* 盘别名 */}
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">盘别名</label>
-              <Input
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>盘别名</label>
+              <input
                 value={chartName}
                 onChange={(e) => setChartName(e.target.value)}
                 placeholder="如：本人-午时-真太阳时校正"
+                className="input"
               />
             </div>
 
             {/* 备注 */}
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">备注（可选）</label>
-              <Input
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>备注（可选）</label>
+              <input
                 value={chartNote}
                 onChange={(e) => setChartNote(e.target.value)}
                 placeholder="如：母亲提供的是阴历"
+                className="input"
               />
             </div>
 
             {/* 出生信息回显 */}
-            <div className="rounded-md bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            <div style={{
+              borderRadius: 8,
+              background: "var(--soft)",
+              padding: "8px 12px",
+              fontSize: 12,
+              color: "var(--text-muted)",
+            }}>
               {birthInfo.year}-{String(birthInfo.month).padStart(2, "0")}-{String(birthInfo.day).padStart(2, "0")} ·{" "}
               {birthInfo.hour}时 · {birthInfo.gender === "MALE" ? "男" : "女"}
               {birthInfo.birthCity ? ` · ${birthInfo.birthCity}` : ""}
@@ -240,15 +252,17 @@ export function SaveChartButton({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)} disabled={loading}>
               取消
-            </Button>
-            <Button
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
               onClick={handleSave}
               disabled={loading || !selectedIdentityId || !chartName.trim()}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
-            </Button>
+              {loading ? <i className="ti ti-loader-2 ti-spin" /> : "保存"}
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

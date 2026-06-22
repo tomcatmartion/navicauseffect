@@ -1,10 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   MAJOR_CITIES,
@@ -260,235 +256,230 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
   const yearOptions = generateYearRange();
 
   return (
-    <Card className="border-primary/15">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-2 font-serif-sc text-xl text-primary">
-          <span className="text-2xl">☯</span>
-          输入出生信息
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="flex items-center justify-between">
-            <Label>使用阴历（农历）</Label>
-            <Switch checked={isLunar} onCheckedChange={setIsLunar} />
-          </div>
+    <form onSubmit={handleSubmit}>
+      <div className="field flex items-center justify-between" style={{ marginBottom: 14 }}>
+        <label className="field-label" style={{ marginBottom: 0 }}>使用阴历（农历）</label>
+        <Switch checked={isLunar} onCheckedChange={setIsLunar} />
+      </div>
 
-          {isLunar ? (
-            <div className="space-y-3">
-              <Label>农历出生日期</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <NativeSelect value={lunarYear} onChange={setLunarYear}>
-                  {yearOptions.map((y) => (
-                    <option key={y} value={String(y)}>
-                      {y}年
-                    </option>
-                  ))}
-                </NativeSelect>
+      {isLunar ? (
+        <div className="field">
+          <label className="field-label">农历出生日期</label>
+          <div className="field-row-3">
+            <NativeSelect value={lunarYear} onChange={setLunarYear}>
+              {yearOptions.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}年
+                </option>
+              ))}
+            </NativeSelect>
 
-                <NativeSelect value={lunarMonth} onChange={setLunarMonth}>
-                  {LUNAR_MONTHS.map((name, i) => (
-                    <option key={i} value={String(i + 1)}>
-                      {name}
-                    </option>
-                  ))}
-                </NativeSelect>
+            <NativeSelect value={lunarMonth} onChange={setLunarMonth}>
+              {LUNAR_MONTHS.map((name, i) => (
+                <option key={i} value={String(i + 1)}>
+                  {name}
+                </option>
+              ))}
+            </NativeSelect>
 
-                <NativeSelect value={lunarDay} onChange={setLunarDay}>
-                  {LUNAR_DAYS.map((name, i) => (
-                    <option key={i} value={String(i + 1)}>
-                      {name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={isLeapMonth} onCheckedChange={setIsLeapMonth} />
-                <Label className="text-xs text-muted-foreground">闰月</Label>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Label>出生日期（阳历）</Label>
-              <div className="grid grid-cols-3 gap-2">
-                <NativeSelect value={solarYear} onChange={setSolarYear}>
-                  {yearOptions.map((y) => (
-                    <option key={y} value={String(y)}>
-                      {y}年
-                    </option>
-                  ))}
-                </NativeSelect>
-                <NativeSelect value={solarMonth} onChange={setSolarMonth}>
-                  {SOLAR_MONTHS.map((name, i) => (
-                    <option key={i} value={String(i + 1)}>
-                      {name}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <NativeSelect value={solarDay} onChange={setSolarDay}>
-                  {Array.from({ length: solarDayCount }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={String(d)}>
-                      {d}日
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>时 (0-23)</Label>
-              <Input
-                type="number"
-                min="0"
-                max="23"
-                value={birthHour}
-                onChange={(e) => setBirthHour(e.target.value)}
-                className="border-primary/20 focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>分 (0-59)</Label>
-              <Input
-                type="number"
-                min="0"
-                max="59"
-                value={birthMinute}
-                onChange={(e) => setBirthMinute(e.target.value)}
-                className="border-primary/20 focus:border-primary"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>性别</Label>
-            <NativeSelect value={gender} onChange={setGender}>
-              <option value="男">男</option>
-              <option value="女">女</option>
+            <NativeSelect value={lunarDay} onChange={setLunarDay}>
+              {LUNAR_DAYS.map((name, i) => (
+                <option key={i} value={String(i + 1)}>
+                  {name}
+                </option>
+              ))}
             </NativeSelect>
           </div>
-
-          {/* 父母出生年份（可选） */}
-          <div className="space-y-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">父母出生年份（可选）</Label>
-              <Switch checked={showParentInfo} onCheckedChange={setShowParentInfo} />
-            </div>
-            {showParentInfo && (
-              <>
-                <p className="text-[11px] text-muted-foreground">输入父母的生年生肖，会提升准确率。请根据实际生肖点选。</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* 父亲 */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">父亲</Label>
-                    <NativeSelect value={fatherBirthYear} onChange={handleFatherYearChange}>
-                      {parentYearOptions.map((y) => (
-                        <option key={y} value={String(y)}>{y}年</option>
-                      ))}
-                    </NativeSelect>
-                    <div className="flex gap-1">
-                      {(() => {
-                        const fy = parseInt(fatherBirthYear, 10);
-                        const cur = yearToZodiac(fy);
-                        const prev = yearToZodiac(fy - 1);
-                        return [cur, prev].map((z) => (
-                          <button
-                            key={z}
-                            type="button"
-                            onClick={() => setFatherZodiac(z)}
-                            className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
-                              fatherZodiac === z
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-muted text-muted-foreground border-muted-foreground/20 hover:border-primary/50"
-                            }`}
-                          >
-                            {z}
-                          </button>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                  {/* 母亲 */}
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">母亲</Label>
-                    <NativeSelect value={motherBirthYear} onChange={handleMotherYearChange}>
-                      {parentYearOptions.map((y) => (
-                        <option key={y} value={String(y)}>{y}年</option>
-                      ))}
-                    </NativeSelect>
-                    <div className="flex gap-1">
-                      {(() => {
-                        const my = parseInt(motherBirthYear, 10);
-                        const cur = yearToZodiac(my);
-                        const prev = yearToZodiac(my - 1);
-                        return [cur, prev].map((z) => (
-                          <button
-                            key={z}
-                            type="button"
-                            onClick={() => setMotherZodiac(z)}
-                            className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
-                              motherZodiac === z
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-muted text-muted-foreground border-muted-foreground/20 hover:border-primary/50"
-                            }`}
-                          >
-                            {z}
-                          </button>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+          <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+            <Switch checked={isLeapMonth} onCheckedChange={setIsLeapMonth} />
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>闰月</span>
           </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label className="field-label">出生日期（阳历）</label>
+          <div className="field-row-3">
+            <NativeSelect value={solarYear} onChange={setSolarYear}>
+              {yearOptions.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}年
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect value={solarMonth} onChange={setSolarMonth}>
+              {SOLAR_MONTHS.map((name, i) => (
+                <option key={i} value={String(i + 1)}>
+                  {name}
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect value={solarDay} onChange={setSolarDay}>
+              {Array.from({ length: solarDayCount }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={String(d)}>
+                  {d}日
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        </div>
+      )}
 
-          {!isLunar && (
-            <div className="space-y-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Label>
-                  <span className="sm:hidden">出生城市</span>
-                  <span className="hidden sm:inline">出生城市（用于真太阳时校正）</span>
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-muted-foreground">启用真太阳时</Label>
-                  <Switch
-                    checked={useTrueSolar}
-                    onCheckedChange={setUseTrueSolar}
-                  />
+      <div className="field-row">
+        <div className="field">
+          <label className="field-label">时 (0-23)</label>
+          <input
+            type="number"
+            min={0}
+            max={23}
+            value={birthHour}
+            onChange={(e) => setBirthHour(e.target.value)}
+            className="input"
+          />
+        </div>
+        <div className="field">
+          <label className="field-label">分 (0-59)</label>
+          <input
+            type="number"
+            min={0}
+            max={59}
+            value={birthMinute}
+            onChange={(e) => setBirthMinute(e.target.value)}
+            className="input"
+          />
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label">性别</label>
+        <NativeSelect value={gender} onChange={setGender}>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </NativeSelect>
+      </div>
+
+      {/* 父母出生年份（可选） */}
+      <div className="field" style={{ padding: 14, border: "1px solid var(--border)", borderRadius: 12 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+          <label className="field-label" style={{ marginBottom: 0, fontSize: 12 }}>父母出生年份（可选）</label>
+          <Switch checked={showParentInfo} onCheckedChange={setShowParentInfo} />
+        </div>
+        {showParentInfo && (
+          <>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 10px" }}>
+              输入父母的生年生肖，会提升准确率。请根据实际生肖点选。
+            </p>
+            <div className="field-row">
+              {/* 父亲 */}
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label className="field-label" style={{ fontSize: 12, color: "var(--text-muted)" }}>父亲</label>
+                <NativeSelect value={fatherBirthYear} onChange={handleFatherYearChange}>
+                  {parentYearOptions.map((y) => (
+                    <option key={y} value={String(y)}>{y}年</option>
+                  ))}
+                </NativeSelect>
+                <div className="flex gap-1" style={{ marginTop: 6 }}>
+                  {(() => {
+                    const fy = parseInt(fatherBirthYear, 10);
+                    const cur = yearToZodiac(fy);
+                    const prev = yearToZodiac(fy - 1);
+                    return [cur, prev].map((z) => (
+                      <button
+                        key={z}
+                        type="button"
+                        onClick={() => setFatherZodiac(z)}
+                        className="chip"
+                        style={
+                          fatherZodiac === z
+                            ? { padding: "2px 10px", fontSize: 11, background: "var(--brand)", color: "#fff", borderColor: "var(--brand)" }
+                            : { padding: "2px 10px", fontSize: 11 }
+                        }
+                      >
+                        {z}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </div>
-              <NativeSelect
-                value={city}
-                onChange={setCity}
-                disabled={!useTrueSolar}
-              >
-                {MAJOR_CITIES.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name} (经度 {c.longitude}°E)
-                  </option>
-                ))}
-              </NativeSelect>
+              {/* 母亲 */}
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label className="field-label" style={{ fontSize: 12, color: "var(--text-muted)" }}>母亲</label>
+                <NativeSelect value={motherBirthYear} onChange={handleMotherYearChange}>
+                  {parentYearOptions.map((y) => (
+                    <option key={y} value={String(y)}>{y}年</option>
+                  ))}
+                </NativeSelect>
+                <div className="flex gap-1" style={{ marginTop: 6 }}>
+                  {(() => {
+                    const my = parseInt(motherBirthYear, 10);
+                    const cur = yearToZodiac(my);
+                    const prev = yearToZodiac(my - 1);
+                    return [cur, prev].map((z) => (
+                      <button
+                        key={z}
+                        type="button"
+                        onClick={() => setMotherZodiac(z)}
+                        className="chip"
+                        style={
+                          motherZodiac === z
+                            ? { padding: "2px 10px", fontSize: 11, background: "var(--brand)", color: "#fff", borderColor: "var(--brand)" }
+                            : { padding: "2px 10px", fontSize: 11 }
+                        }
+                      >
+                        {z}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
             </div>
-          )}
+          </>
+        )}
+      </div>
 
-          <Button
-            type="submit"
-            className="w-full bg-primary text-lg hover:bg-primary/90"
-            disabled={(!isLunar && !birthDateSolar) || isLoading}
+      {!isLunar && (
+        <div className="field">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <label className="field-label" style={{ marginBottom: 0 }}>
+              <span className="sm:hidden">出生城市</span>
+              <span className="hidden sm:inline">出生城市（用于真太阳时校正）</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>启用真太阳时</span>
+              <Switch
+                checked={useTrueSolar}
+                onCheckedChange={setUseTrueSolar}
+              />
+            </div>
+          </div>
+          <NativeSelect
+            value={city}
+            onChange={setCity}
+            disabled={!useTrueSolar}
           >
-            {isLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                正在生成命盘...
-              </span>
-            ) : (
-              "生成命盘"
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            {MAJOR_CITIES.map((c) => (
+              <option key={c.name} value={c.name}>
+                {c.name} (经度 {c.longitude}°E)
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        className="btn btn-primary"
+        style={{ width: "100%", fontSize: 16, marginTop: 6 }}
+        disabled={(!isLunar && !birthDateSolar) || isLoading}
+      >
+        {isLoading ? (
+          <span className="flex items-center gap-2">
+            <i className="ti ti-loader-2 ti-spin" />
+            正在生成命盘...
+          </span>
+        ) : (
+          "生成命盘"
+        )}
+      </button>
+    </form>
   );
 }
