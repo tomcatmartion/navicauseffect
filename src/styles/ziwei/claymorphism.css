@@ -1,0 +1,171 @@
+/**
+ * Claymorphism (粘土风 / 软浮雕风) CSS Framework
+ * Version: 1.0.0
+ * Description: Single-light-source soft emboss style with warm tones
+ */
+
+/* ========== Base Variables ========== */
+:root {
+  --clay-bg: #E8E0D5;
+  --clay-card: #F5F2EF;
+  --clay-text: #3A3530;
+  --clay-text-secondary: #8A8078;
+  --clay-text-muted: #5A544C;
+  --clay-accent: #D4C8B8;
+
+  --clay-radius-xl: 28px;
+  --clay-radius-lg: 18px;
+  --clay-radius-md: 16px;
+  --clay-radius-sm: 12px;
+
+  --clay-transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== Base ========== */
+.clay-body {
+  background: var(--clay-bg);
+  font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  color: var(--clay-text);
+}
+
+/* ========== Card ========== */
+.clay-card {
+  background: var(--clay-card);
+  border-radius: var(--clay-radius-xl);
+  box-shadow:
+    12px 12px 28px rgba(174, 160, 140, 0.22),
+    -8px -8px 20px rgba(255, 255, 255, 0.55),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.4);
+  border: none;
+  transition: all var(--clay-transition);
+}
+.clay-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    16px 16px 36px rgba(174, 160, 140, 0.18),
+    -10px -10px 24px rgba(255, 255, 255, 0.65),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+/* ========== Button ========== */
+.clay-btn {
+  background: var(--clay-card);
+  border-radius: var(--clay-radius-lg);
+  box-shadow:
+    6px 6px 14px rgba(174, 160, 140, 0.18),
+    -4px -4px 10px rgba(255, 255, 255, 0.55),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.3);
+  border: none;
+  color: var(--clay-text-muted);
+  cursor: pointer;
+  padding: 10px 20px;
+  transition: all 0.2s ease;
+}
+.clay-btn:hover {
+  box-shadow:
+    8px 8px 18px rgba(174, 160, 140, 0.22),
+    -6px -6px 12px rgba(255, 255, 255, 0.6);
+}
+.clay-btn:active {
+  box-shadow:
+    inset 4px 4px 10px rgba(174, 160, 140, 0.12),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.5);
+}
+
+.clay-btn-primary {
+  color: var(--clay-text);
+  font-weight: 600;
+}
+
+/* ========== Input ========== */
+.clay-input {
+  background: var(--clay-card);
+  border-radius: var(--clay-radius-lg);
+  box-shadow:
+    inset 4px 4px 10px rgba(174, 160, 140, 0.1),
+    inset -3px -3px 8px rgba(255, 255, 255, 0.55);
+  border: none;
+  padding: 10px 16px;
+  color: var(--clay-text);
+  transition: all 0.2s ease;
+}
+.clay-input:focus {
+  outline: none;
+  box-shadow:
+    inset 5px 5px 12px rgba(174, 160, 140, 0.12),
+    inset -4px -4px 10px rgba(255, 255, 255, 0.6),
+    0 0 0 3px rgba(174, 160, 140, 0.08);
+}
+.clay-input::placeholder {
+  color: var(--clay-text-secondary);
+}
+
+/* ========== Navigation ========== */
+.clay-nav {
+  border-radius: var(--clay-radius-lg);
+  padding: 12px 16px;
+  color: var(--clay-text-secondary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+.clay-nav:hover {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    4px 4px 10px rgba(174, 160, 140, 0.12),
+    -3px -3px 8px rgba(255, 255, 255, 0.5);
+  color: var(--clay-text-muted);
+}
+.clay-nav.active {
+  background: var(--clay-card);
+  box-shadow:
+    5px 5px 12px rgba(174, 160, 140, 0.15),
+    -4px -4px 10px rgba(255, 255, 255, 0.5),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.3);
+  color: var(--clay-text);
+  font-weight: 500;
+}
+
+/* ========== Icon ========== */
+.clay-icon {
+  background: var(--clay-card);
+  box-shadow:
+    5px 5px 12px rgba(174, 160, 140, 0.15),
+    -4px -4px 10px rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========== Badge ========== */
+.clay-badge {
+  background: var(--clay-card);
+  box-shadow:
+    2px 2px 6px rgba(174, 160, 140, 0.12),
+    -2px -2px 4px rgba(255, 255, 255, 0.45);
+  display: inline-block;
+}
+
+/* ========== Chart Bar ========== */
+.clay-bar {
+  background: #E0D8CC;
+  border-radius: 12px 12px 4px 4px;
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.3),
+    3px 3px 8px rgba(174, 160, 140, 0.15);
+}
+.clay-bar-accent {
+  background: #D4C8B8;
+}
+
+/* ========== Text Colors ========== */
+.clay-text { color: var(--clay-text); }
+.clay-text-secondary { color: var(--clay-text-secondary); }
+.clay-text-muted { color: var(--clay-text-muted); }
+
+/* ========== Scrollbar ========== */
+.clay-scroll::-webkit-scrollbar { width: 6px; }
+.clay-scroll::-webkit-scrollbar-track { background: transparent; }
+.clay-scroll::-webkit-scrollbar-thumb { background: #D4C8B8; border-radius: 3px; }

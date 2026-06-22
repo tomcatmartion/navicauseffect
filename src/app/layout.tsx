@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { QueryProvider } from "@/components/providers/query-provider";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -45,12 +46,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons@2.44.0/tabler-icons.css"
+        />
+      </head>
       <body
         className={`${notoSerif.variable} ${notoSans.variable} font-[var(--font-sans-sc)] antialiased`}
       >
         <ThemeProvider>
           <AuthSessionProvider>
-            {children}
+            <QueryProvider>{children}</QueryProvider>
           </AuthSessionProvider>
           <Toaster />
         </ThemeProvider>
