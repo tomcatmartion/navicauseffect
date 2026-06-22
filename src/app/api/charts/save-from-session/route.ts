@@ -26,7 +26,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const body = await req.json()
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
     const { identityId, name, birthInfo, chartData, note, isPrimary } = body as {
       identityId?: string
       name?: string

@@ -16,7 +16,12 @@ export async function POST(request: NextRequest) {
   if (guard) return guard
 
   try {
-    const body = await request.json()
+    let body: Record<string, unknown> | undefined;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 });
+    }
     const chartData = body?.chartData as Record<string, unknown> | undefined
     if (!hasValidChartPalaces(chartData)) {
       return NextResponse.json({ error: '缺少有效的 chartData（须含至少 12 宫 palaces）' }, { status: 400 })

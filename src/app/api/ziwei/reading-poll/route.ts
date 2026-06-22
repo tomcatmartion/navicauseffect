@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import { extractMiniprogramUser } from "@/lib/jwt-miniprogram";
 import { prisma } from "@/lib/db";
+import { checkDailyLimit, incrementDailyUsage } from "@/lib/rate-limit";
 import { runHybridPipeline, appendAssistantReply } from "@/orchestration/hybrid";
 import { parseOpenAiSseEventBlock } from "@/lib/ai/openai-sse";
 import { parseHybridAssistantPayload } from "@/core/adapters/iztro/ai-parse";
@@ -40,6 +41,18 @@ export async function POST(request: NextRequest) {
   const mpUser = await extractMiniprogramUser(request.headers.get("authorization"));
   if (!mpUser) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
+  // 日限额：小程序用户需查 DB 取 membershipPlan
+  const dbUser = await prisma.user.findUnique({
+    where: { id: mpUser.userId },
+    select: { membership: { select: { plan: true } } },
+  });
+  const membershipPlan = dbUser?.membership?.plan ?? "FREE";
+  const ip = request.headers.get("x-forwarded-for") || "unknown";
+  const limitResult = await checkDailyLimit(mpUser.userId, ip, membershipPlan);
+  if (!limitResult.allowed) {
+    return NextResponse.json({ error: "今日使用次数已达上限" }, { status: 429 });
   }
 
   let body: unknown;
@@ -102,6 +115,7 @@ export async function POST(request: NextRequest) {
   await redis.expire(STREAM_KEY_PREFIX + sessionId, STREAM_TTL_SECONDS);
 
   // 立即响应，fire-and-forget 启动后台 task
+  void incrementDailyUsage(mpUser.userId, ip).catch(() => { /* 日限额写入失败不阻塞 */ });
   void runBackgroundPipeline({
     sessionId,
     userId: mpUser.userId,

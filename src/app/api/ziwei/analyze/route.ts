@@ -17,7 +17,23 @@ export async function POST(request: NextRequest) {
   if (guard) return guard;
 
   try {
-    const body = await request.json();
+    let body: {
+      type?: string;
+      birthData?: Record<string, unknown> & { year?: number; month?: number; day?: number; gender?: string };
+      chartData?: Record<string, unknown>;
+      palaceName?: string;
+      parentBirthYears?: { father?: number; mother?: number };
+      question?: string;
+      affairType?: string;
+      affair?: string;
+      targetYear?: number;
+      routingAnswers?: Record<string, string>;
+    };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "无效的请求体" }, { status: 400 });
+    }
     const { type, birthData, chartData } = body;
 
     if (!birthData && !chartData) {

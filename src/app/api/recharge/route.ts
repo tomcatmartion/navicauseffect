@@ -41,7 +41,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const { points, channel } = await req.json()
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
+    const { points, channel } = body as { points?: number; channel?: string }
     if (!points || points <= 0) {
       return NextResponse.json({ error: '无效的充值金额' }, { status: 400 })
     }

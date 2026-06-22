@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { extractMiniprogramUser } from "@/lib/jwt-miniprogram";
+import { checkMinuteRateLimit } from "@/lib/rate-limit";
 import { createUnifiedOrder, signPaymentParams, isWechatPayMockMode } from "@/lib/wechat-pay";
 
 type PlanId = "monthly" | "quarterly" | "yearly" | "query";
@@ -39,6 +40,15 @@ export async function POST(request: NextRequest) {
   const mpUser = await extractMiniprogramUser(request.headers.get("authorization"));
   if (!mpUser) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
+  // 分钟级频率限制：5 次/分钟（防刷下单）
+  const rl = await checkMinuteRateLimit(`wxpay:${mpUser.userId}`, 5, 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "下单过于频繁，请稍后再试", retryAfter: rl.retryAfter },
+      { status: 429 },
+    );
   }
 
   let body: unknown;
@@ -80,6 +90,11 @@ export async function POST(request: NextRequest) {
   });
 
   // 2. 微信统一下单（真实/mock）
+  // notifyUrl 兜底：环境变量缺失时使用默认值并告警一次
+  const notifyUrl = process.env.WECHAT_PAY_NOTIFY_URL;
+  if (!notifyUrl && !isWechatPayMockMode() && process.env.NODE_ENV === "production") {
+    console.warn("[wx-minipay] WECHAT_PAY_NOTIFY_URL 未配置，微信回调将无法到达本服务");
+  }
   let prepay_id: string;
   try {
     const result = await createUnifiedOrder({
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
       amount: Math.round(config.amountYuan * 100), // 元 → 分
       description: config.description,
       openid: mpUser.openid,
-      notifyUrl: process.env.WECHAT_PAY_NOTIFY_URL,
+      notifyUrl,
     });
     prepay_id = result.prepay_id;
   } catch (err) {

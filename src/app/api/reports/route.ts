@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
 import { generateReportContent, resolveReportInstruction } from '@/core/report/report-generator'
 import {
   buildReportContext,
@@ -89,8 +90,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const body = await req.json()
-    const { templateId, identityId, extraInfo, chartRecordId } = body
+    // 日限额：报告生成是重资源（调用 AI 多次）
+    const ip = req.headers.get('x-forwarded-for') || 'unknown'
+    const membershipPlan = session.user.membershipPlan || 'FREE'
+    const limitResult = await checkDailyLimit(session.user.id, ip, membershipPlan)
+    if (!limitResult.allowed) {
+      return NextResponse.json({ error: '今日使用次数已达上限' }, { status: 429 })
+    }
+
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
+    const { templateId, identityId, extraInfo, chartRecordId } = body as {
+      templateId?: string
+      identityId?: string
+      extraInfo?: string
+      chartRecordId?: string
+    }
 
     if (!templateId || !identityId || !chartRecordId) {
       return NextResponse.json(
@@ -174,6 +193,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 步骤 2：创建报告记录（PENDING） ──
+    // 入参校验通过 → 计入日限额（坏请求不计）
+    await incrementDailyUsage(session.user.id, ip)
     const report = await prisma.report.create({
       data: {
         userId: session.user.id,

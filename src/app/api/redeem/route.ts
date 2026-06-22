@@ -10,7 +10,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const { code } = await req.json()
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
+    const { code } = body as { code?: string }
     if (!code) {
       return NextResponse.json({ error: '请输入兑换码' }, { status: 400 })
     }

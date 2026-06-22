@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { Gender, RelationType } from '@prisma/client'
 
 // GET /api/identities — 获取当前用户的命主列表
 export async function GET() {
@@ -33,8 +34,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    const body = await req.json()
-    const { name, gender, birthday, birthCity, region, relation } = body
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
+    const { name, gender, birthday, birthCity, region, relation } = body as {
+      name?: string
+      gender?: Gender
+      birthday?: string
+      birthCity?: string
+      region?: string
+      relation?: RelationType
+    }
 
     if (!name || !gender || !birthday) {
       return NextResponse.json(

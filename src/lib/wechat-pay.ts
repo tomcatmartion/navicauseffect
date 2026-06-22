@@ -26,6 +26,20 @@ export const PAY_MOCK_MODE =
   process.env.WECHAT_PAY_MOCK !== "false" &&
   (!MCH_ID || !API_V3_KEY || !CERT_SERIAL_NO || !PRIVATE_KEY_PEM);
 
+// 启动时凭证完整性告警（非 mock 模式但缺凭证 → 真实支付会失败）
+if (!PAY_MOCK_MODE && process.env.NODE_ENV === "production") {
+  const missing: string[] = [];
+  if (!MCH_ID) missing.push("WECHAT_PAY_MCH_ID");
+  if (!API_V3_KEY) missing.push("WECHAT_PAY_API_V3_KEY");
+  if (!CERT_SERIAL_NO) missing.push("WECHAT_PAY_CERT_SERIAL_NO");
+  if (!PRIVATE_KEY_PEM) missing.push("WECHAT_PAY_PRIVATE_KEY_PEM");
+  if (missing.length > 0) {
+    console.warn(
+      `[wechat-pay] 凭证不完整（${missing.join(", ")} 缺失），真实支付调用将失败`,
+    );
+  }
+}
+
 export interface UnifiedOrderInput {
   orderId: string;
   amount: number; // 单位：分（¥1 = 100）

@@ -46,7 +46,12 @@ export async function PATCH(
     }
 
     const { id } = await params
-    const body = await req.json()
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: '无效的请求体' }, { status: 400 })
+    }
     const { name, note, isPrimary } = body as {
       name?: string
       note?: string | null
