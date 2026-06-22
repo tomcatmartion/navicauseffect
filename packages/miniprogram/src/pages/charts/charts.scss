@@ -1,0 +1,30 @@
+.page { padding: 24rpx; }
+.loading { padding: 80rpx; text-align: center; color: var(--text-muted); }
+.header { display: flex; align-items: baseline; gap: 16rpx; margin-bottom: 24rpx; }
+.title { font-size: 36rpx; color: var(--brand); font-weight: 700; }
+.meta { font-size: 22rpx; color: var(--text-muted); }
+.empty { padding: 60rpx 24rpx; text-align: center; }
+.empty .hint { display: block; font-size: 22rpx; margin-top: 8rpx; color: var(--text-muted); }
+.chart-item { display: flex; align-items: center; gap: 20rpx; padding: 24rpx; margin-bottom: 16rpx; }
+.thumb {
+  width: 80rpx; height: 80rpx; border-radius: 50%;
+  background: var(--soft); color: var(--brand);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32rpx; font-weight: 600;
+}
+.thumb.primary { background: var(--brand); color: #fff; }
+.info { flex: 1; min-width: 0; }
+.name {
+  display: block; font-size: 28rpx; color: var(--ink); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.badge {
+  display: inline-block; margin-left: 12rpx; padding: 2rpx 12rpx;
+  background: var(--brand); color: #fff; font-size: 18rpx;
+  border-radius: var(--radius-sm); vertical-align: middle;
+}
+.meta {
+  display: block; font-size: 22rpx; color: var(--text-muted); margin-top: 6rpx;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.action-icon { color: var(--text-muted); }

@@ -1,0 +1,18 @@
+{
+  "miniprogramRoot": "./dist",
+  "projectname": "navicauseffect-miniprogram",
+  "description": "紫微问道",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "enhance": false,
+    "compileHotReLoad": false,
+    "postcss": false,
+    "minified": false,
+    "bigPackageSizeSupport": true
+  },
+  "compileType": "miniprogram",
+  "simulatorPluginLibVersion": {},
+  "condition": {}
+}

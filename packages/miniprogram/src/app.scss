@@ -1,0 +1,101 @@
+/**
+ * 全局样式 —— 复用 H5 端 testUI 报纸主题变量
+ *
+ * 注意：小程序不支持 CSS 变量级联到 <page>，需要把变量定义在 page 选择器。
+ * 小程序默认主题为 newspaper（testUI 报纸主题），暂不支持粘土/新拟态切换
+ * （小程序首版简化，降低复杂度，见 SPEC.md）
+ */
+
+page {
+  /* 报纸主题变量（来自 testUI/css/ziwei.css :root） */
+  --bg: #F2ECD9;
+  --panel: #FAF6E9;
+  --soft: #E8DFC4;
+  --ink: #1A1208;
+  --ink-light: #3D2F18;
+  --text-muted: #6B5D4A;
+  --line: #C4AD88;
+  --line-light: #E8DFC4;
+  --brand: #8B1A1A;
+  --brand-dark: #6f1313;
+  --brand-light: #a82020;
+  --accent: #2C4A1E;
+  --accent2: #1A3A5C;
+  --danger: #8B1A1A;
+  --success: #2C4A1E;
+  --warning: #7A3B00;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "PingFang SC", -apple-system, "Helvetica Neue", sans-serif;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+/* 通用类（与 H5 testUI 对齐，但 rpx 单位） */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 24rpx;
+  box-shadow: 0 2rpx 0 rgba(26, 18, 8, 0.08);
+}
+
+.btn {
+  font-size: 28rpx;
+  padding: 18rpx 40rpx;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--brand);
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--brand);
+}
+
+.coin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8rpx 20rpx;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 32rpx;
+  font-size: 24rpx;
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+.level-badge {
+  display: inline-block;
+  padding: 2rpx 12rpx;
+  border-radius: var(--radius-sm);
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.level-badge.s { background: #8B1A1A; }
+.level-badge.a { background: #D4A574; color: #1A1208; }
+.level-badge.b { background: #6B5D4A; }
+.level-badge.c { background: #C4AD88; color: #1A1208; }
+
+.help-note {
+  background: var(--soft);
+  border-left: 6rpx solid var(--brand);
+  padding: 18rpx 22rpx;
+  font-size: 24rpx;
+  color: var(--ink-light);
+  line-height: 1.8;
+}
