@@ -1,56 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import {
-  Crown,
-  UserIcon,
-  Plus,
-  Edit2,
-  Calendar,
-  MapPin,
-  Network,
-  Gift,
-  LayoutGrid,
-  Share2,
-  Settings,
-  ShieldCheck,
-  Heart,
-  LogOut,
-  Coins,
-  Sparkles,
-  ChevronRight,
-  Loader2,
-  X,
-  Clock,
-  CreditCard,
-  TicketCheck,
-  Copy,
-  Check,
-  FileText,
-  MessageSquare,
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
-  Users,
-} from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -58,6 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+import { PageContainer } from "@/components/shared/page-container";
+import { SectionTitle } from "@/components/shared/section-title";
+import { EmptyState } from "@/components/shared/empty-state";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -76,6 +41,16 @@ interface Identity {
   createdAt: string;
 }
 
+const RELATION_LABEL: Record<string, string> = {
+  SELF: "自己",
+  SPOUSE: "配偶",
+  CHILD: "子女",
+  PARENT: "父母",
+  SIBLING: "兄弟姐妹",
+  FRIEND: "朋友",
+  OTHER: "其他",
+};
+
 // ---------------------------------------------------------------------------
 // 用户中心页
 // ---------------------------------------------------------------------------
@@ -90,7 +65,6 @@ export default function UserPage() {
   const [editIdentity, setEditIdentity] = useState<Identity | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 余额与兑换
   const [totalPoints, setTotalPoints] = useState(0);
   const [showRedeemModal, setShowRedeemModal] = useState(false);
   const [redeemCode, setRedeemCode] = useState("");
@@ -98,15 +72,12 @@ export default function UserPage() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // 命主详情弹窗
   const [detailIdentity, setDetailIdentity] = useState<Identity | null>(null);
 
-  // 充值弹窗
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState(50);
   const [recharging, setRecharging] = useState(false);
 
-  // 星币流水
   const [pointLogs, setPointLogs] = useState<Array<{
     id: string; type: string; amount: number; source: string;
     sourceLabel: string; detail: string | null; createdAt: string;
@@ -117,7 +88,6 @@ export default function UserPage() {
   } | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  // 表单状态
   const [formName, setFormName] = useState("");
   const [formGender, setFormGender] = useState<"MALE" | "FEMALE">("MALE");
   const [formBirthday, setFormBirthday] = useState("");
@@ -125,7 +95,10 @@ export default function UserPage() {
   const [formRegion, setFormRegion] = useState("");
   const [formRelation, setFormRelation] = useState("SELF");
 
-  // 加载命主列表
+  // -------------------------------------------------------------------------
+  // 数据加载
+  // -------------------------------------------------------------------------
+
   const fetchIdentities = useCallback(async () => {
     try {
       const res = await fetch("/api/identities");
@@ -140,7 +113,6 @@ export default function UserPage() {
     }
   }, []);
 
-  // 加载用户资料（余额、邀请码）
   const fetchProfile = useCallback(async () => {
     try {
       const res = await fetch("/api/user/profile");
@@ -150,11 +122,10 @@ export default function UserPage() {
         setInviteCode(data.inviteCode ?? null);
       }
     } catch {
-      // 静默失败
+      // 静默
     }
   }, []);
 
-  // 加载星币流水和统计
   const fetchPointData = useCallback(async () => {
     setLogsLoading(true);
     try {
@@ -171,7 +142,7 @@ export default function UserPage() {
         setPointStats(data.data || null);
       }
     } catch {
-      // 静默失败
+      // 静默
     } finally {
       setLogsLoading(false);
     }
@@ -189,7 +160,10 @@ export default function UserPage() {
     }
   }, [status, router, fetchIdentities, fetchProfile, fetchPointData]);
 
-  // 重置表单
+  // -------------------------------------------------------------------------
+  // 命主管理
+  // -------------------------------------------------------------------------
+
   const resetForm = () => {
     setFormName("");
     setFormGender("MALE");
@@ -199,14 +173,12 @@ export default function UserPage() {
     setFormRelation("SELF");
   };
 
-  // 打开添加弹窗
   const openAdd = () => {
     resetForm();
     setEditIdentity(null);
     setShowAddModal(true);
   };
 
-  // 打开编辑弹窗
   const openEdit = (id: Identity) => {
     setFormName(id.name);
     setFormGender(id.gender);
@@ -218,7 +190,6 @@ export default function UserPage() {
     setShowAddModal(true);
   };
 
-  // 保存命主
   const handleSave = async () => {
     if (!formName.trim()) {
       toast.error("请输入姓名");
@@ -228,7 +199,6 @@ export default function UserPage() {
       toast.error("请选择出生时间");
       return;
     }
-
     setSaving(true);
     try {
       const body = {
@@ -239,7 +209,6 @@ export default function UserPage() {
         region: formRegion || undefined,
         relation: formRelation,
       };
-
       let res: Response;
       if (editIdentity) {
         res = await fetch(`/api/identities/${editIdentity.id}`, {
@@ -254,12 +223,10 @@ export default function UserPage() {
           body: JSON.stringify(body),
         });
       }
-
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "操作失败");
       }
-
       toast.success(editIdentity ? "命主已更新" : "命主已添加");
       setShowAddModal(false);
       fetchIdentities();
@@ -270,7 +237,6 @@ export default function UserPage() {
     }
   };
 
-  // 设为活跃命主
   const activateIdentity = async (id: string) => {
     try {
       const res = await fetch(`/api/identities/${id}/activate`, { method: "POST" });
@@ -282,12 +248,10 @@ export default function UserPage() {
     }
   };
 
-  // 退出登录
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
   };
 
-  // 兑换积分
   const handleRedeem = async () => {
     if (!redeemCode.trim()) {
       toast.error("请输入兑换码");
@@ -316,7 +280,6 @@ export default function UserPage() {
     }
   };
 
-  // 复制邀请码
   const copyInviteCode = () => {
     if (!inviteCode) return;
     navigator.clipboard.writeText(inviteCode).then(() => {
@@ -326,7 +289,6 @@ export default function UserPage() {
     });
   };
 
-  // 充值星币
   const handleRecharge = async () => {
     setRecharging(true);
     try {
@@ -350,12 +312,15 @@ export default function UserPage() {
     }
   };
 
-  // 未登录 loading
+  // -------------------------------------------------------------------------
+  // 渲染
+  // -------------------------------------------------------------------------
+
   if (status === "loading" || (status === "authenticated" && loading)) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary/40 animate-spin" />
-      </div>
+      <PageContainer maxWidth={1100}>
+        <EmptyState icon="ti-loader-2" title="加载中…" />
+      </PageContainer>
     );
   }
 
@@ -363,472 +328,510 @@ export default function UserPage() {
   const userName = session?.user?.name || "未登录";
   const userId = session?.user?.id || "--";
 
-  // 设置菜单项
   const menuItems = [
-    { title: "服务权益", subtitle: "查看会员专属权益", icon: Gift, action: () => router.push("/pricing") },
-    { title: "兑换中心", subtitle: "使用兑换码获取积分", icon: Gift, action: () => setShowRedeemModal(true) },
-    { title: "关于我们", icon: LayoutGrid, action: () => router.push("/") },
-    { title: "偏好设置", icon: Settings, action: () => {} },
-    { title: "隐私协议", icon: ShieldCheck, action: () => {} },
+    { title: "服务权益", subtitle: "查看会员专属权益", icon: "ti-gift", action: () => router.push("/pricing") },
+    { title: "兑换中心", subtitle: "使用兑换码获取积分", icon: "ti-ticket", action: () => setShowRedeemModal(true) },
+    { title: "关于我们", subtitle: undefined, icon: "ti-info-circle", action: () => router.push("/") },
+    { title: "偏好设置", subtitle: undefined, icon: "ti-settings", action: () => router.push("/settings") },
+    { title: "隐私协议", subtitle: undefined, icon: "ti-shield-lock", action: () => {} },
   ];
 
+  const rechargeOptions = [
+    { amount: 20, coins: 200, bonus: 0, tag: "" },
+    { amount: 50, coins: 500, bonus: 50, tag: "热门" },
+    { amount: 100, coins: 1000, bonus: 150, tag: "" },
+    { amount: 300, coins: 3000, bonus: 600, tag: "超值" },
+  ];
+
+  const totalRechargeCoins =
+    rechargeAmount * 10 +
+    (rechargeAmount === 50 ? 50 : rechargeAmount === 100 ? 150 : rechargeAmount === 300 ? 600 : 0);
+
   return (
-    <div className="pb-32 space-y-12 min-h-screen bg-background">
+    <PageContainer maxWidth={1100}>
       {/* ================================================================
-          用户资料区（浅色主题）
+          用户资料卡
       ================================================================= */}
-      <div className="relative bg-gradient-to-b from-primary/5 to-background overflow-hidden">
-        {/* 装饰光晕 */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px]" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/3 rounded-full blur-[80px]" />
-
-        <div className="relative z-10 max-w-4xl mx-auto w-full pb-10 space-y-6 p-6 md:p-8">
-          {/* 头像 + 用户名 */}
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-full bg-primary/10 border-2 border-primary/20 p-1 relative shrink-0">
-              <div className="w-full h-full rounded-full bg-primary/5 flex items-center justify-center">
-                <UserIcon className="w-8 h-8 text-primary" />
-              </div>
-              {isPremium && (
-                <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-primary rounded-full border-2 border-background flex items-center justify-center shadow-lg">
-                  <Crown className="w-3 h-3 text-primary-foreground" />
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl font-bold tracking-tight text-foreground font-serif-sc">{userName}</span>
-                {isPremium ? (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
-                    专属会员
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-primary/5 text-muted-foreground border border-primary/10">
-                    普通用户
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-muted-foreground font-mono">ID: {userId.slice(0, 8)}</span>
-                <span className="w-1 h-1 rounded-full bg-primary/20" />
-                <span className="text-[10px] text-muted-foreground">
-                  已绑定 {identities.length} 位命主
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 会员升级横幅 */}
-          {!isPremium && (
-            <button
-              onClick={() => router.push("/pricing")}
-              className="w-full p-4 rounded-xl bg-primary/5 border border-primary/20 text-foreground flex items-center justify-between shadow-sm group overflow-hidden relative hover:border-primary/30 hover:shadow-md transition-all"
-            >
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Crown className="w-6 h-6 text-primary" />
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-bold tracking-wide text-foreground">升级专属会员</div>
-                  <div className="text-[10px] text-muted-foreground font-medium">解锁高级命理分析报告</div>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-primary relative z-10 group-hover:translate-x-0.5 transition-transform" />
-            </button>
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            background: "var(--soft)",
+            border: "2px solid var(--line)",
+            color: "var(--brand)",
+            fontSize: 28,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            position: "relative",
+            flexShrink: 0,
+          }}
+        >
+          <i className="ti ti-user" />
+          {isPremium && (
+            <i
+              className="ti ti-crown"
+              style={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: "var(--brand)",
+                color: "#fff",
+                border: "2px solid var(--panel)",
+                fontSize: 11,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            />
           )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+              {userName}
+            </h1>
+            <span
+              className="chip"
+              style={
+                isPremium
+                  ? { background: "var(--brand)", color: "#fff", border: "none", padding: "1px 8px", fontSize: 10 }
+                  : { padding: "1px 8px", fontSize: 10 }
+              }
+            >
+              {isPremium ? "专属会员" : "普通用户"}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--text-muted)" }}>
+            <span style={{ fontFamily: "var(--font-mono, monospace)" }}>ID: {userId.slice(0, 8)}</span>
+            <span>·</span>
+            <span>已绑定 {identities.length} 位命主</span>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 w-full">
-        {/* ================================================================
-            命主档案区
-        ================================================================= */}
-        <div className="mt-12">
-          <div className="flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <span className="font-serif-sc text-sm font-bold text-foreground">命主档案</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={openAdd}
-                className="text-[10px] bg-primary text-primary-foreground px-3 py-1.5 rounded-full flex items-center gap-1 hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="w-3 h-3 text-primary-foreground" />
-                添加新命主
-              </button>
-            </div>
-          </div>
-
-          {/* 命主卡片列表 */}
-          <div className="space-y-6">
-            {identities.length === 0 ? (
-              <div className="py-10 px-4 flex flex-col items-center justify-center bg-card rounded-xl border border-primary/10 shadow-sm cursor-pointer hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all" onClick={openAdd}>
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-3 text-primary/40">
-                  <UserIcon className="w-6 h-6 text-primary/40" />
-                </div>
-                <span className="text-sm font-bold text-muted-foreground mb-1">尚未添加命主</span>
-                <span className="text-[10px] text-muted-foreground">请添加命主以开始命理分析</span>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {identities.map((id) => (
-                    <div
-                      key={id.id}
-                      className={`p-4 rounded-xl bg-card border shadow-sm hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer group relative overflow-hidden ${
-                        id.isActive ? "border-primary/30 ring-1 ring-primary/10" : "border-primary/10 hover:border-primary/30"
-                      }`}
-                      onClick={() => setDetailIdentity(id)}
-                    >
-                      <div className="relative z-10 flex flex-col gap-3">
-                        {/* 头部：性别 + 姓名 + 关系 */}
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                            id.gender === "MALE" ? "bg-blue-50 text-blue-600" : "bg-rose-50 text-rose-600"
-                          }`}>
-                            <UserIcon className={`w-3 h-3 ${id.gender === "MALE" ? "text-blue-600" : "text-rose-600"}`} />
-                          </div>
-                          <span className="text-sm font-bold text-foreground truncate">{id.name}</span>
-                          {id.relation && id.relation !== "SELF" && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-primary/5 text-muted-foreground shrink-0">
-                              {id.relation === "SPOUSE" ? "配偶" : id.relation === "CHILD" ? "子女" : id.relation === "PARENT" ? "父母" : id.relation === "SIBLING" ? "兄弟姐妹" : id.relation === "FRIEND" ? "朋友" : id.relation}
-                            </span>
-                          )}
-                          {id.isActive && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-primary/10 text-primary shrink-0">
-                              当前
-                            </span>
-                          )}
-                        </div>
-
-                        {/* 八字信息 */}
-                        <div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                              id.gender === "MALE" ? "bg-blue-50 text-blue-600" : "bg-rose-50 text-rose-600"
-                            }`}>
-                              {id.gender === "MALE" ? "乾" : "坤"}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground font-medium truncate">
-                              {id.bazi || "命盘待排"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 生日 + 地区 */}
-                        <div className="space-y-1 relative">
-                          <div className="text-[9px] text-muted-foreground flex items-center gap-1.5 truncate">
-                            <Calendar className="w-2.5 h-2.5 text-muted-foreground/60" />
-                            {id.birthday}
-                          </div>
-                          {id.region && (
-                            <div className="text-[9px] text-muted-foreground flex items-center gap-1.5 truncate pr-5">
-                              <MapPin className="w-2.5 h-2.5 text-muted-foreground/60" />
-                              {id.region}
-                            </div>
-                          )}
-                          {/* 编辑按钮 */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openEdit(id); }}
-                            className="absolute right-0 bottom-0 text-[9px] font-bold text-muted-foreground/40 hover:text-primary transition-colors"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 背景装饰 */}
-                      <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full blur-2xl opacity-10 ${
-                        id.gender === "MALE" ? "bg-blue-500" : "bg-rose-500"
-                      }`} />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* 关系网络图入口 */}
-            <div className="p-4 rounded-xl bg-card border border-primary/10 flex items-center justify-between cursor-pointer group hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                  <Network className="w-4 h-4 text-primary group-hover:text-primary-foreground" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-foreground">关系网络图</div>
-                  <div className="text-[10px] text-muted-foreground">可视化查看命主间关系</div>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================
-            资产与会籍区 — 三张快捷卡片
-        ================================================================= */}
-        <div className="mt-12">
-          <div className="flex items-center gap-2 mb-6 px-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <span className="font-serif-sc text-sm font-bold text-foreground">资产与会籍</span>
-            <span className="text-[10px] text-muted-foreground font-medium ml-auto">ASSETS & MEMBERSHIP</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {/* 星币余额 */}
+      {/* 升级横幅 */}
+      {!isPremium && (
+        <button
+          onClick={() => router.push("/pricing")}
+          className="card"
+          style={{
+            marginTop: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            cursor: "pointer",
+            background: "linear-gradient(135deg, var(--soft), var(--panel))",
+            borderColor: "var(--brand)",
+            textAlign: "left",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div
-              className="relative p-4 rounded-xl bg-primary/5 border border-primary/20 text-foreground overflow-hidden cursor-pointer group hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all"
-              onClick={() => router.push("/pricing")}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "var(--radius-sm)",
+                background: "var(--soft)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--brand)",
+                fontSize: 20,
+              }}
             >
-              <div className="relative z-10">
-                <Coins className="w-6 h-6 text-primary mb-2" />
-                <div className="text-2xl font-bold tracking-tight text-foreground">{totalPoints}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">星币余额</div>
-              </div>
-              <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-primary/10 rounded-full blur-xl" />
+              <i className="ti ti-crown" />
             </div>
-
-            {/* 我的报告 */}
-            <div
-              className="p-4 rounded-xl bg-card border border-primary/10 cursor-pointer group hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all"
-              onClick={() => router.push("/reports")}
-            >
-              <FileText className="w-6 h-6 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
-              <div className="text-2xl font-bold tracking-tight text-foreground">报告</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">查看全部</div>
-            </div>
-
-            {/* 立即充值 */}
-            <div
-              className="p-4 rounded-xl bg-primary text-primary-foreground cursor-pointer group hover:bg-primary/90 transition-all"
-              onClick={() => setShowRechargeModal(true)}
-            >
-              <Plus className="w-6 h-6 text-primary-foreground mb-2" />
-              <div className="text-sm font-bold">立即充值</div>
-              <div className="text-[10px] text-primary-foreground/70 mt-0.5">获取更多星币</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>升级专属会员</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>解锁高级命理分析报告</div>
             </div>
           </div>
-        </div>
+          <i className="ti ti-chevron-right" style={{ color: "var(--brand)" }} />
+        </button>
+      )}
 
-        {/* ================================================================
-            星币流水
-        ================================================================= */}
-        <div className="mt-12">
-          <div className="flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <span className="font-serif-sc text-sm font-bold text-foreground">星币流水</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">COIN HISTORY</span>
-          </div>
-
-          {/* 统计概览 */}
-          {pointStats && (
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="p-3 rounded-xl bg-green-50 border border-green-100">
-                <div className="flex items-center gap-1 mb-1">
-                  <ArrowUpRight className="w-3 h-3 text-green-600" />
-                  <span className="text-[9px] text-green-600 font-medium">总获得</span>
-                </div>
-                <div className="text-base font-bold text-green-700">{pointStats.totalIncome}</div>
-              </div>
-              <div className="p-3 rounded-xl bg-orange-50 border border-orange-100">
-                <div className="flex items-center gap-1 mb-1">
-                  <ArrowDownRight className="w-3 h-3 text-orange-600" />
-                  <span className="text-[9px] text-orange-600 font-medium">总消费</span>
-                </div>
-                <div className="text-base font-bold text-orange-700">{pointStats.totalExpense}</div>
-              </div>
-              <div className="p-3 rounded-xl bg-primary/5 border border-primary/10">
-                <div className="flex items-center gap-1 mb-1">
-                  <Coins className="w-3 h-3 text-primary" />
-                  <span className="text-[9px] text-primary font-medium">当前余额</span>
-                </div>
-                <div className="text-base font-bold text-foreground">{pointStats.balance}</div>
-              </div>
-            </div>
-          )}
-
-          {/* 流水列表 */}
-          <div className="rounded-xl border border-primary/10 overflow-hidden bg-card">
-            {logsLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="w-5 h-5 text-primary/40 animate-spin" />
-              </div>
-            ) : pointLogs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Coins className="w-8 h-8 mb-2 text-primary/20" />
-                <span className="text-xs">暂无星币流水记录</span>
-              </div>
-            ) : (
-              <div className="divide-y divide-primary/5">
-                {pointLogs.map((log) => (
-                  <div key={log.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                        log.type === "income"
-                          ? "bg-green-50 text-green-600"
-                          : "bg-orange-50 text-orange-600"
-                      }`}>
-                        {log.type === "income"
-                          ? <ArrowUpRight className="w-4 h-4" />
-                          : <ArrowDownRight className="w-4 h-4" />
-                        }
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-foreground">{log.sourceLabel}</div>
-                        {log.detail && (
-                          <div className="text-[10px] text-muted-foreground">{log.detail}</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-bold ${
-                        log.type === "income" ? "text-green-600" : "text-orange-600"
-                      }`}>
-                        {log.type === "income" ? "+" : ""}{log.amount}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {new Date(log.createdAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ================================================================
-            邀请好友
-        ================================================================= */}
-        <div className="mt-12">
-          <div className="flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-primary rounded-full" />
-              <span className="font-serif-sc text-sm font-bold text-foreground">邀请好友</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">INVITE & EARN</span>
-          </div>
-
-          <div className="rounded-xl border border-primary/10 bg-card overflow-hidden">
-            {/* 邀请码展示 */}
-            {inviteCode && (
-              <div className="p-5 bg-gradient-to-r from-primary/5 to-accent/5 border-b border-primary/10">
-                <div className="flex items-center gap-3 mb-3">
-                  <Users className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-bold text-foreground">我的邀请码</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 px-4 py-3 rounded-xl bg-background border border-primary/15 text-center">
-                    <span className="text-xl font-mono font-bold tracking-[0.2em] text-primary">{inviteCode}</span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="shrink-0 border-primary/20 text-primary hover:bg-primary/5"
-                    onClick={copyInviteCode}
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copied ? "已复制" : "复制"}
-                  </Button>
-                </div>
-                <div className="mt-3 flex items-center gap-4 text-[10px] text-muted-foreground">
-                  <span>好友注册可获得 <strong className="text-primary">10</strong> 星币</span>
-                  <span className="w-1 h-1 rounded-full bg-primary/20" />
-                  <span>您可获得 <strong className="text-primary">20</strong> 星币</span>
-                </div>
-              </div>
-            )}
-
-            {/* 奖励规则 */}
-            <div className="p-5 space-y-3">
-              <div className="text-xs font-bold text-foreground">奖励规则</div>
-              <div className="space-y-2">
-                {[
-                  { label: "分享邀请码", value: "好友注册时填写您的邀请码", icon: Share2 },
-                  { label: "双方奖励", value: "好友 +10 星币，您 +20 星币", icon: Gift },
-                  { label: "无上限", value: "邀请越多好友，获得越多奖励", icon: Sparkles },
-                ].map((rule) => (
-                  <div key={rule.label} className="flex items-center gap-3 text-xs">
-                    <div className="w-6 h-6 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
-                      <rule.icon className="w-3 h-3 text-primary" />
-                    </div>
-                    <span className="text-foreground font-medium">{rule.label}</span>
-                    <span className="text-muted-foreground">{rule.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================
-            系统设置区
-        ================================================================= */}
-        <div className="mt-12 mb-20">
-          <div className="flex items-center justify-between mb-6 px-2">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-primary/40 rounded-full" />
-              <span className="font-serif-sc text-sm font-bold text-foreground">系统设置</span>
-            </div>
-            <button
-              className="p-2 rounded-xl bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
-              title="分享应用"
-            >
-              <Share2 className="w-4 h-4 text-primary hover:text-primary-foreground" />
+      {/* ================================================================
+          命主档案
+      ================================================================= */}
+      <div style={{ marginTop: 28 }}>
+        <SectionTitle
+          icon="ti-users"
+          title="命主档案"
+          extra={
+            <button className="btn btn-primary btn-sm" onClick={openAdd}>
+              <i className="ti ti-plus" /> 添加新命主
             </button>
-          </div>
+          }
+        />
+      </div>
 
-          <div className="space-y-2">
-            {menuItems.map((item) => (
+      {identities.length === 0 ? (
+        <div className="card" style={{ marginTop: 12, cursor: "pointer" }} onClick={openAdd}>
+          <EmptyState icon="ti-user-plus" title="尚未添加命主" description="请添加命主以开始命理分析" />
+        </div>
+      ) : (
+        <div
+          className="template-grid"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12, marginTop: 14 }}
+        >
+          {identities.map((id) => {
+            const isMale = id.gender === "MALE";
+            const genderBg = isMale ? "var(--success-soft, rgba(44,74,30,.08))" : "var(--danger-soft, rgba(139,26,26,.08))";
+            const genderColor = isMale ? "var(--success)" : "var(--danger)";
+            return (
               <div
-                key={item.title}
-                onClick={() => item.action()}
-                className="w-full flex items-center justify-between p-4 rounded-xl border border-primary/10 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all group cursor-pointer"
+                key={id.id}
+                className={`card${id.isActive ? " selected" : ""}`}
+                style={{ cursor: "pointer", padding: 14 }}
+                onClick={() => setDetailIdentity(id)}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <item.icon className="w-4 h-4" />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background: genderBg,
+                      color: genderColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <i className="ti ti-user" />
                   </div>
-                  <div className="text-left">
-                    <div className="text-sm font-bold block text-foreground">{item.title}</div>
-                    {item.subtitle && (
-                      <div className="text-[10px] text-muted-foreground block mt-1">{item.subtitle}</div>
-                    )}
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {id.name}
+                  </span>
+                  {id.relation && id.relation !== "SELF" && (
+                    <span className="chip" style={{ fontSize: 10, padding: "1px 6px" }}>
+                      {RELATION_LABEL[id.relation] || id.relation}
+                    </span>
+                  )}
+                  {id.isActive && (
+                    <span
+                      className="chip"
+                      style={{ background: "var(--brand)", color: "#fff", border: "none", fontSize: 10, padding: "1px 6px" }}
+                    >
+                      当前
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      background: genderBg,
+                      color: genderColor,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isMale ? "乾" : "坤"}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {id.bazi || "命盘待排"}
+                  </span>
+                </div>
+
+                <div style={{ marginTop: 8, fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <i className="ti ti-calendar" />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{id.birthday}</span>
+                </div>
+                {id.region && (
+                  <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-muted)" }}>
+                    <i className="ti ti-map-pin" style={{ marginRight: 4 }} />
+                    {id.region}
+                  </div>
+                )}
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEdit(id); }}
+                  className="iconbtn"
+                  style={{ position: "absolute", top: 8, right: 8, width: 24, height: 24, fontSize: 11 }}
+                  title="编辑"
+                >
+                  <i className="ti ti-edit" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 关系网络图入口 */}
+      <button
+        className="setting-row"
+        style={{ marginTop: 12, width: "100%", cursor: "pointer", textDecoration: "none", color: "inherit" }}
+      >
+        <div className="sr-l">
+          <div className="sr-icon"><i className="ti ti-topology-star-ring-3" /></div>
+          <div>
+            <div className="sr-title">关系网络图</div>
+            <div className="sr-desc">可视化查看命主间关系</div>
+          </div>
+        </div>
+        <i className="ti ti-chevron-right" />
+      </button>
+
+      {/* ================================================================
+          资产与会籍
+      ================================================================= */}
+      <div style={{ marginTop: 28 }}>
+        <SectionTitle icon="ti-wallet" title="资产与会籍" />
+      </div>
+      <div
+        className="template-grid"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginTop: 14 }}
+      >
+        <button
+          className="coin-card"
+          style={{ cursor: "pointer", textAlign: "left" }}
+          onClick={() => router.push("/pricing")}
+        >
+          <i className="ti ti-coin" style={{ color: "var(--warning)", fontSize: 22 }} />
+          <div className="coin-amount">{totalPoints}</div>
+          <div className="coin-price">星币余额</div>
+        </button>
+
+        <button
+          className="coin-card"
+          style={{ cursor: "pointer", textAlign: "left" }}
+          onClick={() => router.push("/reports")}
+        >
+          <i className="ti ti-file-text" style={{ color: "var(--brand)", fontSize: 22 }} />
+          <div className="coin-amount" style={{ fontSize: 18 }}>报告</div>
+          <div className="coin-price">查看全部</div>
+        </button>
+
+        <button
+          className="coin-card"
+          style={{
+            cursor: "pointer",
+            textAlign: "left",
+            background: "var(--brand)",
+            color: "#fff",
+            borderColor: "var(--brand)",
+          }}
+          onClick={() => setShowRechargeModal(true)}
+        >
+          <i className="ti ti-plus" style={{ fontSize: 22 }} />
+          <div className="coin-amount" style={{ color: "#fff", fontSize: 16 }}>立即充值</div>
+          <div className="coin-price" style={{ color: "rgba(255,255,255,.7)" }}>获取更多星币</div>
+        </button>
+      </div>
+
+      {/* ================================================================
+          星币流水
+      ================================================================= */}
+      <div style={{ marginTop: 28 }}>
+        <SectionTitle icon="ti-history" title="星币流水" />
+      </div>
+
+      {/* 统计概览 */}
+      {pointStats && (
+        <div className="share-stats" style={{ marginTop: 14 }}>
+          <div className="ss" style={{ background: "var(--success-soft, rgba(44,74,30,.08))", borderColor: "var(--success)" }}>
+            <div className="ss-v" style={{ color: "var(--success)", fontSize: 20 }}>{pointStats.totalIncome}</div>
+            <div className="ss-l">总获得</div>
+          </div>
+          <div className="ss" style={{ background: "var(--warning-soft, rgba(196,154,74,.1))", borderColor: "var(--warning)" }}>
+            <div className="ss-v" style={{ color: "var(--warning)", fontSize: 20 }}>{pointStats.totalExpense}</div>
+            <div className="ss-l">总消费</div>
+          </div>
+          <div className="ss">
+            <div className="ss-v" style={{ fontSize: 20 }}>{pointStats.balance}</div>
+            <div className="ss-l">当前余额</div>
+          </div>
+        </div>
+      )}
+
+      {/* 流水列表 */}
+      <div className="card" style={{ marginTop: 14, padding: 0, overflow: "hidden" }}>
+        {logsLoading ? (
+          <div style={{ padding: 32, textAlign: "center" }}>
+            <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 20, color: "var(--brand)" }} />
+          </div>
+        ) : pointLogs.length === 0 ? (
+          <EmptyState icon="ti-coin" title="暂无星币流水记录" />
+        ) : (
+          <div className="log-list" style={{ gap: 0 }}>
+            {pointLogs.map((log) => (
+              <div
+                key={log.id}
+                className={`log-item ${log.type === "income" ? "income" : "expense"}`}
+                style={{ borderRadius: 0, border: "none", borderBottom: "1px solid var(--line-light)", margin: 0 }}
+              >
+                <div className={`log-icon`}>
+                  <i className={`ti ${log.type === "income" ? "ti-trending-up" : "ti-trending-down"}`} />
+                </div>
+                <div className="log-info">
+                  <div className="log-title">{log.sourceLabel}</div>
+                  {log.detail && <div className="log-meta">{log.detail}</div>}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className={`log-amount`}>
+                    {log.type === "income" ? "+" : ""}{log.amount}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                    {new Date(log.createdAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
               </div>
             ))}
+          </div>
+        )}
+      </div>
 
-            {/* 退出登录 */}
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-between p-4 rounded-xl border border-primary/10 hover:bg-rose-50 hover:border-rose-200 transition-all group mt-4"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-muted-foreground group-hover:bg-rose-500 group-hover:text-white transition-colors">
-                  <LogOut className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-bold group-hover:text-rose-600 transition-colors text-foreground">退出登录</span>
+      {/* ================================================================
+          邀请好友
+      ================================================================= */}
+      <div style={{ marginTop: 28 }}>
+        <SectionTitle icon="ti-gift" title="邀请好友" />
+      </div>
+      <div className="card" style={{ marginTop: 14 }}>
+        {inviteCode && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <i className="ti ti-users" style={{ color: "var(--brand)" }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>我的邀请码</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--soft)",
+                  border: "1px dashed var(--brand)",
+                  textAlign: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 18,
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontWeight: 700,
+                    letterSpacing: 3,
+                    color: "var(--brand)",
+                  }}
+                >
+                  {inviteCode}
+                </span>
               </div>
-            </button>
+              <button className="btn btn-ghost btn-sm" onClick={copyInviteCode}>
+                <i className={`ti ${copied ? "ti-check" : "ti-copy"}`} />
+                {copied ? "已复制" : "复制"}
+              </button>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-muted)", display: "flex", gap: 16 }}>
+              <span>好友注册可获得 <strong style={{ color: "var(--brand)" }}>10</strong> 星币</span>
+              <span>·</span>
+              <span>您可获得 <strong style={{ color: "var(--brand)" }}>20</strong> 星币</span>
+            </div>
+          </>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 10 }}>
+            奖励规则
+          </div>
+          <div className="log-list">
+            {[
+              { label: "分享邀请码", value: "好友注册时填写您的邀请码", icon: "ti-share" },
+              { label: "双方奖励", value: "好友 +10 星币，您 +20 星币", icon: "ti-gift" },
+              { label: "无上限", value: "邀请越多好友，获得越多奖励", icon: "ti-sparkles" },
+            ].map((rule) => (
+              <div key={rule.label} className="log-item" style={{ padding: 8 }}>
+                <div className="sr-icon" style={{ width: 28, height: 28 }}>
+                  <i className={`ti ${rule.icon}`} />
+                </div>
+                <div className="log-info">
+                  <div className="log-title" style={{ fontSize: 13 }}>{rule.label}</div>
+                  <div className="log-meta">{rule.value}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
+
+      {/* ================================================================
+          系统设置
+      ================================================================= */}
+      <div style={{ marginTop: 28, marginBottom: 32 }}>
+        <SectionTitle
+          icon="ti-settings"
+          title="系统设置"
+          extra={
+            <button className="iconbtn" title="分享应用">
+              <i className="ti ti-share" />
+            </button>
+          }
+        />
+      </div>
+      <div className="log-list" style={{ marginTop: 12 }}>
+        {menuItems.map((item) => (
+          <button
+            key={item.title}
+            onClick={item.action}
+            className="setting-row"
+            style={{ width: "100%", cursor: "pointer", textDecoration: "none", color: "inherit" }}
+          >
+            <div className="sr-l">
+              <div className="sr-icon"><i className={`ti ${item.icon}`} /></div>
+              <div>
+                <div className="sr-title">{item.title}</div>
+                {item.subtitle && <div className="sr-desc">{item.subtitle}</div>}
+              </div>
+            </div>
+            <i className="ti ti-chevron-right" />
+          </button>
+        ))}
+
+        <button
+          onClick={handleLogout}
+          className="setting-row"
+          style={{
+            width: "100%",
+            cursor: "pointer",
+            textDecoration: "none",
+            color: "var(--danger)",
+            borderColor: "var(--danger)",
+          }}
+        >
+          <div className="sr-l">
+            <div className="sr-icon" style={{ background: "var(--danger-soft, rgba(139,26,26,.08))", color: "var(--danger)" }}>
+              <i className="ti ti-logout" />
+            </div>
+            <div>
+              <div className="sr-title" style={{ color: "var(--danger)" }}>退出登录</div>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* ================================================================
           添加/编辑命主弹窗
       ================================================================= */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="paywall-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <UserIcon className="w-4 h-4 text-primary" />
-              </div>
+            <DialogTitle>
+              <i className="ti ti-user-plus" style={{ marginRight: 6 }} />
               {editIdentity ? "编辑命主" : "添加新命主"}
             </DialogTitle>
             <DialogDescription>
@@ -836,83 +839,80 @@ export default function UserPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            {/* 姓名 */}
-            <div className="space-y-2">
-              <Label htmlFor="name">姓名 *</Label>
-              <Input
-                id="name"
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 12 }}>
+            <div>
+              <label style={labelStyle}>姓名 *</label>
+              <input
+                className="input"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="请输入姓名"
+                style={{ width: "100%" }}
               />
             </div>
 
-            {/* 性别 */}
-            <div className="space-y-2">
-              <Label>性别 *</Label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setFormGender("MALE")}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    formGender === "MALE"
-                      ? "bg-blue-50 text-blue-600 border-2 border-blue-200"
-                      : "bg-primary/5 text-muted-foreground border-2 border-transparent hover:border-primary/20"
-                  }`}
-                >
-                  乾（男）
-                </button>
-                <button
-                  onClick={() => setFormGender("FEMALE")}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    formGender === "FEMALE"
-                      ? "bg-rose-50 text-rose-600 border-2 border-rose-200"
-                      : "bg-primary/5 text-muted-foreground border-2 border-transparent hover:border-primary/20"
-                  }`}
-                >
-                  坤（女）
-                </button>
+            <div>
+              <label style={labelStyle}>性别 *</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["MALE", "FEMALE"] as const).map((g) => {
+                  const active = formGender === g;
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => setFormGender(g)}
+                      className="btn"
+                      style={{
+                        flex: 1,
+                        background: active ? "var(--brand)" : "var(--soft)",
+                        color: active ? "#fff" : "var(--text-muted)",
+                        border: "1px solid " + (active ? "var(--brand)" : "var(--line)"),
+                        fontWeight: 600,
+                      }}
+                    >
+                      {g === "MALE" ? "乾（男）" : "坤（女）"}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* 出生时间 */}
-            <div className="space-y-2">
-              <Label htmlFor="birthday">出生时间 *</Label>
-              <Input
-                id="birthday"
+            <div>
+              <label style={labelStyle}>出生时间 *</label>
+              <input
+                className="input"
                 type="datetime-local"
                 value={formBirthday}
                 onChange={(e) => setFormBirthday(e.target.value)}
+                style={{ width: "100%" }}
               />
             </div>
 
-            {/* 出生城市 */}
-            <div className="space-y-2">
-              <Label htmlFor="city">出生城市</Label>
-              <Input
-                id="city"
+            <div>
+              <label style={labelStyle}>出生城市</label>
+              <input
+                className="input"
                 value={formCity}
                 onChange={(e) => setFormCity(e.target.value)}
                 placeholder="例如：南京"
+                style={{ width: "100%" }}
               />
             </div>
 
-            {/* 地区 */}
-            <div className="space-y-2">
-              <Label htmlFor="region">省份/地区</Label>
-              <Input
-                id="region"
+            <div>
+              <label style={labelStyle}>省份/地区</label>
+              <input
+                className="input"
                 value={formRegion}
                 onChange={(e) => setFormRegion(e.target.value)}
                 placeholder="例如：江苏省"
+                style={{ width: "100%" }}
               />
             </div>
 
-            {/* 关系 */}
-            <div className="space-y-2">
-              <Label>与您的关系</Label>
+            <div>
+              <label style={labelStyle}>与您的关系</label>
               <Select value={formRelation} onValueChange={setFormRelation}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -928,26 +928,28 @@ export default function UserPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddModal(false)}>
               取消
-            </Button>
-            <Button className="bg-primary hover:bg-primary/90" onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving && <i className="ti ti-loader-2 ti-spin" style={{ marginRight: 4 }} />}
               {editIdentity ? "保存" : "添加"}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* 兑换中心弹窗 */}
+      {/* 兑换中心 */}
       <Dialog open={showRedeemModal} onOpenChange={setShowRedeemModal}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="paywall-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <TicketCheck className="w-4 h-4 text-primary" />
-              </div>
+            <DialogTitle>
+              <i className="ti ti-ticket" style={{ marginRight: 6 }} />
               兑换中心
             </DialogTitle>
             <DialogDescription>
@@ -955,84 +957,114 @@ export default function UserPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="redeem-code">兑换码</Label>
-              <Input
-                id="redeem-code"
-                value={redeemCode}
-                onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
-                placeholder="请输入兑换码"
-                className="text-center text-lg tracking-widest font-mono"
-                maxLength={32}
-              />
-            </div>
+          <div style={{ paddingTop: 12 }}>
+            <label style={labelStyle}>兑换码</label>
+            <input
+              className="input"
+              value={redeemCode}
+              onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+              placeholder="请输入兑换码"
+              style={{
+                width: "100%",
+                textAlign: "center",
+                fontSize: 18,
+                letterSpacing: 4,
+                fontFamily: "var(--font-mono, monospace)",
+              }}
+              maxLength={32}
+            />
 
             {inviteCode && (
-              <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 space-y-2">
-                <div className="text-xs font-medium text-muted-foreground">我的邀请码</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono font-bold text-foreground flex-1">{inviteCode}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={copyInviteCode}
-                  >
-                    {copied ? <Check className="w-3 h-3 mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-                    {copied ? "已复制" : "复制"}
-                  </Button>
+              <div
+                style={{
+                  marginTop: 12,
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--soft)",
+                  padding: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                  我的邀请码
                 </div>
-                <div className="text-[10px] text-muted-foreground">分享邀请码给好友，双方均可获得积分奖励</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flex: 1, fontFamily: "var(--font-mono, monospace)", fontWeight: 700, color: "var(--ink)" }}>
+                    {inviteCode}
+                  </span>
+                  <button className="btn btn-ghost btn-sm" onClick={copyInviteCode}>
+                    <i className={`ti ${copied ? "ti-check" : "ti-copy"}`} />
+                    {copied ? "已复制" : "复制"}
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRedeemModal(false)}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowRedeemModal(false)}>
               取消
-            </Button>
-            <Button
-              className="bg-primary hover:bg-primary/90"
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
               onClick={handleRedeem}
               disabled={redeeming || !redeemCode.trim()}
             >
               {redeeming ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  兑换中...
-                </>
+                <><i className="ti ti-loader-2 ti-spin" /> 兑换中...</>
               ) : (
                 "立即兑换"
               )}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* 命主详情弹窗 */}
+      {/* 命主详情 */}
       <Dialog open={!!detailIdentity} onOpenChange={(open) => { if (!open) setDetailIdentity(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="paywall-dialog">
           {detailIdentity && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${detailIdentity.gender === "MALE" ? "bg-blue-500" : "bg-rose-500"}`}>
+                <DialogTitle style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      background: detailIdentity.gender === "MALE" ? "var(--success)" : "var(--danger)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 600,
+                    }}
+                  >
                     {detailIdentity.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="text-base font-bold">{detailIdentity.name}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${detailIdentity.gender === "MALE" ? "bg-blue-50 text-blue-600" : "bg-rose-50 text-rose-600"}`}>
+                    <div>{detailIdentity.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontSize: 11 }}>
+                      <span
+                        className="chip"
+                        style={{
+                          fontSize: 10,
+                          padding: "1px 6px",
+                          background: detailIdentity.gender === "MALE" ? "var(--success-soft)" : "var(--danger-soft)",
+                          color: detailIdentity.gender === "MALE" ? "var(--success)" : "var(--danger)",
+                          border: "none",
+                        }}
+                      >
                         {detailIdentity.gender === "MALE" ? "乾" : "坤"}
                       </span>
                       {detailIdentity.relation && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {detailIdentity.relation === "SELF" ? "自己" : detailIdentity.relation}
+                        <span style={{ color: "var(--text-muted)" }}>
+                          {RELATION_LABEL[detailIdentity.relation] || detailIdentity.relation}
                         </span>
                       )}
                       {detailIdentity.isActive && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-primary/10 text-primary">当前</span>
+                        <span className="chip" style={{ background: "var(--brand)", color: "#fff", border: "none", fontSize: 10, padding: "1px 6px" }}>
+                          当前
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1042,58 +1074,64 @@ export default function UserPage() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="grid grid-cols-2 gap-2 py-2">
+              <div
+                className="template-grid"
+                style={{ gridTemplateColumns: "1fr 1fr", gap: 8, paddingTop: 12 }}
+              >
                 <button
                   onClick={() => { setDetailIdentity(null); router.push("/reports"); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors group"
+                  className="coin-card"
+                  style={{ cursor: "pointer" }}
                 >
-                  <FileText className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <span className="text-xs font-medium text-foreground">查看报告</span>
+                  <i className="ti ti-file-text" style={{ color: "var(--brand)" }} />
+                  <div className="coin-amount" style={{ fontSize: 13 }}>查看报告</div>
                 </button>
                 <button
                   onClick={() => { setDetailIdentity(null); router.push("/chart"); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-primary/5 hover:bg-blue-50 transition-colors group"
+                  className="coin-card"
+                  style={{ cursor: "pointer" }}
                 >
-                  <Network className="w-5 h-5 text-muted-foreground group-hover:text-blue-500 transition-colors" />
-                  <span className="text-xs font-medium text-foreground">八字排盘</span>
+                  <i className="ti ti-layout-grid" style={{ color: "var(--brand)" }} />
+                  <div className="coin-amount" style={{ fontSize: 13 }}>八字排盘</div>
                 </button>
                 <button
                   onClick={() => { setDetailIdentity(null); router.push("/reports"); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-primary/5 hover:bg-green-50 transition-colors group"
+                  className="coin-card"
+                  style={{ cursor: "pointer" }}
                 >
-                  <MessageSquare className="w-5 h-5 text-muted-foreground group-hover:text-green-500 transition-colors" />
-                  <span className="text-xs font-medium text-foreground">AI 对话</span>
+                  <i className="ti ti-message-2" style={{ color: "var(--brand)" }} />
+                  <div className="coin-amount" style={{ fontSize: 13 }}>AI 对话</div>
                 </button>
                 <button
                   onClick={() => { const id = detailIdentity; setDetailIdentity(null); openEdit(id); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors group"
+                  className="coin-card"
+                  style={{ cursor: "pointer" }}
                 >
-                  <Edit2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <span className="text-xs font-medium text-foreground">编辑信息</span>
+                  <i className="ti ti-edit" style={{ color: "var(--brand)" }} />
+                  <div className="coin-amount" style={{ fontSize: 13 }}>编辑信息</div>
                 </button>
               </div>
 
               {!detailIdentity.isActive && (
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
+                <button
+                  className="btn btn-primary"
+                  style={{ width: "100%", marginTop: 12 }}
                   onClick={() => { activateIdentity(detailIdentity.id); setDetailIdentity(null); }}
                 >
                   设为当前命主
-                </Button>
+                </button>
               )}
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* 充值弹窗 */}
+      {/* 充值 */}
       <Dialog open={showRechargeModal} onOpenChange={setShowRechargeModal}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="paywall-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Coins className="w-4 h-4 text-primary" />
-              </div>
+            <DialogTitle>
+              <i className="ti ti-coin" style={{ marginRight: 6 }} />
               充值星币
             </DialogTitle>
             <DialogDescription>
@@ -1101,69 +1139,98 @@ export default function UserPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4">
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { amount: 20, coins: 200, bonus: 0, tag: "" },
-                { amount: 50, coins: 500, bonus: 50, tag: "热门" },
-                { amount: 100, coins: 1000, bonus: 150, tag: "" },
-                { amount: 300, coins: 3000, bonus: 600, tag: "超值" },
-              ].map((opt) => (
-                <button
-                  key={opt.amount}
-                  onClick={() => setRechargeAmount(opt.amount)}
-                  className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                    rechargeAmount === opt.amount
-                      ? "border-primary bg-primary/5"
-                      : "border-primary/10 bg-card hover:border-primary/30"
-                  }`}
-                >
-                  {opt.tag && (
-                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
-                      {opt.tag}
-                    </span>
-                  )}
-                  <div className="text-lg font-bold text-foreground">¥{opt.amount}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {opt.coins}星币
-                    {opt.bonus > 0 && (
-                      <span className="text-primary ml-1">+{opt.bonus}</span>
+          <div style={{ paddingTop: 12 }}>
+            <div
+              className="template-grid"
+              style={{ gridTemplateColumns: "1fr 1fr", gap: 10 }}
+            >
+              {rechargeOptions.map((opt) => {
+                const active = rechargeAmount === opt.amount;
+                return (
+                  <button
+                    key={opt.amount}
+                    onClick={() => setRechargeAmount(opt.amount)}
+                    className={`coin-card${active ? " selected" : ""}`}
+                    style={{
+                      cursor: "pointer",
+                      position: "relative",
+                      textAlign: "left",
+                      padding: 14,
+                    }}
+                  >
+                    {opt.tag && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          right: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 4,
+                          background: "var(--brand)",
+                          color: "#fff",
+                        }}
+                      >
+                        {opt.tag}
+                      </span>
                     )}
-                  </div>
-                </button>
-              ))}
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+                      ¥{opt.amount}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                      {opt.coins}星币
+                      {opt.bonus > 0 && (
+                        <span style={{ color: "var(--brand)", marginLeft: 4 }}>+{opt.bonus}</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="mt-4 p-3 rounded-lg bg-primary/5 text-center">
-              <span className="text-xs text-muted-foreground">可获得 </span>
-              <span className="text-base font-bold text-primary">
-                {rechargeAmount * 10 + (rechargeAmount === 50 ? 50 : rechargeAmount === 100 ? 150 : rechargeAmount === 300 ? 600 : 0)}
-              </span>
-              <span className="text-xs text-muted-foreground"> 星币</span>
+            <div
+              style={{
+                marginTop: 14,
+                padding: 10,
+                borderRadius: "var(--radius-sm)",
+                background: "var(--soft)",
+                textAlign: "center",
+                fontSize: 13,
+              }}
+            >
+              <span style={{ color: "var(--text-muted)" }}>可获得 </span>
+              <strong style={{ color: "var(--brand)", fontSize: 16 }}>{totalRechargeCoins}</strong>
+              <span style={{ color: "var(--text-muted)" }}> 星币</span>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRechargeModal(false)}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowRechargeModal(false)}>
               取消
-            </Button>
-            <Button
-              className="bg-primary hover:bg-primary/90"
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
               onClick={handleRecharge}
               disabled={recharging}
             >
               {recharging ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  充值中...
-                </>
+                <><i className="ti ti-loader-2 ti-spin" /> 充值中...</>
               ) : (
-                `确认充值 ¥${rechargeAmount}`
+                "确认充值"
               )}
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }
+
+const labelStyle: CSSProperties = {
+  display: "block",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--ink)",
+  marginBottom: 6,
+};
