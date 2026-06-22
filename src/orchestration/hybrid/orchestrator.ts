@@ -24,6 +24,8 @@ import { executeStage3 } from '@/core/stages/stage3-matter-analysis'
 import { executeStage4 } from '@/core/stages/stage4-interaction'
 import { resolveMatterRoute } from '@/core/router/matter-route-resolver'
 import { buildChartFingerprint } from '@/core/services/scoring-service'
+import { findSnapshotByFingerprint, refreshStageByFingerprint } from '@/core/chart/chart-record-service'
+import { chartDataToBirthInfo, computeChartFingerprint, type ChartSnapshot } from '@/core/chart/chart-snapshot-builder'
 import { resolveLiuNianGan, findCurrentDaXianFromChart } from '@/core/limit-analyzer/fortune-engine'
 
 import {
@@ -165,10 +167,38 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
   const cacheKey2 = `stage2:${cacheVersion}:${fp}`
   const CACHE_TTL = 24 * 60 * 60 // 24 小时
 
+  // ── DB 持久缓存指纹（含 city 的 sha256，与 ChartRecord 一致）──
+  // 从 chartData 提取 birthInfo → 算 sha256 → 查 ChartRecord.chartSnapshot
+  // 提取失败（字段不全）时 dbFingerprint=null，降级到 Redis/重算，不影响主流程
+  const dbBirthInfo = chartDataToBirthInfo(effectiveChartData)
+  const dbFingerprint = dbBirthInfo ? computeChartFingerprint(dbBirthInfo) : null
+
+  // DB 查询缓存（同一次请求内 stage1 + stage2 共用一次查询结果）
+  let dbSnapshotCache: ChartSnapshot | null | undefined // undefined = 尚未查询
+  let dbMissed = false // DB 查询过但未命中/不兼容（用于重算后回写 ChartRecord）
+  const getDbSnapshot = async (): Promise<ChartSnapshot | null> => {
+    if (dbSnapshotCache !== undefined) return dbSnapshotCache
+    if (!dbFingerprint) { dbSnapshotCache = null; return null }
+    try {
+      dbSnapshotCache = await findSnapshotByFingerprint(userId, dbFingerprint)
+      if (dbSnapshotCache) {
+        console.log(`[Hybrid⏱] DB 持久缓存命中, fingerprint=${dbFingerprint.slice(0, 8)}…`)
+      } else {
+        dbMissed = true
+      }
+    } catch (e) {
+      // DB 不可用时降级，绝不阻塞主流程
+      console.error('[Hybrid⏱] DB 缓存查询失败（降级到重算）:', e instanceof Error ? e.message : e)
+      dbSnapshotCache = null
+      dbMissed = true
+    }
+    return dbSnapshotCache
+  }
+
   // 阶段 1：宫位评分（如果尚未执行）
   let stage1Output = hp.stage1Output
   if (!stage1Output) {
-    // 先查 Redis 缓存
+    // ① 先查 Redis 热缓存（24h）
     try {
       const cached1 = await redis.get(cacheKey1)
       if (cached1) {
@@ -177,6 +207,18 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
       }
     } catch { /* Redis 不可用时 fallback */ }
 
+    // ② Redis miss → 查 DB 持久缓存（ChartRecord.chartSnapshot，跨 session/跨 24h）
+    if (!stage1Output) {
+      const dbSnap = await getDbSnapshot()
+      if (dbSnap?.stage1) {
+        stage1Output = dbSnap.stage1
+        console.log(`[Hybrid⏱] Stage1 复用 DB snapshot.stage1`)
+        // 回写 Redis 补热（避免下次还查 DB）
+        redis.set(cacheKey1, JSON.stringify(stage1Output), 'EX', CACHE_TTL).catch(() => {})
+      }
+    }
+
+    // ③ 都 miss → 重算
     if (!stage1Output) {
       stage1Output = executeStage1({ chartData: effectiveChartData, parentBirthYears: params.parentBirthYears })
       // 异步写入 Redis（不阻塞）
@@ -190,7 +232,7 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
   // 阶段 2：性格定性（如果尚未执行）
   let stage2Output = hp.stage2Output
   if (!stage2Output) {
-    // 先查 Redis 缓存
+    // ① 先查 Redis 热缓存
     try {
       const cached2 = await redis.get(cacheKey2)
       if (cached2) {
@@ -199,6 +241,17 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
       }
     } catch { /* Redis 不可用时 fallback */ }
 
+    // ② Redis miss → 查 DB 持久缓存（复用 getDbSnapshot，零额外查询）
+    if (!stage2Output) {
+      const dbSnap = await getDbSnapshot()
+      if (dbSnap?.stage2) {
+        stage2Output = dbSnap.stage2
+        console.log(`[Hybrid⏱] Stage2 复用 DB snapshot.stage2`)
+        redis.set(cacheKey2, JSON.stringify(stage2Output), 'EX', CACHE_TTL).catch(() => {})
+      }
+    }
+
+    // ③ 都 miss → 重算
     if (!stage2Output) {
       stage2Output = executeStage2({ stage1: stage1Output, question })
       // 异步写入 Redis（不阻塞）
@@ -207,6 +260,12 @@ export async function runHybridPipeline(params: RunHybridPipelineParams): Promis
     hp.stage2Output = stage2Output
     hp.stage2Json = JSON.stringify(stage2Output)
     hp.sessionState.stage2Completed = true
+  }
+
+  // DB miss 触发重算后，异步回写 ChartRecord（刷新 stage1/2 + 版本号，避免下次还重算）
+  // 仅在 dbMissed 时回写（DB 命中则数据已是 DB 的，无需回写）；无 ChartRecord 时 refresh 返回 false（不自动创建）
+  if (dbMissed && dbFingerprint) {
+    void refreshStageByFingerprint(userId, dbFingerprint, stage1Output, stage2Output).catch(() => {})
   }
 
   if (params.targetYear !== undefined) {
@@ -702,9 +761,12 @@ function buildMessagesForStage(
 }
 
 /**
- * 构建 Stage3 事项分析的 Prompt 消息（供自由对话模式复用）
+ * 构建 Stage3 事项分析的 Prompt 消息（供自由对话模式与报告生成复用）
+ *
+ * 纯函数：仅依赖 stage1/2/3 + 元数据，不依赖会话上下文。
+ * 报告场景调用时：question 传空字符串、routingAnswers 不传。
  */
-function buildStage3Messages(
+export function buildStage3Messages(
   stage1: ReturnType<typeof executeStage1>,
   stage2: ReturnType<typeof executeStage2>,
   stage3: ReturnType<typeof executeStage3>,

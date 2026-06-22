@@ -15,11 +15,15 @@
 import { prisma } from '@/lib/db'
 import {
   buildChartSnapshot,
+  buildChartSnapshotFromReading,
   computeChartFingerprint,
+  getIztroVersion,
   isSnapshotCompatible,
+  STAGE_VERSION,
   type ChartBirthInfo,
   type ChartSnapshot,
 } from './chart-snapshot-builder'
+import type { Stage1Output, Stage2Output } from '@/core/types'
 
 // ════════════════════════════════════════════════════════════
 // 类型
@@ -34,6 +38,14 @@ export interface SaveChartInput {
   name: string
   /** 出生信息（用于排盘） */
   birthInfo: ChartBirthInfo
+  /**
+   * 前端已序列化的命盘数据（serializeAstrolabeForReading 输出）
+   *
+   * 提供时：跳过 iztro 排盘，直接复用前端 chartData 作为 reading，
+   *         保证保存的数据与用户当前所见完全一致（避免服务端重排的数据漂移）。
+   * 不提供时：服务端按 birthInfo 自行排盘（原逻辑，适用于 API 直接创建等场景）。
+   */
+  chartData?: Record<string, unknown> | null
   /** 来源 */
   source?: ChartSource
   /** 用户备注 */
@@ -133,21 +145,44 @@ function toSummary(r: {
  * 同一指纹已存在时返回已有记录（幂等）
  */
 export async function saveChart(input: SaveChartInput): Promise<ChartRecordSummary> {
-  const { userId, identityId, name, birthInfo, source = 'MANUAL', note, isPrimary } = input
+  const { userId, identityId, name, birthInfo, chartData, source = 'MANUAL', note, isPrimary } = input
 
   await assertIdentityOwned(identityId, userId)
 
-  // 幂等：同指纹已存在则直接返回
   const fingerprint = computeChartFingerprint(birthInfo)
+
+  // 构建完整快照的工厂：有外部 chartData 则跳过排盘复用前端数据，无则服务端排盘
+  const buildSnapshot = (): ChartSnapshot =>
+    chartData
+      ? buildChartSnapshotFromReading({ chartData, birthInfo })
+      : buildChartSnapshot(birthInfo)
+
+  // 幂等检查：同指纹已存在
   const existing = await prisma.chartRecord.findFirst({
     where: { chartFingerprint: fingerprint, identityId },
   })
+
   if (existing) {
+    // 版本治理：已有记录但 stageVersion/iztroVersion 过期 → 重算 update
+    // 保证规则升级后保存的命盘数据一致，而非永久返回旧规则下的 stage1/2
+    const existingSnapshot = existing.chartSnapshot as unknown as ChartSnapshot
+    if (!isSnapshotCompatible(existingSnapshot)) {
+      const freshSnapshot = buildSnapshot()
+      const updated = await prisma.chartRecord.update({
+        where: { id: existing.id },
+        data: {
+          chartSnapshot: freshSnapshot as unknown as object,
+          birthSolarDate: freshSnapshot.summary.solarDate,
+          timeIndex: freshSnapshot.birthInfo.hour,
+        },
+      })
+      return toSummary(updated)
+    }
     return toSummary(existing)
   }
 
-  // 构建完整快照
-  const snapshot = buildChartSnapshot(birthInfo)
+  // 新建：构建快照
+  const snapshot = buildSnapshot()
 
   // 第一个盘自动 primary
   const count = await prisma.chartRecord.count({ where: { identityId } })
@@ -226,6 +261,67 @@ export async function getChartSnapshot(id: string, userId: string): Promise<Char
   const snapshot = record.chartSnapshot as unknown as ChartSnapshot
   if (!isSnapshotCompatible(snapshot)) return null
   return snapshot
+}
+
+/**
+ * 按指纹查 ChartSnapshot（带兼容性校验）
+ *
+ * 供 orchestrator 等"需要 stage1/2 但不想重算"的场景作为 DB 持久缓存层。
+ * 读取顺序：session 内存 → Redis（24h）→ 此方法 → 重算。
+ *
+ * 同 fingerprint 可能对应多个 identity（同一用户给不同命主存了同出生信息的盘），
+ * stage1/2 只依赖出生信息，取任一即可；findFirst 默认取最新创建的。
+ *
+ * 不兼容（iztroVersion 或 stageVersion 不符）时返回 null，调用方应 fallback 到重算。
+ */
+export async function findSnapshotByFingerprint(
+  userId: string,
+  fingerprint: string,
+): Promise<ChartSnapshot | null> {
+  const record = await prisma.chartRecord.findFirst({
+    where: { userId, chartFingerprint: fingerprint },
+    select: { chartSnapshot: true },
+  })
+  if (!record) return null
+  const snapshot = record.chartSnapshot as unknown as ChartSnapshot
+  if (!isSnapshotCompatible(snapshot)) return null
+  return snapshot
+}
+
+/**
+ * 按 fingerprint 刷新 ChartRecord 的 stage1/2（部分更新 chartSnapshot）
+ *
+ * 用于 orchestrator 重算后回写 DB：当 Redis + DB 都 miss 触发重算时，
+ * 如果该指纹已有 ChartRecord（用户之前保存过），更新其 stage1/stage2/stageVersion/iztroVersion，
+ * 让 stageVersion/iztroVersion 升级后 DB 缓存自动刷新（避免每次对话都重算）。
+ *
+ * 没有 ChartRecord 时返回 false（不自动创建，保持"用户主动保存"语义）。
+ */
+export async function refreshStageByFingerprint(
+  userId: string,
+  fingerprint: string,
+  stage1: Stage1Output,
+  stage2: Stage2Output,
+): Promise<boolean> {
+  const existing = await prisma.chartRecord.findFirst({
+    where: { userId, chartFingerprint: fingerprint },
+    select: { id: true, chartSnapshot: true },
+  })
+  if (!existing) return false
+  const oldSnapshot = existing.chartSnapshot as Record<string, unknown>
+  const updatedSnapshot = {
+    ...oldSnapshot,
+    stage1,
+    stage2,
+    stageVersion: STAGE_VERSION,
+    iztroVersion: getIztroVersion(),
+    computedAt: new Date().toISOString(),
+  }
+  await prisma.chartRecord.update({
+    where: { id: existing.id },
+    data: { chartSnapshot: updatedSnapshot as unknown as object },
+  })
+  return true
 }
 
 /**

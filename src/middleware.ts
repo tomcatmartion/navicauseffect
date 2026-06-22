@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-const protectedPaths = ["/profile", "/admin"];
+const protectedPaths = ["/profile", "/admin", "/charts", "/reports"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -28,5 +28,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/profile", "/profile/:path*", "/admin", "/admin/:path*"],
+  matcher: ["/profile", "/profile/:path*", "/admin", "/admin/:path*", "/charts", "/charts/:path*", "/reports", "/reports/:path*"],
 };

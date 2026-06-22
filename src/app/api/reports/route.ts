@@ -1,8 +1,13 @@
 import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { generateReportContent } from '@/core/report/report-generator'
-import { buildReportContext, buildReportContextFromSnapshot } from '@/core/report/report-pipeline'
+import { generateReportContent, resolveReportInstruction } from '@/core/report/report-generator'
+import {
+  buildReportContext,
+  buildReportContextFromSnapshot,
+  type ReportContextBundle,
+} from '@/core/report/report-pipeline'
+import { runReportGovernors } from '@/core/report/report-governor-runner'
 import { getChartSnapshot, saveChart } from '@/core/chart/chart-record-service'
 
 // GET /api/reports — 获取当前用户的报告列表（按命主分组）
@@ -87,23 +92,20 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { templateId, identityId, extraInfo, chartRecordId } = body
 
-    if (!templateId || !identityId) {
+    if (!templateId || !identityId || !chartRecordId) {
       return NextResponse.json(
-        { error: '缺少 templateId 或 identityId' },
+        { error: '生成报告必须基于已保存的命盘，请先在命盘页保存命盘后再生成报告' },
         { status: 400 }
       )
     }
 
-    // 验证 chartRecordId（可选；若提供则用快照替代重排盘）
-    let chartSnapshot: Awaited<ReturnType<typeof getChartSnapshot>> = null
-    if (chartRecordId) {
-      chartSnapshot = await getChartSnapshot(chartRecordId, session.user.id)
-      if (!chartSnapshot) {
-        return NextResponse.json(
-          { error: '指定命盘不存在或无权使用' },
-          { status: 400 }
-        )
-      }
+    // 验证 chartRecordId（必填：报告必须基于已保存命盘，复用 snapshot 避免重排盘）
+    const chartSnapshot = await getChartSnapshot(chartRecordId, session.user.id)
+    if (!chartSnapshot) {
+      return NextResponse.json(
+        { error: '指定命盘不存在、无权使用或快照不兼容（可能规则已升级），请重新保存命盘' },
+        { status: 400 }
+      )
     }
 
     // 验证命主归属
@@ -199,7 +201,7 @@ export async function POST(req: NextRequest) {
 
     // ── 步骤 3：构建紫微 IR（排盘 + Stage1/2/3 硬计算结论） ──
     // 优先用 chartRecordId 对应的快照（避免重排盘，复用 stage1/2）
-    let ir: ReturnType<typeof buildReportContext>
+    let bundle: ReportContextBundle
     try {
       const identityInput = {
         name: identity.name,
@@ -209,7 +211,7 @@ export async function POST(req: NextRequest) {
         region: identity.region,
         bazi: identity.bazi,
       }
-      ir = chartSnapshot
+      bundle = chartSnapshot
         ? buildReportContextFromSnapshot(identityInput, template.slug, chartSnapshot)
         : buildReportContext(identityInput, template.slug)
     } catch (e) {
@@ -221,12 +223,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `紫微排盘失败：${msg}` }, { status: 400 })
     }
 
-    // ── 步骤 3b：AI 基于紫微 IR 生成报告（纯紫微理论） ──
+    // ── 步骤 3a：Stage3 Governor 预解析（每个 matterType 跑一次 stage3 五阶段 AI 分析） ──
+    // 与排盘页面同源链路，保证报告与对话口径一致；失败项降级到 stage3.analysisSummary
+    const governorResults = await runReportGovernors({
+      stage1: bundle.stage1,
+      stage2: bundle.stage2,
+      stage3List: bundle.stage3List,
+      chartData: bundle.chartData,
+      targetYear: bundle.targetYear,
+    })
+
+    // ── 步骤 3b：AI 基于紫微 IR + governor 解析结果 + 模板特殊指令生成报告 ──
+    const reportInstruction = resolveReportInstruction(template.slug, template.promptConfig)
     const genResult = await generateReportContent({
-      ir,
+      ir: bundle.ir,
       templateSlug: template.slug,
       templateName: template.name,
       extraInfo,
+      matterAnalyses: governorResults.map(r => ({
+        matterType: r.matterType,
+        analysisText: r.analysisText,
+        degraded: r.degraded,
+      })),
+      reportInstruction,
     })
 
     // ── 步骤 4：更新报告状态 ──
@@ -270,7 +289,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 子报告：构建紫微 IR（复用主报告的 chartSnapshot，避免重排盘）
-        let childIr: ReturnType<typeof buildReportContext>
+        let childBundle: ReportContextBundle
         try {
           const identityInput = {
             name: identity.name,
@@ -280,7 +299,7 @@ export async function POST(req: NextRequest) {
             region: identity.region,
             bazi: identity.bazi,
           }
-          childIr = chartSnapshot
+          childBundle = chartSnapshot
             ? buildReportContextFromSnapshot(identityInput, child.slug, chartSnapshot)
             : buildReportContext(identityInput, child.slug)
         } catch (e) {
@@ -292,11 +311,31 @@ export async function POST(req: NextRequest) {
           return
         }
 
+        // 子报告 Stage3 Governor 预解析（同主报告链路）
+        const childGovernorResults = await runReportGovernors({
+          stage1: childBundle.stage1,
+          stage2: childBundle.stage2,
+          stage3List: childBundle.stage3List,
+          chartData: childBundle.chartData,
+          targetYear: childBundle.targetYear,
+        })
+
+        // 子报告的模板特殊指令（child.promptConfig 由 include 自动带回）
+        const childInstruction = resolveReportInstruction(
+          child.slug,
+          (child as { promptConfig?: string | null }).promptConfig,
+        )
         const childGen = await generateReportContent({
-          ir: childIr,
+          ir: childBundle.ir,
           templateSlug: child.slug,
           templateName: child.name,
           extraInfo,
+          matterAnalyses: childGovernorResults.map(r => ({
+            matterType: r.matterType,
+            analysisText: r.analysisText,
+            degraded: r.degraded,
+          })),
+          reportInstruction: childInstruction,
         })
 
         // 更新子报告结果

@@ -187,6 +187,8 @@ export interface BirthInfoForReading {
   hour: number
   gender: string
   solar?: boolean
+  /** 出生城市（写入 chartData.birthInfo，供 orchestrator 算 DB 持久缓存指纹，需与保存路径一致） */
+  birthCity?: string
 }
 
 /**
@@ -239,6 +241,7 @@ export function serializeAstrolabeForReading(
       hour: birthDataParam.hour,
       gender: birthDataParam.gender === 'MALE' ? '男' : birthDataParam.gender,
       solar: birthDataParam.solar ?? true,
+      birthCity: birthDataParam.birthCity,
     }
   }
 

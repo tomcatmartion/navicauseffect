@@ -141,13 +141,15 @@ export interface ReportIR {
   baziAux: string | null
   /** 结构化可视化数据看板（程序生成，供前端渲染表格/图表） */
   dataPanel: ReportDataPanel
+  /** AI 预解析的事项 governor 结果（由 report-governor-runner 填充，主调用 prompt 引用） */
+  matterAnalysisTexts?: Array<{ matterType: MatterType; text: string; degraded?: boolean }>
 }
 
 // ════════════════════════════════════════════════════════════
 // 模板主题 → 紫微事项映射
 // ════════════════════════════════════════════════════════════
 
-const TEMPLATE_MAP: Record<string, { matters: MatterType[]; focus: string }> = {
+export const TEMPLATE_MAP: Record<string, { matters: MatterType[]; focus: string }> = {
   'talent-awakening': {
     matters: ['求职'],
     focus: '命宫主星（天赋底色）、官禄宫（才能与事业方向）、福德宫（兴趣与潜能）',
@@ -168,7 +170,7 @@ const TEMPLATE_MAP: Record<string, { matters: MatterType[]; focus: string }> = {
     matters: ['求财', '求职'],
     focus: '流年命宫、流年四化（禄权科忌）引动、十二宫流年吉凶、流年方向判断',
   },
-  'compatibility': {
+  'compatibility-report': {
     matters: ['求爱'],
     focus: '命宫（自身特质）、夫妻宫（伴侣画像）、迁移宫（人际外缘）——单视角关系倾向分析',
   },
@@ -425,6 +427,7 @@ function buildReportIR(
   const matters = stage3List.map(item => extractDeepMatter(stage1, item))
 
   // dataPanel：daXianTimeline 用 stage3 的 allDaXianMappings（命盘级，全量）
+  // 当 matters 为空（如 past-life 模板）时，fallback 到 stage1.allDaXianSummary
   const allDaXianRaw = stage3List[0]?.stage3.allDaXianMappings ?? []
   const palaceScores = stage1.palaceScores.map((p: PalaceScore) => ({
     palace: p.palace, diZhi: p.diZhi,
@@ -433,21 +436,43 @@ function buildReportIR(
     level: mapLevel(p.tone),
     isBodyPalace: chartSnapshot.shenGong.name === p.palace,
   }))
-  const daXianTimeline = allDaXianRaw.map(d => ({
-    index: d.index,
-    ageRange: `${d.ageRange[0]}~${d.ageRange[1]}`,
-    tone: d.index === currentDaXianIdx ? '当前' : (d.mutagen?.[3] ? '艰辛期' : '顺畅期'),
-    daXianGan: d.daXianGan,
-    mingPalace: d.mingPalaceName,
-    mutagen: d.mutagen ?? [],
-    isCurrent: d.index === currentDaXianIdx,
-  }))
+  const daXianTimeline = allDaXianRaw.length > 0
+    ? allDaXianRaw.map(d => ({
+        index: d.index,
+        ageRange: `${d.ageRange[0]}~${d.ageRange[1]}`,
+        tone: d.index === currentDaXianIdx ? '当前' : (d.mutagen?.[3] ? '艰辛期' : '顺畅期'),
+        daXianGan: d.daXianGan,
+        mingPalace: d.mingPalaceName,
+        mutagen: d.mutagen ?? [],
+        isCurrent: d.index === currentDaXianIdx,
+      }))
+    : (stage1.allDaXianSummary ?? []).map(d => ({
+        index: d.index,
+        ageRange: d.ageRange,
+        tone: d.isCurrent ? '当前' : '—',
+        daXianGan: d.daXianGan,
+        mingPalace: d.mingPalaceName,
+        mutagen: d.sihuaStars ?? [],
+        isCurrent: d.isCurrent,
+      }))
 
   // 组装 dataPanel（sihuaLanding/patterns/matters/personalityTriad 用 buildDataPanel）
   const basePanel = buildDataPanel(stage1, stage2, chartSnapshot, matters, currentDaXianIdx)
+  // 当 matters 为空时，sihuaLanding 也为空（依赖 matterSpec）→ fallback 用 stage1 全局四化标注
+  const sihuaLanding = basePanel.sihuaLanding.length > 0
+    ? basePanel.sihuaLanding
+    : (stage1.mergedSihua.palaceAnnotations ?? []).flatMap(ann =>
+        ann.annotations.map(a => ({
+          layer: '原局·全局',
+          type: String(a.type ?? ''),
+          star: a.star,
+          palace: ann.palaceName,
+        }))
+      )
   const dataPanel: ReportDataPanel = {
     ...basePanel,
-    daXianTimeline, // 用全量 allDaXianMappings 覆盖
+    sihuaLanding,
+    daXianTimeline, // 用全量 allDaXianMappings（或 stage1 fallback）覆盖
     palaceScores,
   }
 
@@ -478,12 +503,28 @@ function buildReportIR(
 // 主入口
 // ════════════════════════════════════════════════════════════
 
-export function buildReportContext(identity: ReportIdentity, templateSlug: string): ReportIR {
+/**
+ * 报告上下文 Bundle：包含 IR + stage 中间值 + chartData
+ *
+ * 返回中间值的目的：让 report-governor-runner 能直接复用 stage1/2/3 + chartData，
+ * 不需要重排盘或重算 stage。
+ */
+export interface ReportContextBundle {
+  ir: ReportIR
+  stage1: Stage1
+  stage2: Stage2
+  stage3List: Array<{ matterType: MatterType; stage3: Stage3; matterSpec: MatterAnalysisSpec | null }>
+  chartData: Record<string, unknown>
+  targetYear: number
+}
+
+export function buildReportContext(identity: ReportIdentity, templateSlug: string): ReportContextBundle {
   const tmpl = TEMPLATE_MAP[templateSlug] ?? { matters: [] as MatterType[], focus: '命宫与十二宫整体格局' }
   const chartData = buildReportChartData(identity)
   const targetYear = new Date().getFullYear()
   const { stage1, stage2, stage3List } = runReportStages(chartData, tmpl.matters, targetYear)
-  return buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
+  const ir = buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
+  return { ir, stage1, stage2, stage3List, chartData, targetYear }
 }
 
 /**
@@ -500,7 +541,7 @@ export function buildReportContextFromSnapshot(
     stage1: unknown
     stage2: unknown
   },
-): ReportIR {
+): ReportContextBundle {
   const tmpl = TEMPLATE_MAP[templateSlug] ?? { matters: [] as MatterType[], focus: '命宫与十二宫整体格局' }
   const chartData = snapshot.reading
   const targetYear = new Date().getFullYear()
@@ -518,5 +559,6 @@ export function buildReportContextFromSnapshot(
     }
     return { matterType, stage3, matterSpec }
   })
-  return buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
+  const ir = buildReportIR(identity, chartData, stage1, stage2, stage3List, tmpl.focus)
+  return { ir, stage1, stage2, stage3List, chartData, targetYear }
 }

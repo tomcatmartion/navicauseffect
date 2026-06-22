@@ -81,8 +81,18 @@ export default function ChartPage() {
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
+  /**
+   * 从已保存命盘恢复的 chartData（chartSnapshot.reading）
+   *
+   * 非空时 chartDataForPipeline 直接复用，跳过 serializeAstrolabeForReading，
+   * 让下游 orchestrator 走 DB snapshot 命中，避免 stage1/2 重算。
+   * Iztrolabe 组件仍需 astro.bySolar 重建 astrolabe 实例（iztro 类无法序列化，~50ms 纯计算）。
+   */
+  const [restoredChartData, setRestoredChartData] = useState<Record<string, unknown> | null>(null);
 
   const chartDataForPipeline = useMemo(() => {
+    // 优先复用从已保存命盘恢复的 reading（让 stage1/2 走 DB 持久缓存，跳过重算）
+    if (restoredChartData) return restoredChartData;
     if (!astrolabe || !birthData) return null;
     // referenceYear 与 UI 所选流年对齐：优先用 horoscope 中的年份，否则当前年
     const referenceYear = horoscope?.yearly?.index ?? new Date().getFullYear();
@@ -95,12 +105,13 @@ export default function ChartPage() {
         hour: birthData.hour,
         gender: birthData.gender === "MALE" ? "男" : "女",
         solar: birthData.solar,
+        birthCity: birthData.birthCity,
       },
       horoscope
         ? { horoscope: horoscope as unknown as Record<string, unknown>, referenceYear }
         : undefined,
     ) as Record<string, unknown>;
-  }, [astrolabe, birthData, horoscope]);
+  }, [restoredChartData, astrolabe, birthData, horoscope]);
 
   // 命盘缩放：必须在组件顶层调用（Rules of Hooks）
   const chartWrapperRef = useRef<HTMLDivElement>(null);
@@ -189,6 +200,10 @@ export default function ChartPage() {
           "zh-CN",
         );
         setAstrolabe(result);
+        // 复用 snapshot.reading 作为 chartData（让下游 orchestrator 命中 DB 持久缓存，跳过 stage1/2 重算）
+        if (snap.reading && typeof snap.reading === "object") {
+          setRestoredChartData(snap.reading as Record<string, unknown>);
+        }
         const restoredBirth = {
           gender: bi.gender,
           year: bi.year,
@@ -232,6 +247,8 @@ export default function ChartPage() {
     parentBirthYears?: { father?: number; mother?: number };
     parentZodiacs?: { father?: string; mother?: string };
   }) => {
+    // 重新排盘：清空从已保存命盘恢复的 reading，走全新序列化路径
+    setRestoredChartData(null);
     setIsGenerating(true);
     try {
       const astro = await getAstro();
@@ -309,6 +326,7 @@ export default function ChartPage() {
     setHoroscope(null);
     setTrueSolarTimeInfo("");
     setBirthData(null);
+    setRestoredChartData(null);
     sessionStorage.removeItem(CHART_STATE_KEY);
   };
 
@@ -345,6 +363,7 @@ export default function ChartPage() {
         <div className="flex items-center gap-2 shrink-0">
           <SaveChartButton
             visible={!!birthData}
+            chartData={chartDataForPipeline}
             birthInfo={{
               gender: birthData!.gender,
               year: birthData!.year,

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Bookmark, Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
+import { TIME_INDEX_TO_HOUR } from "@/lib/ziwei/time-index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,6 +41,11 @@ interface SaveChartButtonProps {
   };
   /** 命盘已显示时调用，按钮才会显示 */
   visible: boolean;
+  /**
+   * 当前命盘的序列化数据（serializeAstrolabeForReading 输出）
+   * 提供时：保存接口复用此数据作为 reading，避免服务端重排导致与用户所见不一致
+   */
+  chartData?: Record<string, unknown> | null;
   /** 样式类名（默认 outline） */
   variant?: "outline" | "default" | "ghost";
   size?: "sm" | "default";
@@ -48,6 +54,7 @@ interface SaveChartButtonProps {
 export function SaveChartButton({
   birthInfo,
   visible,
+  chartData,
   variant = "outline",
   size = "sm",
 }: SaveChartButtonProps) {
@@ -63,12 +70,8 @@ export function SaveChartButton({
   const [fetchingIdentities, setFetchingIdentities] = useState(false);
 
   // 构建生日字符串（用于 API）
-  // birthInfo.hour 是 iztro timeIndex (0-12)，需要转回 24 小时制的中间点
-  // timeIndex: 0=子时早(00:30), 1=丑(02:00), ..., 6=午(12:00), ..., 12=子时晚(23:30) 等
-  // 为简化，直接用 timeIndex 映射到该时辰的"中间小时"作为代表
-  const TIME_INDEX_TO_HOUR: Record<number, number> = {
-    0: 0, 1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 22, 12: 0,
-  }
+  // birthInfo.hour 是 iztro timeIndex (0-12)，用 TIME_INDEX_TO_HOUR 映射到该时辰的代表小时
+  // 映射表来自 @/lib/ziwei/time-index（与 chart-snapshot-builder 共用，保证 DB 指纹一致）
   const hour24 = TIME_INDEX_TO_HOUR[birthInfo.hour] ?? 12
   const birthdayStr = `${birthInfo.year}-${String(birthInfo.month).padStart(2, "0")}-${String(birthInfo.day).padStart(2, "0")} ${String(hour24).padStart(2, "0")}:00`;
 
@@ -127,6 +130,7 @@ export function SaveChartButton({
             birthCity: birthInfo.birthCity,
             region: birthInfo.birthCity, // 兼容字段（region 字段也用同值，便于真太阳时校正匹配）
           },
+          chartData: chartData ?? undefined,
           note: chartNote.trim() || undefined,
         }),
       });

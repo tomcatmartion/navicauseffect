@@ -27,10 +27,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { identityId, name, birthInfo, note, isPrimary } = body as {
+    const { identityId, name, birthInfo, chartData, note, isPrimary } = body as {
       identityId?: string
       name?: string
       birthInfo?: ChartBirthInfo
+      chartData?: Record<string, unknown> | null
       note?: string
       isPrimary?: boolean
     }
@@ -48,11 +49,23 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // chartData 结构校验（防止前端异常状态传入空对象导致伪 snapshot 入库）
+    if (chartData) {
+      const palaces = (chartData as { palaces?: unknown }).palaces
+      if (!Array.isArray(palaces) || palaces.length < 12) {
+        return NextResponse.json(
+          { error: 'chartData 结构非法（palaces 须为数组且至少 12 宫）' },
+          { status: 400 },
+        )
+      }
+    }
+
     const chart = await saveChart({
       userId: session.user.id,
       identityId,
       name: name.trim(),
       birthInfo,
+      chartData,
       source: 'MANUAL',
       note,
       isPrimary,

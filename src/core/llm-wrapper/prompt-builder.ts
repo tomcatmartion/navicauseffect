@@ -25,7 +25,7 @@ import {
 let cachedSystemPrompt: string | null = null
 let systemPromptCacheTime = 0
 
-function getSystemPrompt(): string {
+export function getSystemPrompt(): string {
   const now = Date.now()
   if (cachedSystemPrompt && now - systemPromptCacheTime < 5000) {
     return cachedSystemPrompt

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -450,6 +450,14 @@ export default function ReportsPage() {
   const [selectedIdentityId, setSelectedIdentityId] = useState<string>("");
   /** 来自 URL 参数 ?chartRecordId=（从 /charts/[id] 跳转时携带，生成时一起提交以复用 snapshot） */
   const [selectedChartRecordId, setSelectedChartRecordId] = useState<string>("");
+  /**
+   * URL 预设标记：从 /charts/[id] 跳来时设为 true，阻止 fetchIdentities 用 active 命主覆盖 URL 预选
+   * 解决竞态：fetchIdentities（async）完成时若已 URL 预设，不自动选 active 命主
+   */
+  const urlPreserveRef = useRef(false);
+  /** 当前命主的命盘列表（命主切换时加载，用于命盘选择器） */
+  const [chartRecords, setChartRecords] = useState<{ id: string; name: string; isPrimary: boolean }[]>([]);
+  const [loadingChartRecords, setLoadingChartRecords] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [extraInfo, setExtraInfo] = useState("");
 
@@ -492,6 +500,45 @@ export default function ReportsPage() {
     }
   }, []);
 
+  /** 加载指定命主的命盘列表（用于命盘选择器）
+   *  preserveSelection：URL 预设的 chartRecordId，若列表中存在则保留，否则选 primary/第一个
+   */
+  const fetchChartRecords = useCallback(async (identityId: string, preserveSelection?: string) => {
+    if (!identityId) { setChartRecords([]); return; }
+    setLoadingChartRecords(true);
+    try {
+      const res = await fetch(`/api/charts?identityId=${identityId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const list: { id: string; name: string; isPrimary: boolean }[] = (data.charts ?? []).map(
+          (c: { id: string; name: string; isPrimary: boolean }) => ({
+            id: c.id, name: c.name, isPrimary: c.isPrimary,
+          }),
+        );
+        setChartRecords(list);
+        if (preserveSelection && list.some((c) => c.id === preserveSelection)) {
+          setSelectedChartRecordId(preserveSelection);
+        } else {
+          const primary = list.find((c) => c.isPrimary);
+          setSelectedChartRecordId(primary?.id ?? list[0]?.id ?? "");
+        }
+      } else {
+        setChartRecords([]);
+        setSelectedChartRecordId("");
+      }
+    } catch {
+      setChartRecords([]);
+    } finally {
+      setLoadingChartRecords(false);
+    }
+  }, []);
+
+  /** 命主切换：加载新命主的命盘列表（选 primary 或第一个） */
+  const handleIdentityChange = (id: string) => {
+    setSelectedIdentityId(id);
+    fetchChartRecords(id);
+  };
+
   const fetchIdentities = useCallback(async () => {
     try {
       const res = await fetch("/api/identities");
@@ -501,14 +548,16 @@ export default function ReportsPage() {
         setIdentities(list);
         // 默认选中当前活跃的命主
         const active = list.find((i) => i.isActive);
-        if (active) {
+        // URL 已预设命主时不覆盖（避免 /charts/[id] 跳来被 active 命主覆盖）
+        if (active && !urlPreserveRef.current) {
           setSelectedIdentityId(active.id);
+          fetchChartRecords(active.id);
         }
       }
     } catch {
       toast.error("加载命主列表失败");
     }
-  }, []);
+  }, [fetchChartRecords]);
 
   // 首次加载
   useEffect(() => {
@@ -530,15 +579,15 @@ export default function ReportsPage() {
     if (sessionStatus !== "authenticated") return;
     const urlIdentityId = searchParams.get("identityId");
     const urlChartRecordId = searchParams.get("chartRecordId");
-    if (urlChartRecordId) {
-      setSelectedChartRecordId(urlChartRecordId);
-    }
     if (urlIdentityId) {
+      urlPreserveRef.current = true; // 标记 URL 预设，阻止 fetchIdentities 用 active 命主覆盖
       setSelectedIdentityId(urlIdentityId);
+      // 加载该命主的命盘列表，并保留 URL 指定的 chartRecordId（若存在）
+      fetchChartRecords(urlIdentityId, urlChartRecordId || undefined);
       // 打开生成对话框第一步（让用户立即看到预选状态）
       setDialogOpen(true);
     }
-  }, [searchParams, sessionStatus]);
+  }, [searchParams, sessionStatus, fetchChartRecords]);
 
   // 切换到"我的报告"时刷新列表
   useEffect(() => {
@@ -581,6 +630,10 @@ export default function ReportsPage() {
       toast.error("请选择命主");
       return;
     }
+    if (!selectedChartRecordId) {
+      toast.error("请先保存命盘后再生成报告");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -590,8 +643,8 @@ export default function ReportsPage() {
         body: JSON.stringify({
           templateId: selectedTemplate.id,
           identityId: selectedIdentityId,
+          chartRecordId: selectedChartRecordId,
           extraInfo: extraInfo.trim() || undefined,
-          ...(selectedChartRecordId ? { chartRecordId: selectedChartRecordId } : {}),
         }),
       });
 
@@ -840,7 +893,7 @@ export default function ReportsPage() {
                     </a>
                   </div>
                 ) : (
-                  <Select value={selectedIdentityId} onValueChange={setSelectedIdentityId}>
+                  <Select value={selectedIdentityId} onValueChange={handleIdentityChange}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="请选择命主" />
                     </SelectTrigger>
@@ -865,6 +918,43 @@ export default function ReportsPage() {
                 )}
               </div>
 
+              {/* 命盘选择（必选：报告必须基于已保存命盘） */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">选择命盘</label>
+                {!selectedIdentityId ? (
+                  <div className="rounded-lg border border-dashed border-muted p-3 text-center text-xs text-muted-foreground">
+                    请先选择命主
+                  </div>
+                ) : loadingChartRecords ? (
+                  <div className="rounded-lg border border-dashed border-muted p-3 text-center text-xs text-muted-foreground">
+                    加载命盘列表...
+                  </div>
+                ) : chartRecords.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-primary/20 p-3 text-center text-xs text-muted-foreground">
+                    该命主尚未保存命盘，请先
+                    <a href="/chart" className="text-primary underline-offset-2 hover:underline">
+                      去排盘并保存
+                    </a>
+                  </div>
+                ) : (
+                  <Select value={selectedChartRecordId} onValueChange={setSelectedChartRecordId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="请选择命盘" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chartRecords.map((cr) => (
+                        <SelectItem key={cr.id} value={cr.id}>
+                          {cr.name}
+                          {cr.isPrimary && (
+                            <span className="ml-1 text-[10px] text-green-500">默认</span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
                   取消
@@ -872,7 +962,7 @@ export default function ReportsPage() {
                 <Button
                   className="bg-primary text-white hover:bg-primary/90"
                   onClick={() => setGenStep(2)}
-                  disabled={!selectedIdentityId || identities.length === 0}
+                  disabled={!selectedIdentityId || identities.length === 0 || !selectedChartRecordId}
                 >
                   下一步
                   <ChevronRight className="ml-1 h-4 w-4" />

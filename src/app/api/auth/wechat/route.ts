@@ -9,7 +9,7 @@ export async function GET() {
   if (!appId) {
     return NextResponse.json(
       { error: "微信登录未配置", configured: false },
-      { status: 503 }
+      { status: 200 }
     );
   }
 
