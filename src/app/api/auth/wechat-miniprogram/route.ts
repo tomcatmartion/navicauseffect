@@ -19,27 +19,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { jscode2session, isMiniprogramMockMode } from "@/lib/wechat-miniprogram";
 import { signMiniprogramToken } from "@/lib/jwt-miniprogram";
+import { generateUniqueInviteCode } from "@/lib/utils/invite-code";
 
 // 小程序 openid 前缀，与 H5 OAuth 的 wechatOpenId 区分（避免冲突）
 const MP_OPENID_PREFIX = "mp_";
-
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-async function generateUniqueInviteCode(): Promise<string> {
-  for (let i = 0; i < 10; i++) {
-    const code = generateInviteCode();
-    const exists = await prisma.user.findUnique({ where: { inviteCode: code }, select: { id: true } });
-    if (!exists) return code;
-  }
-  throw new Error("生成邀请码失败（10 次重试均冲突）");
-}
 
 export async function POST(request: NextRequest) {
   try {
