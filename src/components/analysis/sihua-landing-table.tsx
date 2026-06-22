@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import type { SihuaLandingReport } from "@/core/types";
 
 const PALACE_QUALITY_LABELS: Record<string, string> = {
@@ -10,11 +9,11 @@ const PALACE_QUALITY_LABELS: Record<string, string> = {
   unknown: "未入盘",
 };
 
-function palaceQualityBadgeClass(quality: string): string {
-  if (quality === "good") return "border-emerald-500/40 text-emerald-800 dark:text-emerald-300";
-  if (quality === "bad") return "border-destructive/40 text-destructive";
-  if (quality === "neutral") return "border-amber-500/30 text-amber-800 dark:text-amber-300";
-  return "border-muted-foreground/30 text-muted-foreground";
+function palaceQualityChipStyle(quality: string): React.CSSProperties {
+  if (quality === "good") return { color: "var(--success)", borderColor: "var(--success)" };
+  if (quality === "bad") return { color: "var(--danger)", borderColor: "var(--danger)" };
+  if (quality === "neutral") return { color: "var(--warning)", borderColor: "var(--warning)" };
+  return { color: "var(--text-muted)" };
 }
 
 interface SihuaLandingTableProps {
@@ -23,36 +22,46 @@ interface SihuaLandingTableProps {
 }
 
 export function SihuaLandingTable({ report, compact = false }: SihuaLandingTableProps) {
+  const baseFont = compact ? 12 : 13;
   return (
-    <div className={`space-y-3 ${compact ? "text-xs" : "text-sm"}`}>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: baseFont }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-muted)" }}>
         <span>
-          事项焦点：<span className="text-foreground">{report.focusPalaces.join("、")}</span>
+          事项焦点：<span style={{ color: "var(--ink)" }}>{report.focusPalaces.join("、")}</span>
         </span>
-        <Badge variant="outline" className="text-[10px]">
+        <span className="chip" style={{ fontSize: 10 }}>
           方向矩阵 {report.directionMatrix}
-        </Badge>
+        </span>
       </div>
 
       {report.layers.map((layer) => (
         <div
           key={`${layer.layer}-${layer.stemLabel}`}
-          className="rounded-md border border-primary/10 bg-muted/20 p-2 space-y-2"
+          style={{
+            borderRadius: 8,
+            border: "1px solid var(--line-light)",
+            background: "var(--soft)",
+            padding: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-foreground">{layer.stemLabel}</span>
-            <Badge
-              variant="outline"
-              className={`text-[10px] ${
-                layer.direction === "吉"
-                  ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
-                  : "border-destructive/40 text-destructive"
-              }`}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)" }}>{layer.stemLabel}</span>
+            <span
+              className="chip"
+              style={{
+                fontSize: 10,
+                ...(layer.direction === "吉"
+                  ? { color: "var(--success)", borderColor: "var(--success)" }
+                  : { color: "var(--danger)", borderColor: "var(--danger)" }),
+              }}
             >
               层向 {layer.direction}
-            </Badge>
-            <span className="text-[11px] text-muted-foreground">层分 {layer.layerScore.toFixed(2)}</span>
-            <span className="text-[11px] text-muted-foreground">
+            </span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>层分 {layer.layerScore.toFixed(2)}</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               规则 {layer.ruleKey}
               {layer.ruleAdjustment !== 0 && (
                 <>（{layer.ruleAdjustment > 0 ? "+" : ""}{layer.ruleAdjustment.toFixed(2)}）</>
@@ -61,18 +70,18 @@ export function SihuaLandingTable({ report, compact = false }: SihuaLandingTable
           </div>
 
           {layer.rows.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">无落宫数据</p>
+            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>无落宫数据</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-[11px]">
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", minWidth: 520, borderCollapse: "collapse", fontSize: 11 }}>
                 <thead>
-                  <tr className="border-b border-primary/10 text-left text-muted-foreground">
-                    <th className="py-1 pr-2 font-medium">四化</th>
-                    <th className="py-1 pr-2 font-medium">星曜</th>
-                    <th className="py-1 pr-2 font-medium">落宫</th>
-                    <th className="py-1 pr-2 font-medium">焦点</th>
-                    <th className="py-1 pr-2 font-medium">宫质</th>
-                    <th className="py-1 font-medium">备注</th>
+                  <tr style={{ borderBottom: "1px solid var(--line-light)", textAlign: "left", color: "var(--text-muted)" }}>
+                    <th style={{ padding: "4px 8px 4px 0", fontWeight: 500 }}>四化</th>
+                    <th style={{ padding: "4px 8px 4px 0", fontWeight: 500 }}>星曜</th>
+                    <th style={{ padding: "4px 8px 4px 0", fontWeight: 500 }}>落宫</th>
+                    <th style={{ padding: "4px 8px 4px 0", fontWeight: 500 }}>焦点</th>
+                    <th style={{ padding: "4px 8px 4px 0", fontWeight: 500 }}>宫质</th>
+                    <th style={{ padding: "4px 0", fontWeight: 500 }}>备注</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -83,21 +92,21 @@ export function SihuaLandingTable({ report, compact = false }: SihuaLandingTable
                     return (
                       <tr
                         key={`${layer.layer}-${row.sihuaType}-${row.star}`}
-                        className={`border-b border-primary/5 ${row.inMatterFocus ? "bg-primary/5" : ""}`}
+                        style={{
+                          borderBottom: "1px solid var(--line-light)",
+                          background: row.inMatterFocus ? "var(--soft)" : "transparent",
+                        }}
                       >
-                        <td className="py-1 pr-2">{row.sihuaType}</td>
-                        <td className="py-1 pr-2 font-medium text-foreground">{row.star}</td>
-                        <td className="py-1 pr-2">{row.palace ?? "—"}</td>
-                        <td className="py-1 pr-2">{row.inMatterFocus ? "是" : "否"}</td>
-                        <td className="py-1 pr-2">
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] ${palaceQualityBadgeClass(row.palaceQuality)}`}
-                          >
+                        <td style={{ padding: "4px 8px 4px 0" }}>{row.sihuaType}</td>
+                        <td style={{ padding: "4px 8px 4px 0", fontWeight: 500, color: "var(--ink)" }}>{row.star}</td>
+                        <td style={{ padding: "4px 8px 4px 0" }}>{row.palace ?? "—"}</td>
+                        <td style={{ padding: "4px 8px 4px 0" }}>{row.inMatterFocus ? "是" : "否"}</td>
+                        <td style={{ padding: "4px 8px 4px 0" }}>
+                          <span className="chip" style={{ fontSize: 10, ...palaceQualityChipStyle(row.palaceQuality) }}>
                             {PALACE_QUALITY_LABELS[row.palaceQuality] ?? row.palaceQuality}
-                          </Badge>
+                          </span>
                         </td>
-                        <td className="py-1 text-muted-foreground">{notes.length ? notes.join(" · ") : "—"}</td>
+                        <td style={{ padding: "4px 0", color: "var(--text-muted)" }}>{notes.length ? notes.join(" · ") : "—"}</td>
                       </tr>
                     );
                   })}

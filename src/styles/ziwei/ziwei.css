@@ -1412,3 +1412,23 @@ input:checked + .slider::before { transform: translateX(20px); background: #fff;
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ── 主题语义色工具类（迁移硬编码 Tailwind 色 → CSS 变量）── */
+.text-warning { color: var(--warning); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-info { color: var(--brand); }
+.text-accent { color: var(--accent, var(--brand)); }
+.text-warning-soft { color: var(--warning); opacity: 0.85; }
+
+.bg-warning-soft { background: var(--warning-soft, color-mix(in srgb, var(--warning) 8%, var(--panel))); }
+.bg-success-soft { background: var(--success-soft, color-mix(in srgb, var(--success) 8%, var(--panel))); }
+.bg-danger-soft { background: var(--danger-soft, color-mix(in srgb, var(--danger) 8%, var(--panel))); }
+.bg-info-soft { background: var(--soft); }
+.bg-brand-solid { background: var(--brand); }
+.bg-success-solid { background: var(--success); }
+
+.border-warning { border-color: var(--warning) !important; }
+.border-danger { border-color: var(--danger) !important; }
+.border-success { border-color: var(--success) !important; }
+.border-info { border-color: var(--brand) !important; }

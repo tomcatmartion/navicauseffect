@@ -1,7 +1,6 @@
 "use client";
 
 import type { ThreeDimensionAnalysis } from "@/core/types";
-import { Badge } from "@/components/ui/badge";
 
 export interface MatterInteractionResult {
   mode: "full" | "solo";
@@ -19,6 +18,31 @@ interface MatterInteractionPanelProps {
   result: MatterInteractionResult;
 }
 
+const blockStyle: React.CSSProperties = {
+  borderRadius: 8,
+  border: "1px solid var(--line-light)",
+  background: "var(--soft)",
+  padding: 12,
+};
+
+const blockTitleStyle: React.CSSProperties = {
+  marginBottom: 8,
+  fontSize: 12,
+  fontWeight: 500,
+  color: "var(--brand)",
+};
+
+const blockListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  fontSize: 11,
+  color: "var(--text-muted)",
+  listStyleType: "disc",
+  listStylePosition: "inside",
+  paddingLeft: 0,
+};
+
 function DimensionBlock({
   title,
   lines,
@@ -27,12 +51,12 @@ function DimensionBlock({
   lines: { label: string; text: string }[];
 }) {
   return (
-    <div className="rounded-md border border-primary/10 bg-muted/20 p-3">
-      <div className="mb-2 text-xs font-medium text-primary">{title}</div>
-      <div className="space-y-1.5 text-[11px] text-muted-foreground">
+    <div style={blockStyle}>
+      <div style={blockTitleStyle}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
         {lines.map((line) => (
           <p key={line.label}>
-            <span className="font-medium text-foreground/80">{line.label}：</span>
+            <span style={{ fontWeight: 500, color: "var(--ink)" }}>{line.label}：</span>
             {line.text}
           </p>
         ))}
@@ -45,25 +69,25 @@ export function MatterInteractionPanel({ result }: MatterInteractionPanelProps) 
   const { threeDimension: td } = result;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className="text-[10px]">
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <span className="chip" style={{ fontSize: 10 }}>
           {result.mode === "full" ? "太岁入卦 · 双人" : "单方 · 关系宫"}
-        </Badge>
+        </span>
         {result.mode === "full" && result.partnerYear && (
-          <span className="text-[11px] text-muted-foreground">
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             对方 {result.partnerYear} 年生（{result.partnerGan}
             {result.partnerZhi}）
           </span>
         )}
         {result.mode === "solo" && (
-          <span className="text-[11px] text-muted-foreground">
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             未填对方生年，已降级为夫妻/迁移/三合关系宫分析
           </span>
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
         <DimensionBlock
           title="维度 A · 入卦/关系面"
           lines={[
@@ -88,11 +112,15 @@ export function MatterInteractionPanel({ result }: MatterInteractionPanelProps) 
       </div>
 
       {result.tensionPoints.length > 0 && (
-        <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
-          <div className="mb-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <div style={{
+          ...blockStyle,
+          borderColor: "var(--warning)",
+          background: "var(--warning-soft, var(--soft))",
+        }}>
+          <div style={{ ...blockTitleStyle, color: "var(--warning)" }}>
             核心张力点
           </div>
-          <ul className="list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+          <ul style={blockListStyle}>
             {result.tensionPoints.map((t) => (
               <li key={t}>{t}</li>
             ))}
@@ -101,9 +129,12 @@ export function MatterInteractionPanel({ result }: MatterInteractionPanelProps) 
       )}
 
       {result.adjustableAdvice.length > 0 && (
-        <div className="rounded-md border border-primary/15 bg-primary/5 p-3">
-          <div className="mb-1.5 text-xs font-medium text-primary">可调整建议</div>
-          <ul className="list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+        <div style={{
+          ...blockStyle,
+          borderColor: "var(--brand)",
+        }}>
+          <div style={blockTitleStyle}>可调整建议</div>
+          <ul style={blockListStyle}>
             {result.adjustableAdvice.map((a) => (
               <li key={a}>{a}</li>
             ))}
@@ -112,9 +143,13 @@ export function MatterInteractionPanel({ result }: MatterInteractionPanelProps) 
       )}
 
       {result.fixedRisks.length > 0 && (
-        <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3">
-          <div className="mb-1.5 text-xs font-medium text-destructive">结构性风险</div>
-          <ul className="list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+        <div style={{
+          ...blockStyle,
+          borderColor: "var(--danger)",
+          background: "var(--danger-soft, var(--soft))",
+        }}>
+          <div style={{ ...blockTitleStyle, color: "var(--danger)" }}>结构性风险</div>
+          <ul style={blockListStyle}>
             {result.fixedRisks.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -123,11 +158,14 @@ export function MatterInteractionPanel({ result }: MatterInteractionPanelProps) 
       )}
 
       {result.mode === "full" && result.virtualChart && (
-        <details className="rounded-md border border-dashed border-primary/15 bg-muted/10 p-2">
-          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+        <details style={{
+          ...blockStyle,
+          borderStyle: "dashed",
+        }}>
+          <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>
             虚拟命盘结构（调试）
           </summary>
-          <pre className="mt-2 max-h-48 overflow-auto text-[10px] text-muted-foreground">
+          <pre style={{ marginTop: 8, maxHeight: 200, overflow: "auto", fontSize: 10, color: "var(--text-muted)" }}>
             {JSON.stringify(result.virtualChart, null, 2)}
           </pre>
         </details>

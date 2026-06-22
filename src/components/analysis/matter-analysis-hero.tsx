@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import type { DirectionMatrix, DirectionWindow } from "@/core/types";
 
 const MATRIX_CELLS: Array<{ row: "吉" | "凶"; col: "吉" | "凶"; key: DirectionMatrix }> = [
@@ -34,61 +33,83 @@ export function MatterAnalysisHero({
   resilienceStrategy,
 }: MatterAnalysisHeroProps) {
   return (
-    <div className="space-y-3 rounded-lg border border-primary/15 bg-gradient-to-br from-primary/5 to-transparent p-3">
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      borderRadius: 12,
+      border: "1px solid var(--border)",
+      background: "linear-gradient(135deg, var(--soft) 0%, transparent 100%)",
+      padding: 12,
+    }}>
       {(matterType || affairText) && (
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{matterType ?? "事项"}</span>
+        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <span style={{ fontWeight: 500, color: "var(--ink)" }}>{matterType ?? "事项"}</span>
           {affairText ? ` · ${affairText}` : ""}
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-2">
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
         {compositeScore !== undefined && (
-          <span className="text-2xl font-semibold tabular-nums text-foreground">
+          <span style={{ fontSize: 24, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "var(--ink)" }}>
             {compositeScore.toFixed(1)}
           </span>
         )}
         {scoreLabel && (
-          <Badge variant="secondary" className="text-xs">{scoreLabel}</Badge>
+          <span className="chip" style={{ fontSize: 12 }}>{scoreLabel}</span>
         )}
         {directionWindow && (
-          <Badge variant="outline" className="text-xs">{directionWindow}</Badge>
+          <span className="chip" style={{ fontSize: 12 }}>{directionWindow}</span>
         )}
         {liuYueDataAvailable === false && (
-          <Badge variant="outline" className="text-xs text-amber-700 border-amber-300">
+          <span className="chip" style={{ fontSize: 12, color: "var(--warning)", borderColor: "var(--warning)" }}>
             流月未接入
-          </Badge>
+          </span>
         )}
         {resilienceStrategy && (
-          <Badge
-            variant="outline"
-            className={
+          <span
+            className="chip"
+            style={
               resilienceStrategy === "危机干预"
-                ? "border-destructive/40 text-destructive"
-                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                ? { fontSize: 12, color: "var(--danger)", borderColor: "var(--danger)" }
+                : { fontSize: 12, color: "var(--success)", borderColor: "var(--success)" }
             }
           >
             {resilienceStrategy}
-          </Badge>
+          </span>
         )}
       </div>
 
       {scoreAction && (
-        <p className="text-sm font-medium text-foreground">{scoreAction}</p>
+        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{scoreAction}</p>
       )}
 
       {directionMatrix && (
-        <div className="inline-grid grid-cols-2 gap-1 text-[10px]">
-          <div className="text-center text-muted-foreground col-span-2">流年 ↓ / 大限 →</div>
+        <div style={{ display: "inline-grid", gridTemplateColumns: "repeat(2, auto)", gap: 4, fontSize: 10 }}>
+          <div style={{ textAlign: "center", color: "var(--text-muted)", gridColumn: "span 2" }}>流年 ↓ / 大限 →</div>
           {MATRIX_CELLS.map((cell) => {
             const active = cell.key === directionMatrix;
             return (
               <div
                 key={cell.key}
-                className={`rounded border px-2 py-1 text-center ${
+                style={
                   active
-                    ? "border-primary bg-primary/10 font-semibold text-primary"
-                    : "border-primary/10 text-muted-foreground"
-                }`}
+                    ? {
+                        borderRadius: 6,
+                        border: "1px solid var(--brand)",
+                        background: "var(--soft)",
+                        padding: "4px 8px",
+                        textAlign: "center",
+                        fontWeight: 600,
+                        color: "var(--brand)",
+                      }
+                    : {
+                        borderRadius: 6,
+                        border: "1px solid var(--line-light)",
+                        padding: "4px 8px",
+                        textAlign: "center",
+                        color: "var(--text-muted)",
+                      }
+                }
               >
                 {cell.key}
               </div>

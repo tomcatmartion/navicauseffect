@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { RouteQuestion } from "@/core/router/decision-tree";
 
 type RouterBranch = {
@@ -112,72 +110,80 @@ export function MatterRouterQuestionnaire({
 
   if (loadError) {
     return (
-      <p className="text-xs text-muted-foreground">{loadError}</p>
+      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{loadError}</p>
     );
   }
 
   if (!branch) {
-    return <p className="text-xs text-muted-foreground">加载问诊树…</p>;
+    return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>加载问诊树…</p>;
   }
 
   const answeredIds = Object.keys(answers).filter((k) => branch.questions[k]);
 
   return (
-    <div className="space-y-2 rounded-md border border-primary/10 bg-muted/20 p-2">
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      borderRadius: 8,
+      border: "1px solid var(--line-light)",
+      background: "var(--soft)",
+      padding: 8,
+    }}>
       {branch.pre_analysis && (
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
+        <p style={{ fontSize: 11, lineHeight: 1.7, color: "var(--text-muted)" }}>
           {branch.pre_analysis.description}
         </p>
       )}
 
       {answeredIds.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {answeredIds.map((id) => {
             const q = branch.questions[id];
             const val = answers[id];
             const label = q?.options.find((o) => o.value === val)?.label ?? val;
             return (
-              <Badge key={id} variant="secondary" className="text-[10px] font-normal">
+              <span key={id} className="chip" style={{ fontSize: 10, fontWeight: 400 }}>
                 {q?.question.slice(0, 12) ?? id}：{label}
-              </Badge>
+              </span>
             );
           })}
         </div>
       )}
 
       {isComplete ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700 dark:text-emerald-300">
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <span className="chip" style={{ fontSize: 10, color: "var(--success)", borderColor: "var(--success)" }}>
             问诊已完成
-          </Badge>
-          <Button
+          </span>
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs cursor-pointer"
+            className="btn btn-ghost btn-sm"
+            style={{ height: 28, fontSize: 12, cursor: "pointer" }}
             onClick={handleReset}
           >
             重新问诊
-          </Button>
+          </button>
         </div>
       ) : currentQuestion ? (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-foreground">{currentQuestion.question}</p>
-          <div className="flex flex-col gap-1.5">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)" }}>{currentQuestion.question}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {currentQuestion.options.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => handlePick(currentQuestion.id, opt.value, opt.next)}
-                className="cursor-pointer rounded-md border border-primary/15 bg-card px-2 py-1.5 text-left text-xs transition-colors hover:border-primary/30 hover:bg-primary/5"
+                className="btn btn-ghost"
+                style={{ cursor: "pointer", textAlign: "left", fontSize: 12 }}
               >
                 {opt.label}
               </button>
             ))}
           </div>
           {currentQuestion.id === "wealth_3b" && answers.wealth_3b === "has" && (
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground" htmlFor="partner-birth-year">
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 11, color: "var(--text-muted)" }} htmlFor="partner-birth-year">
                 合伙人生年（1900–2100）
               </label>
               <input
@@ -187,7 +193,7 @@ export function MatterRouterQuestionnaire({
                 max={2100}
                 value={partnerBirthYear}
                 onChange={(e) => onPartnerBirthYearChange?.(e.target.value)}
-                className="h-8 w-full rounded-md border px-2 text-sm"
+                className="input"
                 placeholder="例如 1985"
               />
             </div>
@@ -196,15 +202,14 @@ export function MatterRouterQuestionnaire({
       ) : null}
 
       {!isComplete && answeredIds.length > 0 && (
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs cursor-pointer"
+          className="btn btn-ghost btn-sm"
+          style={{ height: 28, fontSize: 12, cursor: "pointer", alignSelf: "flex-start" }}
           onClick={handleReset}
         >
           清空重来
-        </Button>
+        </button>
       )}
     </div>
   );

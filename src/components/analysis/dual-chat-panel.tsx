@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Bug } from "lucide-react";
 import type { HybridDebugInfo } from "@/types/hybrid-debug";
 import { HybridDebugPanel } from "./hybrid-debug-panel";
 
@@ -212,9 +211,9 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
             className="tool-call"
             style={{ margin: "8px 2px 0" }}
           >
-            <Loader2
-              className="size-3 animate-spin"
-              style={{ marginRight: 6 }}
+            <i
+              className="ti ti-loader-2 ti-spin"
+              style={{ marginRight: 6, fontSize: 12 }}
             />
             正在调动各类知识，结合科学与玄学全面分析，请稍候...
           </div>
@@ -299,7 +298,7 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
                       style={{ width: "auto", height: "auto", padding: "4px 10px", fontSize: 11 }}
                       title="查看调试信息"
                     >
-                      <Bug style={{ width: 12, height: 12, marginRight: 4 }} />
+                      <i className="ti ti-bug" style={{ fontSize: 12, marginRight: 4 }} />
                       调试
                     </button>
                   </div>
@@ -373,7 +372,7 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
               aria-label="发送"
             >
               {streaming ? (
-                <Loader2 className="size-4 animate-spin" />
+                <i className="ti ti-loader-2 ti-spin" />
               ) : (
                 <i className="ti ti-send" />
               )}

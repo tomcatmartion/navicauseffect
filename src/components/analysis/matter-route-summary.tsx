@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import routerConfig from "@/../../data/router.json";
 
 interface MatterRouteSummaryProps {
@@ -47,35 +46,44 @@ export function MatterRouteSummary({
   routingAnswers,
 }: MatterRouteSummaryProps) {
   return (
-    <div className="rounded-md border border-primary/10 bg-muted/20 p-2 text-xs space-y-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-muted-foreground">主看</span>
-        <Badge variant="secondary" className="text-[10px]">{primaryPalace}</Badge>
+    <div style={{
+      borderRadius: 8,
+      border: "1px solid var(--line-light)",
+      background: "var(--soft)",
+      padding: 8,
+      fontSize: 12,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        <span style={{ color: "var(--text-muted)" }}>主看</span>
+        <span className="chip" style={{ fontSize: 10 }}>{primaryPalace}</span>
         {secondaryPalaces.map((p) => (
-          <Badge key={p} variant="outline" className="text-[10px]">兼看 {p}</Badge>
+          <span key={p} className="chip" style={{ fontSize: 10 }}>兼看 {p}</span>
         ))}
       </div>
 
       {Object.entries(routingAnswers).length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {Object.entries(routingAnswers).map(([k, v]) => {
             const qLabel = questionLabels[k] ?? k
             const vLabel = optionLabels[k]?.[v] ?? v
             return (
-              <Badge key={k} variant="outline" className="text-[10px] font-normal">
+              <span key={k} className="chip" style={{ fontSize: 10, fontWeight: 400 }}>
                 {qLabel}：{vLabel}
-              </Badge>
+              </span>
             )
           })}
         </div>
       )}
 
       {specialConditions.length > 0 && (
-        <p className="text-muted-foreground">特殊条件：{specialConditions.join("；")}</p>
+        <p style={{ color: "var(--text-muted)" }}>特殊条件：{specialConditions.join("；")}</p>
       )}
 
       {needInteraction && (
-        <p className="text-amber-800 dark:text-amber-300">
+        <p style={{ color: "var(--warning)" }}>
           本事项建议进入互动关系分析（Stage4），可点击下方按钮继续。
         </p>
       )}

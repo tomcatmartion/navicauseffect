@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MatterRouterQuestionnaire } from "@/components/analysis/matter-router-questionnaire";
 import { MatterAffairPanel, type MatterAffairResult } from "@/components/analysis/matter-affair-panel";
 import { MatterInteractionPanel, type MatterInteractionResult } from "@/components/analysis/matter-interaction-panel";
@@ -16,9 +14,60 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import limitDirectionData from "../../../data/limit_direction.json";
+
+// ── 本地 shadcn 组件 shim（用 testUI 类，便于一次性迁移）──
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={`card ${className ?? ""}`} style={{ padding: 16 }}>{children}</div>;
+}
+function CardContent({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={className}>{children}</div>;
+}
+function Badge({
+  children,
+  variant,
+  className,
+}: {
+  children: React.ReactNode;
+  variant?: "outline" | "secondary" | "default";
+  className?: string;
+}) {
+  return (
+    <span
+      className={`chip ${className ?? ""}`}
+      style={{
+        fontSize: 11,
+        ...(variant === "secondary" ? { background: "var(--soft)" } : {}),
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+function Button({
+  children,
+  variant,
+  size,
+  className,
+  ...rest
+}: {
+  children?: React.ReactNode;
+  variant?: "ghost" | "outline" | "default" | "secondary";
+  size?: "sm" | "default" | "icon";
+  className?: string;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const cls = [
+    "btn",
+    variant === "default" ? "btn-primary" : "btn-ghost",
+    size === "sm" ? "btn-sm" : "",
+    className ?? "",
+  ].filter(Boolean).join(" ");
+  return (
+    <button type="button" className={cls} {...rest}>
+      {children}
+    </button>
+  );
+}
 
 type AnalysisType =
   | "palace"
@@ -1032,7 +1081,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                       )}
                       {fromPipeline && (
                         <span className="ml-auto shrink-0">
-                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {isExpanded ? <i className="ti ti-chevron-up" style={{ fontSize: 14, color: "var(--text-muted)" }} /> : <i className="ti ti-chevron-down" style={{ fontSize: 14, color: "var(--text-muted)" }} />}
                         </span>
                       )}
                     </div>
@@ -1120,14 +1169,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                   <Badge
                     variant={score >= 6 ? "default" : "secondary"}
                     className={`text-[10px] px-1.5 py-0 ${
-                      score >= 8 ? "bg-emerald-600" : score >= 6 ? "bg-blue-600" : ""
+                      score >= 8 ? "bg-success-solid" : score >= 6 ? "bg-brand-solid" : ""
                     }`}
                   >
                     {score.toFixed(1)}
                   </Badge>
                   {fromPipeline && (
                     <span className="shrink-0">
-                      {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                      {isExpanded ? <i className="ti ti-chevron-up" style={{ fontSize: 12, color: "var(--text-muted)" }} /> : <i className="ti ti-chevron-down" style={{ fontSize: 12, color: "var(--text-muted)" }} />}
                     </span>
                   )}
                 </div>
@@ -1144,7 +1193,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                       {/* 步骤0：空宫借对宫 */}
                       {debug.sixSteps.step0_emptyBorrow?.isEmpty && (
                         <div className="bg-orange-50/50 dark:bg-orange-950/10 rounded p-1">
-                          <span className="font-medium text-orange-700">步骤0 空宫借对宫：</span>
+                          <span className="font-medium text-warning">步骤0 空宫借对宫：</span>
                           <span className="text-muted-foreground">借{debug.sixSteps.step0_emptyBorrow.borrowedFrom} × {debug.sixSteps.step0_emptyBorrow.borrowFactor}</span>
                         </div>
                       )}
@@ -1206,7 +1255,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                       {/* 步骤4：减分阶段 */}
                       <div className="bg-red-50/30 dark:bg-red-950/10 rounded p-1">
                         <div className="flex justify-between items-center mb-0.5">
-                          <span className="font-medium text-red-700">步骤4 减分阶段</span>
+                          <span className="font-medium text-danger">步骤4 减分阶段</span>
                           <span>减分后：{debug.sixSteps.step4_penalty.scoreAfterPenalty.toFixed(2)}</span>
                         </div>
                         {debug.sixSteps.step4_penalty.sumPenalty !== undefined && debug.sixSteps.step4_penalty.H !== undefined && (
@@ -1216,25 +1265,25 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                           </div>
                         )}
                         <div className="space-y-0.5 pl-2">
-                          <div className="flex justify-between"><span>4.1 三方四正煞星：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.1_三方四正煞星'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.2 命主生年化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.2_命主生年化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.3 命主遁干化忌：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.3_命主遁干化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.4 父亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.gan}干·${pipelineSnapshot.parentSihuaMeta.father.jiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.4_父亲生年化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.5 父亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.dunGan}干·${pipelineSnapshot.parentSihuaMeta.father.dunJiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.5_父亲遁干化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.6 母亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.gan}干·${pipelineSnapshot.parentSihuaMeta.mother.jiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.6_母亲生年化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.7 母亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.dunGan}干·${pipelineSnapshot.parentSihuaMeta.mother.dunJiStar}）` : ''}：</span><span className="text-red-600">{debug.sixSteps.step4_penalty.details['4.7_母亲遁干化忌'].toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span>4.8 凶格倍率：</span><span className="text-red-600">×{debug.sixSteps.step4_penalty.details['4.8_凶格倍率'].toFixed(1)}</span></div>
+                          <div className="flex justify-between"><span>4.1 三方四正煞星：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.1_三方四正煞星'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.2 命主生年化忌：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.2_命主生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.3 命主遁干化忌：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.3_命主遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.4 父亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.gan}干·${pipelineSnapshot.parentSihuaMeta.father.jiStar}）` : ''}：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.4_父亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.5 父亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.father ? `（${pipelineSnapshot.parentSihuaMeta.father.dunGan}干·${pipelineSnapshot.parentSihuaMeta.father.dunJiStar}）` : ''}：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.5_父亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.6 母亲生年化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.gan}干·${pipelineSnapshot.parentSihuaMeta.mother.jiStar}）` : ''}：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.6_母亲生年化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.7 母亲遁干化忌{pipelineSnapshot?.parentSihuaMeta?.mother ? `（${pipelineSnapshot.parentSihuaMeta.mother.dunGan}干·${pipelineSnapshot.parentSihuaMeta.mother.dunJiStar}）` : ''}：</span><span className="text-danger">{debug.sixSteps.step4_penalty.details['4.7_母亲遁干化忌'].toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span>4.8 凶格倍率：</span><span className="text-danger">×{debug.sixSteps.step4_penalty.details['4.8_凶格倍率'].toFixed(1)}</span></div>
                           <div className="flex justify-between text-[10px] text-muted-foreground"><span>intensity_factor：</span><span>{debug.sixSteps.step4_penalty.intensityFactor}</span></div>
                         </div>
                         {/* 具体减分星曜列表 */}
                         {debug.sixSteps.step4_penalty.starList && debug.sixSteps.step4_penalty.starList.length > 0 && (
                           <div className="mt-1.5 pt-1.5 border-t border-dashed border-red-300/50">
-                            <div className="text-[10px] text-red-700 font-medium mb-1">具体减分星曜：</div>
+                            <div className="text-[10px] text-danger font-medium mb-1">具体减分星曜：</div>
                             <div className="space-y-0.5">
                               {debug.sixSteps.step4_penalty.starList.map((star, idx) => (
                                 <div key={idx} className="flex justify-between text-[10px]">
                                   <span className="text-muted-foreground">{star.starName}（{star.source}）</span>
-                                  <span className="text-red-600 font-medium">{star.value.toFixed(2)}</span>
+                                  <span className="text-danger font-medium">{star.value.toFixed(2)}</span>
                                 </div>
                               ))}
                             </div>
@@ -1257,7 +1306,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                         {debug.sixSteps.step6_ceiling.specialFlags && debug.sixSteps.step6_ceiling.specialFlags.length > 0 && (
                           <div className="flex gap-1 mt-0.5">
                             {debug.sixSteps.step6_ceiling.specialFlags.map((f: string, i: number) => (
-                              <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-amber-600">{f}</Badge>
+                              <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-warning">{f}</Badge>
                             ))}
                           </div>
                         )}
@@ -1311,7 +1360,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                           {debug.penaltyBreakdown.map((item, idx) => (
                             <div key={idx} className="flex justify-between text-[10px]">
                               <span className="text-muted-foreground">{item.source}：{item.detail}</span>
-                              <span className="text-red-600 font-medium">{item.value.toFixed(2)}</span>
+                              <span className="text-danger font-medium">{item.value.toFixed(2)}</span>
                             </div>
                           ))}
                         </div>
@@ -1327,10 +1376,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                     {/* 状态标记 */}
                     <div className="flex flex-wrap gap-1">
                       {debug.isAbsoluteFail && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-red-300 text-red-600">绝败</Badge>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-red-300 text-danger">绝败</Badge>
                       )}
                       {debug.criticalStatus !== '无临界' && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-amber-600">{debug.criticalStatus}</Badge>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-300 text-warning">{debug.criticalStatus}</Badge>
                       )}
                       <Badge variant="outline" className="text-[9px] px-1 py-0">制煞：{debug.subdueLevel}</Badge>
                     </div>
@@ -1354,9 +1403,9 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                               {s.sihua && (
                                 <span className={
                                   s.sihua === '化禄' ? 'text-green-600' :
-                                  s.sihua === '化权' ? 'text-blue-600' :
+                                  s.sihua === '化权' ? 'text-info' :
                                   s.sihua === '化科' ? 'text-purple-600' :
-                                  'text-red-600'
+                                  'text-danger'
                                 }>·{s.sihua}</span>
                               )}
                             </Badge>
@@ -1428,7 +1477,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             <div className="grid grid-cols-3 gap-2">
               {profile.traits.surface?.length > 0 && (
                 <div className="bg-blue-50 dark:bg-blue-950/20 rounded p-2">
-                  <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mb-1">表层 · 早年凸显</div>
+                  <div className="text-[10px] text-info font-medium mb-1">表层 · 早年凸显</div>
                   <div className="flex flex-wrap gap-1">
                     {profile.traits.surface.map((t: string, i: number) => (
                       <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 bg-blue-100 dark:bg-blue-900/40">{t}</Badge>
@@ -1448,7 +1497,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               )}
               {profile.traits.core?.length > 0 && (
                 <div className="bg-orange-50 dark:bg-orange-950/20 rounded p-2">
-                  <div className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mb-1">核心 · 关键时刻爆发</div>
+                  <div className="text-[10px] text-warning font-medium mb-1">核心 · 关键时刻爆发</div>
                   <div className="flex flex-wrap gap-1">
                     {profile.traits.core.map((t: string, i: number) => (
                       <Badge key={i} variant="secondary" className="text-[10px] px-1 py-0 bg-orange-100 dark:bg-orange-900/40">{t}</Badge>
@@ -1507,7 +1556,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               )}
               {profile.holographicBase.inauspiciousEffect && (
                 <div className="flex items-start gap-2">
-                  <span className="text-red-600 shrink-0">煞星影响：</span>
+                  <span className="text-danger shrink-0">煞星影响：</span>
                   <span className="text-foreground">{profile.holographicBase.inauspiciousEffect}</span>
                 </div>
               )}
@@ -1528,14 +1577,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             <div className="grid grid-cols-3 gap-2">
               {profile.mingGongScore !== undefined && (
                 <div className="bg-red-50/50 dark:bg-red-950/20 rounded p-2 border border-red-100 dark:border-red-900/30">
-                  <div className="text-[10px] text-red-600 dark:text-red-400 font-medium mb-1">命宫</div>
+                  <div className="text-[10px] text-danger font-medium mb-1">命宫</div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-bold text-primary">{profile.mingGongScore.toFixed(1)}</span>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
-                      profile.scoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
-                      : profile.scoreLevel === '中等' ? 'border-blue-400 text-blue-600'
-                      : profile.scoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
-                      : 'border-red-400 text-red-600'
+                      profile.scoreLevel === '强旺' ? 'border-emerald-400 text-success'
+                      : profile.scoreLevel === '中等' ? 'border-blue-400 text-info'
+                      : profile.scoreLevel === '虚浮' ? 'border-amber-400 text-warning'
+                      : 'border-red-400 text-danger'
                     }`}>{profile.scoreLevel}</Badge>
                   </div>
                   {profile.scoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.scoreInfluence}</div>}
@@ -1543,14 +1592,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               )}
               {profile.shenGongScore !== undefined && (
                 <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
-                  <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mb-1">身宫</div>
+                  <div className="text-[10px] text-info font-medium mb-1">身宫</div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-bold text-primary">{profile.shenGongScore.toFixed(1)}</span>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
-                      profile.shenScoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
-                      : profile.shenScoreLevel === '中等' ? 'border-blue-400 text-blue-600'
-                      : profile.shenScoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
-                      : 'border-red-400 text-red-600'
+                      profile.shenScoreLevel === '强旺' ? 'border-emerald-400 text-success'
+                      : profile.shenScoreLevel === '中等' ? 'border-blue-400 text-info'
+                      : profile.shenScoreLevel === '虚浮' ? 'border-amber-400 text-warning'
+                      : 'border-red-400 text-danger'
                     }`}>{profile.shenScoreLevel}</Badge>
                   </div>
                   {profile.shenScoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.shenScoreInfluence}</div>}
@@ -1558,14 +1607,14 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               )}
               {profile.taiSuiScore !== undefined && (
                 <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded p-2 border border-amber-100 dark:border-amber-900/30">
-                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mb-1">太岁宫</div>
+                  <div className="text-[10px] text-warning font-medium mb-1">太岁宫</div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-lg font-bold text-primary">{profile.taiSuiScore.toFixed(1)}</span>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
-                      profile.taiSuiScoreLevel === '强旺' ? 'border-emerald-400 text-emerald-600'
-                      : profile.taiSuiScoreLevel === '中等' ? 'border-blue-400 text-blue-600'
-                      : profile.taiSuiScoreLevel === '虚浮' ? 'border-amber-400 text-amber-600'
-                      : 'border-red-400 text-red-600'
+                      profile.taiSuiScoreLevel === '强旺' ? 'border-emerald-400 text-success'
+                      : profile.taiSuiScoreLevel === '中等' ? 'border-blue-400 text-info'
+                      : profile.taiSuiScoreLevel === '虚浮' ? 'border-amber-400 text-warning'
+                      : 'border-red-400 text-danger'
                     }`}>{profile.taiSuiScoreLevel}</Badge>
                   </div>
                   {profile.taiSuiScoreInfluence && <div className="text-[10px] text-muted-foreground mt-1">{profile.taiSuiScoreInfluence}</div>}
@@ -1596,7 +1645,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                         : 'bg-muted/30'
                   }`}
                 >
-                  <span className={p.includes('吉') ? 'text-emerald-500' : p.includes('凶') ? 'text-red-500' : 'text-muted-foreground'}>
+                  <span className={p.includes('吉') ? 'text-success' : p.includes('凶') ? 'text-danger' : 'text-muted-foreground'}>
                     {p.includes('吉') ? '✨' : p.includes('凶') ? '⚡' : '•'}
                   </span>
                   <span className="text-foreground">{p}</span>
@@ -1621,9 +1670,9 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                 }`}>
                   <span className={
                     trait.includes('化禄') ? 'text-green-500'
-                    : trait.includes('化权') ? 'text-blue-500'
+                    : trait.includes('化权') ? 'text-info'
                     : trait.includes('化科') ? 'text-purple-500'
-                    : trait.includes('化忌') ? 'text-red-500'
+                    : trait.includes('化忌') ? 'text-danger'
                     : 'text-muted-foreground'
                   }>
                     {trait.includes('化禄') ? '💰' : trait.includes('化权') ? '⚡' : trait.includes('化科') ? '📜' : trait.includes('化忌') ? '🔒' : '•'}
@@ -1642,7 +1691,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             <div className="space-y-1.5 text-[11px]">
               {profile.trineInteraction && (
                 <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">三合会照：</span>
+                  <span className="text-info font-medium">三合会照：</span>
                   <span className="text-foreground">{profile.trineInteraction}</span>
                 </div>
               )}
@@ -1686,8 +1735,8 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                   className={`font-medium ${
                     profile.flankingInfluence.includes('夹')
                       ? profile.flankingInfluence.includes('羊陀') || profile.flankingInfluence.includes('空劫') || profile.flankingInfluence.includes('火铃')
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-emerald-600 dark:text-emerald-400'
+                        ? 'text-danger'
+                        : 'text-success'
                       : 'text-muted-foreground'
                   }`}
                 >
@@ -1698,7 +1747,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             )}
             {profile.singleFlankingInfluence && !profile.singleFlankingInfluence.includes('已在上文') && !profile.singleFlankingInfluence.includes('均无星曜') && (
               <div className="text-[11px] rounded p-2 border bg-amber-50/50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30">
-                <span className="font-medium text-amber-600 dark:text-amber-400">📍 单侧夹宫：</span>
+                <span className="font-medium text-warning">📍 单侧夹宫：</span>
                 <span className="text-foreground">{profile.singleFlankingInfluence}</span>
               </div>
             )}
@@ -1723,13 +1772,13 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
 
         {profile.weaknesses && profile.weaknesses.length > 0 && (
           <div className="space-y-1">
-            <div className="text-xs text-orange-600 dark:text-orange-400 font-medium flex items-center gap-1">
+            <div className="text-xs text-warning font-medium flex items-center gap-1">
               <span>⚠️</span> 挑战
             </div>
             <div className="space-y-1">
               {profile.weaknesses.map((w: string, i: number) => (
                 <div key={i} className="text-[11px] text-foreground flex items-start gap-1">
-                  <span className="text-orange-500">❌</span>
+                  <span className="text-warning">❌</span>
                   <span>{w}</span>
                 </div>
               ))}
@@ -1747,7 +1796,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
-                <div className="text-blue-600 dark:text-blue-400 font-medium mb-0.5">行为倾向</div>
+                <div className="text-info font-medium mb-0.5">行为倾向</div>
                 <div className="text-foreground">{profile.patternPersonality.behavioralTendency}</div>
               </div>
               <div className="bg-pink-50/50 dark:bg-pink-950/20 rounded p-2 border border-pink-100 dark:border-pink-900/30">
@@ -1755,7 +1804,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                 <div className="text-foreground">{profile.patternPersonality.interpersonalStyle}</div>
               </div>
               <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded p-2 border border-amber-100 dark:border-amber-900/30 col-span-2">
-                <div className="text-amber-600 dark:text-amber-400 font-medium mb-0.5">压力反应</div>
+                <div className="text-warning font-medium mb-0.5">压力反应</div>
                 <div className="text-foreground">{profile.patternPersonality.stressResponse}</div>
               </div>
             </div>
@@ -1769,7 +1818,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                     : 'bg-muted/30 border-muted'
                   }`}>
                     <div className="flex items-center gap-1.5">
-                      <span className={inf.level.includes('吉') ? 'text-emerald-500' : inf.level.includes('凶') ? 'text-red-500' : 'text-muted-foreground'}>
+                      <span className={inf.level.includes('吉') ? 'text-success' : inf.level.includes('凶') ? 'text-danger' : 'text-muted-foreground'}>
                         {inf.level.includes('吉') ? '✨' : inf.level.includes('凶') ? '⚡' : '•'}
                       </span>
                       <span className="font-medium">{inf.patternName}</span>
@@ -1810,10 +1859,10 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               )}
               {profile.scoreReasonPersonality.mingProfile.challenges.length > 0 && (
                 <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded p-2 border border-orange-100 dark:border-orange-900/30">
-                  <div className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mb-1">评分挑战</div>
+                  <div className="text-[10px] text-warning font-medium mb-1">评分挑战</div>
                   {profile.scoreReasonPersonality.mingProfile.challenges.map((c, i) => (
                     <div key={i} className="text-[11px] text-foreground flex items-start gap-1">
-                      <span className="text-orange-500">⚠️</span>
+                      <span className="text-warning">⚠️</span>
                       <span>{c}</span>
                     </div>
                   ))}
@@ -1822,7 +1871,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded p-2 border border-blue-100 dark:border-blue-900/30">
-                <span className="text-blue-600 dark:text-blue-400 font-medium">抗压能力：</span>
+                <span className="text-info font-medium">抗压能力：</span>
                 <span className="text-foreground">{profile.scoreReasonPersonality.keyDimensions.抗压能力}</span>
               </div>
               <div className="bg-purple-50/50 dark:bg-purple-950/20 rounded p-2 border border-purple-100 dark:border-purple-900/30">
@@ -1846,7 +1895,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                 <div className="text-[10px] text-muted-foreground">张力明细</div>
                 {profile.threePalaceCross.crossTensions.map((tension, i) => (
                   <div key={i} className="text-[11px] rounded p-2 border bg-amber-50/50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30">
-                    <span className="text-amber-600 dark:text-amber-400 font-medium">张力{i + 1}：</span>
+                    <span className="text-warning font-medium">张力{i + 1}：</span>
                     <span className="text-foreground">{tension}</span>
                   </div>
                 ))}
@@ -1861,15 +1910,15 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             <div className="space-y-2 text-[11px]">
               {profile.advice.overall && (
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-lg p-3 border border-blue-100 dark:border-blue-900/50">
-                  <div className="text-blue-600 dark:text-blue-400 font-medium mb-1">📋 总体分析</div>
+                  <div className="text-info font-medium mb-1">📋 总体分析</div>
                   <div className="text-foreground leading-relaxed">{profile.advice.overall}</div>
                 </div>
               )}
               {profile.advice.career && (
                 <div className="flex items-start gap-2 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg p-2">
-                  <span className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">💼</span>
+                  <span className="text-info shrink-0 mt-0.5">💼</span>
                   <div>
-                    <div className="text-blue-600 dark:text-blue-400 text-[10px] font-medium">事业发展</div>
+                    <div className="text-info text-[10px] font-medium">事业发展</div>
                     <div className="text-foreground">{profile.advice.career}</div>
                   </div>
                 </div>
@@ -2199,7 +2248,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               onCompleteChange={setQuestionnaireComplete}
             />
             {affairParamsStale && (
-              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-warning">
                 参数已变更，请重新分析以更新结果。
               </p>
             )}
@@ -2211,12 +2260,12 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <i className="ti ti-loader-2 ti-spin" style={{ marginRight: 6, fontSize: 14 }} />
                   分析中...
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  <i className="ti ti-sparkles" style={{ marginRight: 6, fontSize: 14 }} />
                   {usePipeline ? "开始分析（Stage3）" : "开始分析"}
                 </>
               )}
@@ -2280,7 +2329,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
               </div>
             </div>
             {interactionParamsStale && (
-              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-warning">
                 参数已变更，请重新分析以更新结果。
               </p>
             )}
@@ -2292,12 +2341,12 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <i className="ti ti-loader-2 ti-spin" style={{ marginRight: 6, fontSize: 14 }} />
                   分析中...
                 </>
               ) : (
                 <>
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                  <i className="ti ti-sparkles" style={{ marginRight: 6, fontSize: 14 }} />
                   开始分析（Stage4）
                 </>
               )}
@@ -2325,7 +2374,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
                   onClick={() => void runAiPersonalityAnalysis()}
                   className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted cursor-pointer"
                 >
-                  <RefreshCw className="h-3 w-3" />
+                  <i className="ti ti-refresh" style={{ fontSize: 12 }} />
                   重新生成
                 </button>
               )}
@@ -2335,7 +2384,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             )}
             {aiPersonalityStreaming && !aiPersonalityContent && (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 12 }} />
                 正在计算并生成性格分析...
               </div>
             )}
@@ -2361,7 +2410,7 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
       {/* 加载中 */}
       {loading && (
         <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 16 }} />
           正在分析中...
         </div>
       )}

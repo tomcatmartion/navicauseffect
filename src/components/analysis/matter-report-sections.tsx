@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Badge } from "@/components/ui/badge";
 import type {
   CurrentDaXianDetail,
   DaXianTimelineEntry,
@@ -218,13 +217,42 @@ function SectionNav() {
   );
 }
 
-// ── 四化徽章颜色映射 ──
-const SIHUA_COLORS: Record<string, string> = {
-  '化禄': 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400',
-  '化权': 'border-blue-500/40 text-blue-700 dark:text-blue-400',
-  '化科': 'border-purple-500/40 text-purple-700 dark:text-purple-400',
-  '化忌': 'border-red-500/40 text-red-700 dark:text-red-400',
+// ── 四化徽章颜色映射（用 testUI CSS 变量替代硬编码 Tailwind 色）──
+const SIHUA_COLORS: Record<string, React.CSSProperties> = {
+  '化禄': { color: "var(--success)", borderColor: "var(--success)" },
+  '化权': { color: "var(--brand)", borderColor: "var(--brand)" },
+  '化科': { color: "var(--accent, var(--brand))", borderColor: "var(--accent, var(--brand))" },
+  '化忌': { color: "var(--danger)", borderColor: "var(--danger)" },
 };
+
+/**
+ * Badge shim — 用 testUI .chip 类替代 shadcn Badge
+ * 兼容 variant="outline" | "secondary"，其他视为默认
+ */
+function Badge({
+  children,
+  variant,
+  className,
+  style,
+}: {
+  children: ReactNode;
+  variant?: "outline" | "secondary" | "default";
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span
+      className={`chip ${className ?? ""}`}
+      style={{
+        fontSize: 11,
+        ...(variant === "secondary" ? { background: "var(--soft)" } : {}),
+        ...style,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 /** 四化徽章列表 */
 function SihuaBadgeList({ sihua, compact }: { sihua: SihuaEntry[]; compact?: boolean }) {
@@ -234,7 +262,13 @@ function SihuaBadgeList({ sihua, compact }: { sihua: SihuaEntry[]; compact?: boo
       {sihua.map((s, i) => (
         <span
           key={i}
-          className={`inline-block rounded border px-1 py-px text-[10px] leading-tight ${SIHUA_COLORS[s.type] ?? ''}`}
+          className="chip"
+          style={{
+            padding: "1px 6px",
+            fontSize: 10,
+            lineHeight: 1.4,
+            ...SIHUA_COLORS[s.type],
+          }}
         >
           {s.type}{compact ? '' : s.star}
         </span>
@@ -578,7 +612,7 @@ export function MatterReportSections({ data }: MatterReportSectionsProps) {
             </details>
           )}
           {data.luluJiFlow && data.luluJiFlow.length > 0 && (
-            <div className="text-amber-800 dark:text-amber-300 space-y-0.5">
+            <div style={{ color: "var(--warning)", display: "flex", flexDirection: "column", gap: 2 }}>
               {data.luluJiFlow.map((flow, i) => <p key={i}>{flow}</p>)}
             </div>
           )}
