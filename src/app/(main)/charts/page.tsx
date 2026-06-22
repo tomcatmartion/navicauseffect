@@ -3,17 +3,14 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
@@ -182,9 +179,9 @@ export default function ChartsListPage() {
       <div style={{ maxWidth: 480, margin: "80px auto", padding: 24, textAlign: "center" }}>
         <i className="ti ti-lock" style={{ fontSize: 48, color: "var(--text-muted)" }} />
         <p style={{ marginTop: 16, color: "var(--text-muted)" }}>请先登录后查看命盘</p>
-        <Button className="btn btn-primary" onClick={() => router.push("/auth/login")}>
+        <button className="btn btn-primary" onClick={() => router.push("/auth/login")}>
           去登录
-        </Button>
+        </button>
       </div>
     );
   }
@@ -193,7 +190,7 @@ export default function ChartsListPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
-        <Loader2 className="size-8 animate-spin" style={{ color: "var(--brand)" }} />
+        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 28, color: "var(--brand)" }} />
       </div>
     );
   }
@@ -426,7 +423,7 @@ export default function ChartsListPage() {
                       style={{ width: 32, height: 32 }}
                       onClick={() => setDeleteTarget(chart)}
                     >
-                      <Trash2 style={{ width: 14, height: 14 }} />
+                      <i className="ti ti-trash" style={{ fontSize: 14 }} />
                     </button>
                   </div>
                 </div>
@@ -438,7 +435,7 @@ export default function ChartsListPage() {
 
       {/* 删除确认 */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="paywall-dialog" style={{ maxWidth: 400 }}>
           <DialogHeader>
             <DialogTitle>确认删除命盘</DialogTitle>
             <DialogDescription>
@@ -446,14 +443,19 @@ export default function ChartsListPage() {
               {deleteTarget?.isPrimary && " 删除默认盘后会自动选取同命主最新盘为默认。"}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)} disabled={deleting}>
               取消
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "确认删除"}
-            </Button>
-          </DialogFooter>
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{ background: "var(--danger)", color: "#fff" }}
+            >
+              {deleting ? <i className="ti ti-loader-2 ti-spin" /> : "确认删除"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

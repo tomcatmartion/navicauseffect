@@ -1402,3 +1402,13 @@ input:checked + .slider::before { transform: translateX(20px); background: #fff;
 .paywall-dialog .lock-icon { color: var(--warning); font-size: 32px; margin-bottom: 8px; display: inline-block; }
 .paywall-dialog .paywall-desc { color: var(--text-muted); font-size: 13px; line-height: 1.8; margin: 12px 0 18px; }
 .paywall-dialog .paywall-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* 旋转动画 — 配合 .ti.ti-loader-2 用于加载态 */
+.ti-spin { animation: ti-spin 1s linear infinite; display: inline-block; }
+@keyframes ti-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 加载态 pulse（占位卡片） */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

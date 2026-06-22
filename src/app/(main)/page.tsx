@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Loader2 } from "lucide-react";
 
 const features = [
   {
@@ -83,7 +82,7 @@ export default function HomePage() {
   if (status === "loading") {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
-        <Loader2 className="size-8 animate-spin" style={{ color: "var(--brand)" }} />
+        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 28, color: "var(--brand)" }} />
       </div>
     );
   }

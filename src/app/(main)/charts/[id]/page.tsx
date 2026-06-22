@@ -4,30 +4,14 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import {
-  Loader2,
-  Star,
-  Trash2,
-  FileText,
-  MessageSquare,
-  Heart,
-  Crown,
-  Edit3,
-  AlertCircle,
-} from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 
@@ -233,17 +217,17 @@ function ChartDetailContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary/40 animate-spin" />
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px 60px", display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 28, color: "var(--brand)" }} />
       </div>
     );
   }
 
   if (!chart) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <AlertCircle className="w-12 h-12 text-primary/20" />
-        <p className="text-muted-foreground">命盘不存在</p>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px 60px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, minHeight: 400 }}>
+        <i className="ti ti-alert-circle" style={{ fontSize: 48, color: "var(--text-muted)" }} />
+        <p style={{ color: "var(--text-muted)" }}>命盘不存在</p>
       </div>
     );
   }
@@ -277,7 +261,7 @@ function ChartDetailContent() {
               setEditOpen(true);
             }}
           >
-            <Edit3 className="size-3.5" style={{ marginRight: 4 }} />
+            <i className="ti ti-edit" style={{ marginRight: 4 }} />
             编辑
           </button>
           <button
@@ -287,7 +271,7 @@ function ChartDetailContent() {
             onClick={() => setDeleteOpen(true)}
             title="删除"
           >
-            <Trash2 className="size-3.5" />
+            <i className="ti ti-trash" />
           </button>
         </div>
       </div>
@@ -296,9 +280,9 @@ function ChartDetailContent() {
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {chart.isPrimary ? (
-            <Crown className="size-5" style={{ color: "var(--warning)" }} />
+            <i className="ti ti-crown" style={{ fontSize: 20, color: "var(--warning)" }} />
           ) : (
-            <Star className="size-5" style={{ color: "var(--text-muted)", opacity: 0.4 }} />
+            <i className="ti ti-star" style={{ fontSize: 20, color: "var(--text-muted)", opacity: 0.4 }} />
           )}
           <h1
             style={{
@@ -405,9 +389,9 @@ function ChartDetailContent() {
                 color: "var(--text-muted)",
               }}
             >
-              <Loader2
-                className="size-8 animate-spin"
-                style={{ color: "var(--brand)" }}
+              <i
+                className="ti ti-loader-2 ti-spin"
+                style={{ fontSize: 28, color: "var(--brand)" }}
               />
               <p style={{ marginTop: 12, fontSize: 12 }}>
                 正在重建 iztro 命盘实例...
@@ -454,95 +438,94 @@ function ChartDetailContent() {
       <div className="space-y-4" style={{ marginTop: 16 }}>
 
         {/* 命盘摘要 */}
-        <Card className="border-primary/10">
-          <CardContent className="p-4 space-y-3">
-            <h2 className="font-serif-sc text-sm font-bold text-foreground">命盘摘要</h2>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">阳历</div>
-                <div className="font-medium">{chart.chartSnapshot.summary.solarDate}</div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">阴历</div>
-                <div className="font-medium">{chart.chartSnapshot.summary.lunarDate}</div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">生年干支</div>
-                <div className="font-medium">{chart.chartSnapshot.summary.birthGanZhi}</div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">生肖 · 五行局</div>
-                <div className="font-medium">
-                  {chart.chartSnapshot.summary.zodiac} · {chart.chartSnapshot.summary.fiveElementsClass}
-                </div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2 col-span-2">
-                <div className="text-muted-foreground mb-0.5">命宫主星</div>
-                <div className="font-medium">
-                  {chart.chartSnapshot.summary.mingGongMajorStars.join("、") || "空宫"}
-                </div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">身宫</div>
-                <div className="font-medium">{chart.chartSnapshot.summary.shenGongName}</div>
-              </div>
-              <div className="rounded-md bg-primary/5 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">时辰</div>
-                <div className="font-medium">
-                  {timeIndexLabel(chart.timeIndex)}时
-                  {chart.chartSnapshot.birthInfo.trueSolarTimeInfo && (
-                    <span className="ml-1 text-muted-foreground">
-                      ({chart.chartSnapshot.birthInfo.trueSolarTimeInfo})
-                    </span>
-                  )}
-                </div>
+        <div className="card" style={{ padding: 16 }}>
+          <h2 className="home-section-title" style={{ fontSize: 14, marginBottom: 12 }}>命盘摘要</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>阳历</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>{chart.chartSnapshot.summary.solarDate}</div>
+            </div>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>阴历</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>{chart.chartSnapshot.summary.lunarDate}</div>
+            </div>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>生年干支</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>{chart.chartSnapshot.summary.birthGanZhi}</div>
+            </div>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>生肖 · 五行局</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>
+                {chart.chartSnapshot.summary.zodiac} · {chart.chartSnapshot.summary.fiveElementsClass}
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px", gridColumn: "span 2" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>命宫主星</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>
+                {chart.chartSnapshot.summary.mingGongMajorStars.join("、") || "空宫"}
+              </div>
+            </div>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>身宫</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>{chart.chartSnapshot.summary.shenGongName}</div>
+            </div>
+            <div style={{ background: "var(--soft)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
+              <div style={{ color: "var(--text-muted)", marginBottom: 2 }}>时辰</div>
+              <div style={{ fontWeight: 500, color: "var(--ink)" }}>
+                {timeIndexLabel(chart.timeIndex)}时
+                {chart.chartSnapshot.birthInfo.trueSolarTimeInfo && (
+                  <span style={{ marginLeft: 4, color: "var(--text-muted)" }}>
+                    ({chart.chartSnapshot.birthInfo.trueSolarTimeInfo})
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* 操作 CTA */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Button
-            className="bg-primary hover:bg-primary/90 h-auto py-3 flex flex-col items-center gap-1"
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
+          <button
+            className="btn btn-primary"
+            style={{ flexDirection: "column", gap: 4, padding: "12px 8px", height: "auto" }}
             onClick={() => router.push(`/chart?chartRecordId=${chart.id}`)}
           >
-            <MessageSquare className="w-5 h-5" />
-            <span className="text-xs">AI 解盘</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="border-primary/30 text-primary hover:bg-primary/5 h-auto py-3 flex flex-col items-center gap-1"
+            <i className="ti ti-message-2" style={{ fontSize: 18 }} />
+            <span style={{ fontSize: 12 }}>AI 解盘</span>
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ flexDirection: "column", gap: 4, padding: "12px 8px", height: "auto" }}
             onClick={() => router.push(`/reports?chartRecordId=${chart.id}&identityId=${chart.identityId}`)}
           >
-            <FileText className="w-5 h-5" />
-            <span className="text-xs">生成报告</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="border-primary/30 text-primary hover:bg-primary/5 h-auto py-3 flex flex-col items-center gap-1"
+            <i className="ti ti-file-text" style={{ fontSize: 18 }} />
+            <span style={{ fontSize: 12 }}>生成报告</span>
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ flexDirection: "column", gap: 4, padding: "12px 8px", height: "auto" }}
             onClick={() => router.push(`/compatibility?selfChartId=${chart.id}`)}
           >
-            <Heart className="w-5 h-5" />
-            <span className="text-xs">加入合盘</span>
-          </Button>
+            <i className="ti ti-heart" style={{ fontSize: 18 }} />
+            <span style={{ fontSize: 12 }}>加入合盘</span>
+          </button>
         </div>
 
         {!chart.isPrimary && (
-          <Button
-            variant="outline"
-            className="w-full border-primary/20"
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%" }}
             onClick={handleSetPrimary}
           >
-            <Crown className="w-4 h-4 mr-2 text-amber-500" />
+            <i className="ti ti-crown" style={{ marginRight: 6, color: "var(--warning)" }} />
             设为该命主的默认盘
-          </Button>
+          </button>
         )}
 
         {/* 快照元信息（开发调试用） */}
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer hover:text-foreground">快照元信息</summary>
-          <div className="mt-2 space-y-1 pl-3">
+        <details style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <summary style={{ cursor: "pointer" }}>快照元信息</summary>
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4, paddingLeft: 12 }}>
             <div>iztroVersion: {chart.chartSnapshot.iztroVersion}</div>
             <div>computedAt: {chart.chartSnapshot.computedAt}</div>
             <div>fingerprint: {chart.chartFingerprint.slice(0, 16)}...</div>
@@ -552,51 +535,59 @@ function ChartDetailContent() {
 
       {/* 编辑弹窗 */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="paywall-dialog" style={{ maxWidth: 400 }}>
           <DialogHeader>
             <DialogTitle>编辑命盘</DialogTitle>
             <DialogDescription>修改盘别名或备注</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 8 }}>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">盘别名</label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>盘别名</label>
+              <input className="input" value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: "100%" }} />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">备注</label>
-              <Input
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>备注</label>
+              <input
+                className="input"
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 placeholder="如：母亲提供的是阴历"
+                style={{ width: "100%" }}
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditOpen(false)} disabled={saving}>
               取消
-            </Button>
-            <Button onClick={handleSaveEdit} disabled={saving || !editName.trim()}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
-            </Button>
-          </DialogFooter>
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={handleSaveEdit} disabled={saving || !editName.trim()}>
+              {saving && <i className="ti ti-loader-2 ti-spin" style={{ marginRight: 4 }} />}
+              保存
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* 删除确认 */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="paywall-dialog" style={{ maxWidth: 400 }}>
           <DialogHeader>
             <DialogTitle>确认删除命盘</DialogTitle>
             <DialogDescription>将删除「{chart.name}」，此操作不可恢复。</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setDeleteOpen(false)}>
               取消
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={handleDelete}
+              style={{ background: "var(--danger)", color: "#fff" }}
+            >
+              <i className="ti ti-trash" style={{ marginRight: 4 }} />
               确认删除
-            </Button>
-          </DialogFooter>
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
@@ -605,7 +596,13 @@ function ChartDetailContent() {
 
 export default function ChartDetailPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary/40 animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+          <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 28, color: "var(--brand)" }} />
+        </div>
+      }
+    >
       <ChartDetailContent />
     </Suspense>
   );
