@@ -1,32 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Star,
-  Crown,
-  Clock,
-  FileText,
-  Loader2,
-  UserCircle,
-  ChevronRight,
-  Sparkles,
-} from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -36,11 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { PageContainer } from "@/components/shared/page-container";
+import { SectionTitle } from "@/components/shared/section-title";
+import { EmptyState } from "@/components/shared/empty-state";
+
 // ---------------------------------------------------------------------------
 // 类型定义
 // ---------------------------------------------------------------------------
 
-/** 报告模板 - 子模板 */
 interface TemplateChild {
   id: string;
   name: string;
@@ -49,7 +36,6 @@ interface TemplateChild {
   sortOrder: number;
 }
 
-/** 报告模板 */
 interface ReportTemplate {
   id: string;
   name: string;
@@ -62,7 +48,6 @@ interface ReportTemplate {
   children: TemplateChild[];
 }
 
-/** 命主 */
 interface Identity {
   id: string;
   name: string;
@@ -72,7 +57,6 @@ interface Identity {
   isActive: boolean;
 }
 
-/** 子报告 */
 interface ChildReport {
   id: string;
   status: string;
@@ -80,7 +64,6 @@ interface ChildReport {
   template: { id: string; name: string; slug: string };
 }
 
-/** 报告 */
 interface Report {
   id: string;
   status: string;
@@ -91,7 +74,6 @@ interface Report {
   children: ChildReport[];
 }
 
-/** 按命主分组的报告 */
 interface GroupedReports {
   identity: { id: string; name: string; gender: string };
   reports: Report[];
@@ -101,31 +83,47 @@ interface GroupedReports {
 // 辅助函数
 // ---------------------------------------------------------------------------
 
-/** 状态文案与颜色 */
+const HIGHLIGHT_TAGS = new Set(["热门", "推荐", "限时", "重磅"]);
+
 function getStatusConfig(status: string): {
   label: string;
-  className: string;
+  color: CSSProperties;
+  bg: CSSProperties["background"];
   pulse: boolean;
 } {
   switch (status) {
     case "COMPLETED":
-      return { label: "已完成", className: "bg-green-100 text-green-700", pulse: false };
+      return {
+        label: "已完成",
+        color: { color: "var(--success)" },
+        bg: "var(--success-soft, rgba(44,74,30,.08))",
+        pulse: false,
+      };
     case "FAILED":
-      return { label: "失败", className: "bg-red-100 text-red-700", pulse: false };
+      return {
+        label: "失败",
+        color: { color: "var(--danger)" },
+        bg: "var(--danger-soft, rgba(139,26,26,.08))",
+        pulse: false,
+      };
     case "GENERATING":
-      return { label: "生成中", className: "bg-primary/10 text-primary", pulse: true };
+      return {
+        label: "生成中",
+        color: { color: "var(--brand)" },
+        bg: "var(--soft)",
+        pulse: true,
+      };
     case "PENDING":
     default:
-      return { label: "等待中", className: "bg-muted text-muted-foreground", pulse: false };
+      return {
+        label: "等待中",
+        color: { color: "var(--text-muted)" },
+        bg: "var(--soft)",
+        pulse: false,
+      };
   }
 }
 
-/** 性别 → 头像背景色 */
-function genderColor(gender: string): string {
-  return gender === "M" ? "bg-blue-100 text-blue-600" : "bg-pink-100 text-pink-600";
-}
-
-/** 格式化日期 */
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("zh-CN", {
     year: "numeric",
@@ -146,147 +144,114 @@ interface TemplateCardProps {
 }
 
 function TemplateCard({ template, onSelect }: TemplateCardProps) {
-  const hasChildren = template.children.length > 0;
   const isAdvanced = template.type === "ADVANCED";
-
-  // 区分「高亮标签」（热门/推荐/限时）和「信息标签」（字数/子报告等）
-  const highlightTags = template.tags.filter((t) =>
-    ["热门", "推荐", "限时", "重磅"].includes(t)
-  );
-  const infoTags = template.tags.filter(
-    (t) => !["热门", "推荐", "限时", "重磅"].includes(t)
-  );
+  const highlightTags = template.tags.filter((t) => HIGHLIGHT_TAGS.has(t));
+  const infoTags = template.tags.filter((t) => !HIGHLIGHT_TAGS.has(t));
 
   return (
-    <Card
-      className="group cursor-pointer overflow-hidden border-primary/10 bg-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/8"
+    <div
+      className="report-card vertical"
+      style={{ cursor: "pointer" }}
       onClick={() => onSelect(template)}
+      role="button"
+      tabIndex={0}
     >
-      {/* 封面区 — 沉浸式渐变背景 */}
-      <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16/9" }}>
-        {template.bgImage ? (
-          <>
-            <img
-              src={template.bgImage}
-              alt={template.name}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-          </>
-        ) : (
-          /* 无图片时：根据类型生成不同风格渐变 */
-          <div className="flex h-full w-full items-center justify-center">
-            <div
-              className={`absolute inset-0 ${
-                isAdvanced
-                  ? "bg-gradient-to-br from-primary/15 via-primary/8 to-accent/10"
-                  : "bg-gradient-to-br from-primary/8 via-background to-primary/12"
-              }`}
-            />
-            {/* 装饰光圈 */}
-            <div className="absolute right-[-20%] top-[-20%] h-[80%] w-[60%] rounded-full bg-primary/5 blur-3xl" />
-            <div className="absolute bottom-[-10%] left-[-10%] h-[50%] w-[40%] rounded-full bg-accent/5 blur-2xl" />
-            {/* 中心图标 */}
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white/90 shadow-md ring-1 ring-primary/10">
-              {isAdvanced ? (
-                <Crown className="h-7 w-7 text-primary" />
-              ) : (
-                <Star className="h-7 w-7 text-primary/80" />
-              )}
-            </div>
-          </div>
-        )}
-        {/* 底部渐变遮罩（仅无图片时） */}
+      {/* 封面 */}
+      <div
+        className="report-thumb"
+        style={
+          template.bgImage
+            ? {
+                backgroundImage: `url(${template.bgImage})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      >
         {!template.bgImage && (
-          <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-card to-transparent" />
+          <i className={`ti ${isAdvanced ? "ti-crown" : "ti-star"}`} style={{ fontSize: 32 }} />
         )}
-        {/* 左上角类型标记 */}
-        <div className="absolute left-3 top-3">
-          <span
-            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold backdrop-blur-sm ${
-              isAdvanced
-                ? "bg-primary/80 text-white"
-                : "bg-white/70 text-primary"
-            }`}
-          >
-            {isAdvanced ? (
-              <Crown className="h-3 w-3" />
-            ) : (
-              <Star className="h-3 w-3" />
-            )}
-            {isAdvanced ? "深度" : "体验"}
-          </span>
-        </div>
+        {/* 类型标记 */}
+        <span
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 8px",
+            fontSize: 11,
+            fontWeight: 600,
+            color: isAdvanced ? "#fff" : "var(--brand)",
+            background: isAdvanced ? "var(--brand)" : "var(--panel)",
+            border: "1px solid " + (isAdvanced ? "var(--brand)" : "var(--line)"),
+            borderRadius: 4,
+          }}
+        >
+          <i className={`ti ${isAdvanced ? "ti-crown" : "ti-star"}`} style={{ fontSize: 11 }} />
+          {isAdvanced ? "深度" : "体验"}
+        </span>
       </div>
 
-      {/* 信息区 */}
-      <CardContent className="space-y-2.5 px-4 pb-4 pt-3.5">
-        {/* 标题 + 高亮标签 */}
-        <div className="flex items-start gap-2">
-          <h3 className="text-sm font-bold text-foreground leading-snug">
+      {/* 信息 */}
+      <div className="report-info">
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+          <h3 className="report-name" style={{ flex: 1 }}>
             {template.name}
           </h3>
-          {highlightTags.length > 0 && (
-            <div className="flex shrink-0 gap-1">
-              {highlightTags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
+          {highlightTags.map((tag) => (
+            <span
+              key={tag}
+              style={{
+                background: "var(--warning)",
+                color: "#fff",
+                padding: "1px 6px",
+                borderRadius: 3,
+                fontSize: 10,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {tag}
+            </span>
+          ))}
         </div>
 
-        {/* 子报告分类标签 */}
-        {hasChildren && (
-          <div className="flex flex-wrap gap-1.5">
+        {template.children.length > 0 && (
+          <div className="report-meta">
             {template.children.map((child) => (
-              <span
-                key={child.id}
-                className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground/70"
-              >
-                {child.name}
-              </span>
+              <span key={child.id} className="chip">{child.name}</span>
             ))}
           </div>
         )}
 
-        {/* 描述 — 价值主张 */}
         {template.description && (
-          <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-            {template.description}
-          </p>
+          <p className="report-desc">{template.description}</p>
         )}
 
-        {/* 底部：信息标签 + 价格/箭头 */}
-        <div className="flex items-center justify-between pt-0.5">
-          <div className="flex flex-wrap gap-1.5">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {infoTags.map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] font-medium text-muted-foreground/70"
-              >
+              <span key={tag} style={{ fontSize: 10, color: "var(--text-muted)" }}>
                 {tag}
               </span>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="report-actions" style={{ flexDirection: "row" }}>
             {template.pointCost > 0 ? (
-              <span className="text-xs font-bold text-primary">
-                {template.pointCost}
-                <span className="font-normal text-muted-foreground"> 星币</span>
+              <span className="report-cost">
+                {template.pointCost}<span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 11, marginLeft: 2 }}> 星币</span>
               </span>
             ) : (
-              <span className="text-xs font-bold text-green-600">免费</span>
+              <span className="report-cost free">免费</span>
             )}
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
+            <i className="ti ti-chevron-right" style={{ color: "var(--text-muted)", fontSize: 14 }} />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -315,73 +280,119 @@ function ReportItem({ report }: ReportItemProps) {
   };
 
   return (
-    <Card
-      className="cursor-pointer border-primary/10 bg-card transition-all hover:border-primary/25 hover:shadow-lg hover:shadow-primary/5"
+    <div
+      className="log-item"
+      style={{
+        cursor: "pointer",
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 8,
+      }}
       onClick={handleClick}
+      role="button"
+      tabIndex={0}
     >
-      <CardContent className="p-4">
-        {/* 头部：类型图标 + 模板名称 + 状态徽章 */}
-        <div className="mb-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/8">
-              <FileText className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-sm font-bold text-foreground">
-              {report.template.name}
-            </span>
-          </div>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCfg.className}`}
+      {/* 头部 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "var(--radius-sm)",
+              background: "var(--soft)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--brand)",
+            }}
           >
-            {statusCfg.pulse && (
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-            )}
-            {statusCfg.label}
+            <i className="ti ti-file-text" />
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+            {report.template.name}
           </span>
         </div>
-
-        {/* 进度条 */}
-        {(report.status === "GENERATING" || report.status === "PENDING") && (
-          <div className="mb-2.5 h-1.5 w-full overflow-hidden rounded-full bg-primary/10">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-primary/80 to-primary transition-all duration-500"
-              style={{ width: `${report.progress}%` }}
+        <span
+          className="chip"
+          style={{
+            background: statusCfg.bg,
+            border: "1px solid var(--line-light)",
+            padding: "2px 10px",
+            fontSize: 11,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {statusCfg.pulse && (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "var(--brand)",
+                animation: "pulse 1.4s ease-in-out infinite",
+              }}
             />
-          </div>
-        )}
+          )}
+          <span style={statusCfg.color}>{statusCfg.label}</span>
+        </span>
+      </div>
 
-        {/* 子报告状态 */}
-        {report.children.length > 0 && (
-          <div className="mb-2.5 space-y-1.5">
-            {report.children.map((child) => {
-              const childCfg = getStatusConfig(child.status);
-              return (
-                <div key={child.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
-                  <span className="text-xs font-medium text-foreground/70">{child.template.name}</span>
-                  <span
-                    className={`rounded-full px-2 py-px text-[10px] font-medium ${childCfg.className}`}
-                  >
-                    {childCfg.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 底部：命主 + 时间 */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            <span>{formatDate(report.createdAt)}</span>
-          </div>
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+      {/* 进度条 */}
+      {(report.status === "GENERATING" || report.status === "PENDING") && (
+        <div className="dim-track" style={{ height: 4 }}>
+          <div
+            className="dim-fill"
+            style={{ width: `${report.progress}%`, background: "var(--brand)" }}
+          />
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* 子报告 */}
+      {report.children.length > 0 && (
+        <div className="log-list" style={{ gap: 4 }}>
+          {report.children.map((child) => {
+            const childCfg = getStatusConfig(child.status);
+            return (
+              <div
+                key={child.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "4px 8px",
+                  background: "var(--soft)",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--line-light)",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ color: "var(--ink-light)" }}>{child.template.name}</span>
+                <span
+                  style={{
+                    ...childCfg.color,
+                    fontSize: 11,
+                  }}
+                >
+                  {childCfg.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 底部 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)" }}>
+        <span>
+          <i className="ti ti-clock" style={{ marginRight: 4 }} />
+          {formatDate(report.createdAt)}
+        </span>
+        <i className="ti ti-chevron-right" />
+      </div>
+    </div>
   );
 }
 
@@ -398,26 +409,12 @@ function IdentityGroup({ group }: IdentityGroupProps) {
   const initial = identity.name.charAt(0);
 
   return (
-    <div className="space-y-3">
-      {/* 命主信息 */}
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${genderColor(identity.gender)}`}
-        >
-          {initial}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">{identity.name}</span>
-            <Badge variant="outline" className="border-primary/20 text-xs text-primary">
-              {reports.length} 份报告
-            </Badge>
-          </div>
-        </div>
+    <div>
+      <div className="group-title">
+        <span className="group-count">{reports.length} 份报告</span>
+        <span style={{ marginLeft: 8 }}>{identity.name}</span>
       </div>
-
-      {/* 报告列表 */}
-      <div className="space-y-2 pl-1">
+      <div className="log-list" style={{ marginTop: 10 }}>
         {reports.map((report) => (
           <ReportItem key={report.id} report={report} />
         ))}
@@ -434,36 +431,25 @@ export default function ReportsPage() {
   const { status: sessionStatus } = useSession();
   const router = useRouter();
 
-  // 数据状态
   const [basicTemplates, setBasicTemplates] = useState<ReportTemplate[]>([]);
   const [advancedTemplates, setAdvancedTemplates] = useState<ReportTemplate[]>([]);
   const [groupedReports, setGroupedReports] = useState<GroupedReports[]>([]);
   const [identities, setIdentities] = useState<Identity[]>([]);
 
-  // 加载状态
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  // 对话框状态
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [selectedIdentityId, setSelectedIdentityId] = useState<string>("");
-  /** 来自 URL 参数 ?chartRecordId=（从 /charts/[id] 跳转时携带，生成时一起提交以复用 snapshot） */
   const [selectedChartRecordId, setSelectedChartRecordId] = useState<string>("");
-  /**
-   * URL 预设标记：从 /charts/[id] 跳来时设为 true，阻止 fetchIdentities 用 active 命主覆盖 URL 预选
-   * 解决竞态：fetchIdentities（async）完成时若已 URL 预设，不自动选 active 命主
-   */
   const urlPreserveRef = useRef(false);
-  /** 当前命主的命盘列表（命主切换时加载，用于命盘选择器） */
   const [chartRecords, setChartRecords] = useState<{ id: string; name: string; isPrimary: boolean }[]>([]);
   const [loadingChartRecords, setLoadingChartRecords] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [extraInfo, setExtraInfo] = useState("");
 
-  // 当前 Tab
-  const [activeTab, setActiveTab] = useState("generate");
-  // 生成弹窗步骤: 1=选命主, 2=填背景
+  const [activeTab, setActiveTab] = useState<"generate" | "my">("generate");
   const [genStep, setGenStep] = useState(1);
 
   // -------------------------------------------------------------------------
@@ -500,9 +486,6 @@ export default function ReportsPage() {
     }
   }, []);
 
-  /** 加载指定命主的命盘列表（用于命盘选择器）
-   *  preserveSelection：URL 预设的 chartRecordId，若列表中存在则保留，否则选 primary/第一个
-   */
   const fetchChartRecords = useCallback(async (identityId: string, preserveSelection?: string) => {
     if (!identityId) { setChartRecords([]); return; }
     setLoadingChartRecords(true);
@@ -533,7 +516,6 @@ export default function ReportsPage() {
     }
   }, []);
 
-  /** 命主切换：加载新命主的命盘列表（选 primary 或第一个） */
   const handleIdentityChange = (id: string) => {
     setSelectedIdentityId(id);
     fetchChartRecords(id);
@@ -546,9 +528,7 @@ export default function ReportsPage() {
         const data = await res.json();
         const list: Identity[] = data.identities ?? [];
         setIdentities(list);
-        // 默认选中当前活跃的命主
         const active = list.find((i) => i.isActive);
-        // URL 已预设命主时不覆盖（避免 /charts/[id] 跳来被 active 命主覆盖）
         if (active && !urlPreserveRef.current) {
           setSelectedIdentityId(active.id);
           fetchChartRecords(active.id);
@@ -559,7 +539,6 @@ export default function ReportsPage() {
     }
   }, [fetchChartRecords]);
 
-  // 首次加载
   useEffect(() => {
     if (sessionStatus === "unauthenticated") {
       router.push("/auth/login");
@@ -572,45 +551,32 @@ export default function ReportsPage() {
     }
   }, [sessionStatus, router, fetchTemplates, fetchReports, fetchIdentities]);
 
-  // 处理 URL 参数 ?chartRecordId=xxx&identityId=xxx：从 /charts/[id] 跳转过来时
-  // 预选命主 + 记录 chartRecordId（POST 时一起提交以复用 snapshot）
   const searchParams = useSearchParams();
   useEffect(() => {
     if (sessionStatus !== "authenticated") return;
     const urlIdentityId = searchParams.get("identityId");
     const urlChartRecordId = searchParams.get("chartRecordId");
     if (urlIdentityId) {
-      urlPreserveRef.current = true; // 标记 URL 预设，阻止 fetchIdentities 用 active 命主覆盖
+      urlPreserveRef.current = true;
       setSelectedIdentityId(urlIdentityId);
-      // 加载该命主的命盘列表，并保留 URL 指定的 chartRecordId（若存在）
       fetchChartRecords(urlIdentityId, urlChartRecordId || undefined);
-      // 打开生成对话框第一步（让用户立即看到预选状态）
       setDialogOpen(true);
     }
   }, [searchParams, sessionStatus, fetchChartRecords]);
 
-  // 切换到"我的报告"时刷新列表
   useEffect(() => {
     if (activeTab === "my" && sessionStatus === "authenticated") {
       fetchReports();
     }
   }, [activeTab, sessionStatus, fetchReports]);
 
-  // 自动轮询：我的报告Tab有生成中的报告时，每10秒刷新
   useEffect(() => {
     if (activeTab !== "my" || sessionStatus !== "authenticated") return;
-
     const hasGenerating = groupedReports.some((g) =>
-      g.reports.some(
-        (r) => r.status === "GENERATING" || r.status === "PENDING"
-      )
+      g.reports.some((r) => r.status === "GENERATING" || r.status === "PENDING")
     );
     if (!hasGenerating) return;
-
-    const timer = setInterval(() => {
-      fetchReports();
-    }, 10000);
-
+    const timer = setInterval(() => fetchReports(), 10000);
     return () => clearInterval(timer);
   }, [activeTab, sessionStatus, groupedReports, fetchReports]);
 
@@ -634,7 +600,6 @@ export default function ReportsPage() {
       toast.error("请先保存命盘后再生成报告");
       return;
     }
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/reports", {
@@ -647,11 +612,9 @@ export default function ReportsPage() {
           extraInfo: extraInfo.trim() || undefined,
         }),
       });
-
       if (res.ok) {
         toast.success("报告已开始生成");
         setDialogOpen(false);
-        // 切换到我的报告
         setActiveTab("my");
         fetchReports();
       } else {
@@ -666,19 +629,22 @@ export default function ReportsPage() {
   };
 
   // -------------------------------------------------------------------------
-  // 加载骨架屏
+  // 加载态
   // -------------------------------------------------------------------------
 
   if (sessionStatus === "loading" || (loadingTemplates && loadingReports)) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-10 md:py-16">
-        <div className="mb-8 h-48 animate-pulse rounded-xl bg-primary/5" />
-        <div className="space-y-4">
+      <PageContainer maxWidth={1100}>
+        <div style={{ height: 128, background: "var(--soft)", borderRadius: "var(--radius)", marginBottom: 16 }} />
+        <div className="log-list">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-primary/5" />
+            <div
+              key={i}
+              style={{ height: 96, background: "var(--soft)", borderRadius: "var(--radius-sm)" }}
+            />
           ))}
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -687,148 +653,141 @@ export default function ReportsPage() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col">
-      {/* Hero Banner */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-background to-background">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-3xl" />
-        </div>
+    <PageContainer maxWidth={1100}>
+      {/* Hero */}
+      <div
+        className="card"
+        style={{
+          marginBottom: 20,
+          textAlign: "center",
+          padding: "32px 24px",
+          background: "linear-gradient(135deg, var(--soft), var(--panel))",
+          borderColor: "var(--brand)",
+        }}
+      >
+        <p style={{ fontSize: 11, letterSpacing: "0.3em", color: "var(--text-muted)", marginBottom: 8 }}>
+          INSIGHT &amp; DESTINY
+        </p>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--brand)", margin: "0 0 8px" }}>
+          命理报告
+        </h1>
+        <p style={{ fontSize: 14, color: "var(--ink-light)", lineHeight: 1.8, maxWidth: 480, margin: "0 auto" }}>
+          基于紫微斗数与心理学的深度分析报告，为你揭示命运轨迹与性格密码
+        </p>
+      </div>
 
-        <div className="relative mx-auto max-w-4xl px-4 py-14 text-center md:py-20">
-          <p className="mb-4 text-sm tracking-[0.3em] text-accent-foreground/60">
-            Insight &amp; Destiny
-          </p>
-          <h1 className="mb-3 font-serif-sc text-3xl font-bold text-primary md:text-4xl">
-            命理报告
-          </h1>
-          <p className="mx-auto max-w-lg text-base leading-relaxed text-muted-foreground">
-            基于紫微斗数与心理学的深度分析报告，为你揭示命运轨迹与性格密码
-          </p>
-        </div>
-      </section>
+      {/* Tab 切换 */}
+      <div className="seg" style={{ width: "100%", marginBottom: 20 }}>
+        <button
+          className={`seg-btn ${activeTab === "generate" ? "active" : ""}`}
+          onClick={() => setActiveTab("generate")}
+          style={{ flex: 1 }}
+        >
+          <i className="ti ti-sparkles" style={{ marginRight: 4 }} />
+          生成报告
+        </button>
+        <button
+          className={`seg-btn ${activeTab === "my" ? "active" : ""}`}
+          onClick={() => setActiveTab("my")}
+          style={{ flex: 1 }}
+        >
+          <i className="ti ti-file-text" style={{ marginRight: 4 }} />
+          我的报告
+        </button>
+      </div>
 
-      {/* 内容区域 */}
-      <section className="mx-auto w-full max-w-6xl px-4 py-8 md:py-12">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Tab 切换 */}
-          <TabsList className="mb-6 w-full bg-primary/5">
-            <TabsTrigger
-              value="generate"
-              className="data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
-            >
-              <Sparkles className="mr-1.5 h-4 w-4" />
-              生成报告
-            </TabsTrigger>
-            <TabsTrigger
-              value="my"
-              className="data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
-            >
-              <FileText className="mr-1.5 h-4 w-4" />
-              我的报告
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ======== 生成报告 Tab ======== */}
-          <TabsContent value="generate">
-            {loadingTemplates ? (
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="aspect-video animate-pulse rounded-xl bg-primary/5" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-10">
-                {/* 体验区 */}
-                {basicTemplates.length > 0 && (
-                  <div>
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-                        <Star className="h-4 w-4 text-primary" />
-                      </div>
-                      <h2 className="font-serif-sc text-lg font-bold text-primary">体验区</h2>
-                      <span className="text-xs text-muted-foreground">基础模板，免费体验</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      {basicTemplates.map((t) => (
-                        <TemplateCard key={t.id} template={t} onSelect={handleSelectTemplate} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 会员区 */}
-                {advancedTemplates.length > 0 && (
-                  <div>
-                    <div className="mb-4 flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-                        <Crown className="h-4 w-4 text-primary" />
-                      </div>
-                      <h2 className="font-serif-sc text-lg font-bold text-primary">会员区</h2>
-                      <span className="text-xs text-muted-foreground">深度分析，解锁完整洞察</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      {advancedTemplates.map((t) => (
-                        <TemplateCard key={t.id} template={t} onSelect={handleSelectTemplate} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 无模板 */}
-                {basicTemplates.length === 0 && advancedTemplates.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <FileText className="mb-3 h-12 w-12 text-primary/30" />
-                    <p className="text-sm text-muted-foreground">暂无可用的报告模板</p>
-                  </div>
-                )}
+      {/* ======== 生成报告 Tab ======== */}
+      {activeTab === "generate" && (
+        loadingTemplates ? (
+          <div className="template-grid">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                style={{
+                  aspectRatio: "3/4",
+                  background: "var(--soft)",
+                  borderRadius: "var(--radius-sm)",
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div>
+            {/* 体验区 */}
+            {basicTemplates.length > 0 && (
+              <div style={{ marginBottom: 32 }}>
+                <SectionTitle
+                  icon="ti-star"
+                  title="体验区"
+                  extra={<span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>基础模板，免费体验</span>}
+                />
+                <div className="template-grid" style={{ marginTop: 14 }}>
+                  {basicTemplates.map((t) => (
+                    <TemplateCard key={t.id} template={t} onSelect={handleSelectTemplate} />
+                  ))}
+                </div>
               </div>
             )}
-          </TabsContent>
 
-          {/* ======== 我的报告 Tab ======== */}
-          <TabsContent value="my">
-            {loadingReports ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-28 animate-pulse rounded-xl bg-primary/5" />
-                ))}
-              </div>
-            ) : groupedReports.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <UserCircle className="mb-3 h-12 w-12 text-primary/30" />
-                <p className="mb-1 text-sm text-muted-foreground">暂无报告</p>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  选择一个模板，生成你的第一份命理报告
-                </p>
-                <Button
-                  variant="outline"
-                  className="border-primary/30 text-primary hover:bg-primary/5"
-                  onClick={() => setActiveTab("generate")}
-                >
-                  去生成报告
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {groupedReports.map((group) => (
-                  <IdentityGroup key={group.identity.id} group={group} />
-                ))}
+            {/* 会员区 */}
+            {advancedTemplates.length > 0 && (
+              <div>
+                <SectionTitle
+                  icon="ti-crown"
+                  title="会员区"
+                  extra={<span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 400 }}>深度分析，解锁完整洞察</span>}
+                />
+                <div className="template-grid" style={{ marginTop: 14 }}>
+                  {advancedTemplates.map((t) => (
+                    <TemplateCard key={t.id} template={t} onSelect={handleSelectTemplate} />
+                  ))}
+                </div>
               </div>
             )}
-          </TabsContent>
-        </Tabs>
-      </section>
+
+            {/* 无模板 */}
+            {basicTemplates.length === 0 && advancedTemplates.length === 0 && (
+              <EmptyState icon="ti-file-text" title="暂无可用的报告模板" />
+            )}
+          </div>
+        )
+      )}
+
+      {/* ======== 我的报告 Tab ======== */}
+      {activeTab === "my" && (
+        loadingReports ? (
+          <div className="log-list">
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ height: 96, background: "var(--soft)", borderRadius: "var(--radius-sm)" }} />
+            ))}
+          </div>
+        ) : groupedReports.length === 0 ? (
+          <div className="card">
+            <EmptyState
+              icon="ti-user-circle"
+              title="暂无报告"
+              description="选择一个模板，生成你的第一份命理报告"
+            >
+              <button className="btn btn-primary" onClick={() => setActiveTab("generate")}>
+                去生成报告
+              </button>
+            </EmptyState>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+            {groupedReports.map((group) => (
+              <IdentityGroup key={group.identity.id} group={group} />
+            ))}
+          </div>
+        )
+      )}
 
       {/* ======== 生成确认对话框（两步流程） ======== */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="paywall-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedTemplate?.type === "BASIC" ? (
-                <Star className="h-5 w-5 text-primary" />
-              ) : (
-                <Crown className="h-5 w-5 text-primary" />
-              )}
+            <DialogTitle style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <i className={`ti ${selectedTemplate?.type === "BASIC" ? "ti-star" : "ti-crown"}`} />
               生成报告
             </DialogTitle>
             <DialogDescription>
@@ -839,56 +798,80 @@ export default function ReportsPage() {
           </DialogHeader>
 
           {/* 步骤指示器 */}
-          <div className="mb-2 flex items-center gap-2">
-            <div className={`flex-1 h-1 rounded-full ${genStep >= 1 ? "bg-primary" : "bg-primary/10"}`} />
-            <div className={`flex-1 h-1 rounded-full ${genStep >= 2 ? "bg-primary" : "bg-primary/10"}`} />
+          <div style={{ marginBottom: 8, display: "flex", gap: 6 }}>
+            <div style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              background: genStep >= 1 ? "var(--brand)" : "var(--line)",
+            }} />
+            <div style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              background: genStep >= 2 ? "var(--brand)" : "var(--line)",
+            }} />
           </div>
 
           {genStep === 1 ? (
             <>
               {/* 模板信息 */}
               {selectedTemplate && (
-                <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
-                  <p className="mb-1 text-sm font-medium">
+                <div
+                  style={{
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--line)",
+                    background: "var(--soft)",
+                    padding: 12,
+                  }}
+                >
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", margin: "0 0 4px" }}>
                     {selectedTemplate.name}
                   </p>
                   {selectedTemplate.description && (
-                    <p className="mb-2 text-xs text-muted-foreground">{selectedTemplate.description}</p>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+                      {selectedTemplate.description}
+                    </p>
                   )}
                   {selectedTemplate.children.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                       {selectedTemplate.children.map((child) => (
-                        <span
-                          key={child.id}
-                          className="rounded-md bg-background px-2 py-0.5 text-xs text-primary shadow-sm"
-                        >
+                        <span key={child.id} className="chip" style={{ fontSize: 11, padding: "1px 8px" }}>
                           {child.name}
                         </span>
                       ))}
                     </div>
                   )}
-                  <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                  <div style={{ marginTop: 8, fontSize: 12 }}>
                     {selectedTemplate.pointCost > 0 ? (
-                      <span className="font-medium text-primary">
+                      <span style={{ color: "var(--brand)", fontWeight: 600 }}>
                         {selectedTemplate.pointCost} 星币
                       </span>
                     ) : (
-                      <span className="font-medium text-green-600">免费</span>
+                      <span style={{ color: "var(--success)", fontWeight: 600 }}>免费</span>
                     )}
                   </div>
                 </div>
               )}
 
               {/* 选择命主 */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">选择命主</label>
+              <div style={{ marginTop: 12 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", display: "block", marginBottom: 6 }}>
+                  选择命主
+                </label>
                 {identities.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-primary/20 p-4 text-center text-xs text-muted-foreground">
+                  <div
+                    style={{
+                      border: "1px dashed var(--line)",
+                      padding: 12,
+                      borderRadius: "var(--radius-sm)",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     暂无命主，请先
-                    <a
-                      href="/user"
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
+                    <a href="/user" style={{ color: "var(--brand)", marginLeft: 4, textDecoration: "underline" }}>
                       创建命主
                     </a>
                   </div>
@@ -900,17 +883,10 @@ export default function ReportsPage() {
                     <SelectContent>
                       {identities.map((idt) => (
                         <SelectItem key={idt.id} value={idt.id}>
-                          <span className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs ${genderColor(idt.gender)}`}
-                            >
-                              {idt.name.charAt(0)}
-                            </span>
-                            {idt.name}
-                            {idt.isActive && (
-                              <span className="text-[10px] text-green-500">当前</span>
-                            )}
-                          </span>
+                          {idt.name}
+                          {idt.isActive && (
+                            <span style={{ marginLeft: 6, fontSize: 10, color: "var(--success)" }}>当前</span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -918,21 +894,41 @@ export default function ReportsPage() {
                 )}
               </div>
 
-              {/* 命盘选择（必选：报告必须基于已保存命盘） */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">选择命盘</label>
+              {/* 选择命盘 */}
+              <div style={{ marginTop: 12 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", display: "block", marginBottom: 6 }}>
+                  选择命盘
+                </label>
                 {!selectedIdentityId ? (
-                  <div className="rounded-lg border border-dashed border-muted p-3 text-center text-xs text-muted-foreground">
+                  <div
+                    style={{
+                      border: "1px dashed var(--line)",
+                      padding: 10,
+                      borderRadius: "var(--radius-sm)",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     请先选择命主
                   </div>
                 ) : loadingChartRecords ? (
-                  <div className="rounded-lg border border-dashed border-muted p-3 text-center text-xs text-muted-foreground">
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 10 }}>
                     加载命盘列表...
                   </div>
                 ) : chartRecords.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-primary/20 p-3 text-center text-xs text-muted-foreground">
+                  <div
+                    style={{
+                      border: "1px dashed var(--line)",
+                      padding: 10,
+                      borderRadius: "var(--radius-sm)",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     该命主尚未保存命盘，请先
-                    <a href="/chart" className="text-primary underline-offset-2 hover:underline">
+                    <a href="/chart" style={{ color: "var(--brand)", marginLeft: 4, textDecoration: "underline" }}>
                       去排盘并保存
                     </a>
                   </div>
@@ -946,7 +942,7 @@ export default function ReportsPage() {
                         <SelectItem key={cr.id} value={cr.id}>
                           {cr.name}
                           {cr.isPrimary && (
-                            <span className="ml-1 text-[10px] text-green-500">默认</span>
+                            <span style={{ marginLeft: 6, fontSize: 10, color: "var(--success)" }}>默认</span>
                           )}
                         </SelectItem>
                       ))}
@@ -955,72 +951,89 @@ export default function ReportsPage() {
                 )}
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={submitting}
+                >
                   取消
-                </Button>
-                <Button
-                  className="bg-primary text-white hover:bg-primary/90"
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
                   onClick={() => setGenStep(2)}
                   disabled={!selectedIdentityId || identities.length === 0 || !selectedChartRecordId}
                 >
-                  下一步
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              </DialogFooter>
+                  下一步 <i className="ti ti-chevron-right" />
+                </button>
+              </div>
             </>
           ) : (
             <>
-              {/* 步骤2：背景信息 */}
-              <div className="space-y-3">
-                <div className="rounded-lg border border-primary/10 bg-primary/5 p-3">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">报告：</span>
-                    <span className="text-xs font-bold">{selectedTemplate?.name}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">{selectedTemplate?.pointCost} 星币</span>
-                  </div>
-                </div>
+              {/* 步骤 2：背景信息 */}
+              <div
+                style={{
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--line)",
+                  background: "var(--soft)",
+                  padding: 10,
+                  marginBottom: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ color: "var(--text-muted)" }}>报告：</span>
+                <strong style={{ color: "var(--ink)" }}>{selectedTemplate?.name}</strong>
+                <span style={{ marginLeft: "auto", color: "var(--brand)" }}>
+                  {selectedTemplate?.pointCost ?? 0} 星币
+                </span>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">背景信息（选填）</label>
-                  <Textarea
-                    value={extraInfo}
-                    onChange={(e) => {
-                      if (e.target.value.length <= 500) setExtraInfo(e.target.value);
-                    }}
-                    placeholder="填写你想重点了解的内容，例如：&#10;· 事业方面想了解创业机会&#10;· 感情方面想知道正缘何时出现&#10;· 健康方面需要特别注意什么"
-                    className="min-h-[120px] resize-none text-sm"
-                    maxLength={500}
-                  />
-                  <div className="text-right text-[10px] text-muted-foreground">
-                    {extraInfo.length}/500
-                  </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", display: "block", marginBottom: 6 }}>
+                  背景信息（选填）
+                </label>
+                <textarea
+                  className="input"
+                  value={extraInfo}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 500) setExtraInfo(e.target.value);
+                  }}
+                  placeholder={"填写你想重点了解的内容，例如：\n· 事业方面想了解创业机会\n· 感情方面想知道正缘何时出现\n· 健康方面需要特别注意什么"}
+                  style={{ minHeight: 120, resize: "vertical", fontSize: 13, lineHeight: 1.6 }}
+                  maxLength={500}
+                />
+                <div style={{ textAlign: "right", fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                  {extraInfo.length}/500
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setGenStep(1)} disabled={submitting}>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setGenStep(1)}
+                  disabled={submitting}
+                >
                   上一步
-                </Button>
-                <Button
-                  className="bg-primary text-white hover:bg-primary/90"
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
                   onClick={handleGenerate}
                   disabled={submitting}
                 >
                   {submitting ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      生成中...
-                    </>
+                    <><i className="ti ti-loader-2 ti-spin" /> 生成中...</>
                   ) : (
-                    "确认生成"
+                    <>确认生成</>
                   )}
-                </Button>
-              </DialogFooter>
+                </button>
+              </div>
             </>
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }
