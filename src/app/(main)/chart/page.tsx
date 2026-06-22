@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
 import { SaveChartButton } from "@/components/chart/save-chart-button";
-import { Button } from "@/components/ui/button";
 import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
-
 
 // 重型依赖：排盘后才需要，用 dynamic import 按需加载
 const Iztrolabe = dynamic(
@@ -37,31 +36,29 @@ const DualChatPanel = dynamic(
 );
 
 const CHART_STATE_KEY = "chart_birth_state";
-
-// 命盘固定渲染宽度（px），缩放基于此值计算
 const CHART_RENDER_WIDTH = 600;
-// 命盘容器内边距（px），命盘四周留白
 const CHART_PADDING = 16;
 
-// 按需加载 iztro 排盘引擎（不在文件顶部 import，减少首屏 JS 体积）
 async function getAstro() {
   const { astro } = await import("iztro");
   return astro;
 }
 
-/**
- * 预加载所有重型依赖（iztro + react-iztro + analysis 组件）
- * 在用户填写表单时后台下载，点击"生成命盘"时直接使用缓存
- */
 function preloadHeavyDeps() {
-  // iztro 排盘引擎（2.6MB 压缩后 ~565KB）
   import("iztro");
-  // react-iztro 命盘 UI（2.6MB 压缩后 ~595KB）
   import("react-iztro");
-  // 规则分析面板
   import("@/components/analysis/ziwei-analysis-panel");
-  // AI 对话面板
   import("@/components/analysis/dual-chat-panel");
+}
+
+interface BirthData {
+  gender: "MALE" | "FEMALE";
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  solar?: boolean;
+  birthCity?: string;
 }
 
 export default function ChartPage() {
@@ -70,31 +67,15 @@ export default function ChartPage() {
   const [trueSolarTimeInfo, setTrueSolarTimeInfo] = useState("");
   const [birthTimeIndex, setBirthTimeIndex] = useState(0);
   const [horoscopeTimeIndex, setHoroscopeTimeIndex] = useState(0);
-  const [birthData, setBirthData] = useState<{
-    gender: "MALE" | "FEMALE";
-    year: number;
-    month: number;
-    day: number;
-    hour: number;
-    solar?: boolean;
-    birthCity?: string;
-  } | null>(null);
+  const [birthData, setBirthData] = useState<BirthData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
-  /**
-   * 从已保存命盘恢复的 chartData（chartSnapshot.reading）
-   *
-   * 非空时 chartDataForPipeline 直接复用，跳过 serializeAstrolabeForReading，
-   * 让下游 orchestrator 走 DB snapshot 命中，避免 stage1/2 重算。
-   * Iztrolabe 组件仍需 astro.bySolar 重建 astrolabe 实例（iztro 类无法序列化，~50ms 纯计算）。
-   */
   const [restoredChartData, setRestoredChartData] = useState<Record<string, unknown> | null>(null);
+  const [chartPanelOpen, setChartPanelOpen] = useState(true);
 
   const chartDataForPipeline = useMemo(() => {
-    // 优先复用从已保存命盘恢复的 reading（让 stage1/2 走 DB 持久缓存，跳过重算）
     if (restoredChartData) return restoredChartData;
     if (!astrolabe || !birthData) return null;
-    // referenceYear 与 UI 所选流年对齐：优先用 horoscope 中的年份，否则当前年
     const referenceYear = horoscope?.yearly?.index ?? new Date().getFullYear();
     return serializeAstrolabeForReading(
       astrolabe as unknown as Record<string, unknown>,
@@ -113,21 +94,18 @@ export default function ChartPage() {
     ) as Record<string, unknown>;
   }, [restoredChartData, astrolabe, birthData, horoscope]);
 
-  // 命盘缩放：必须在组件顶层调用（Rules of Hooks）
+  // 命盘缩放
   const chartWrapperRef = useRef<HTMLDivElement>(null);
   const chartInnerRef = useRef<HTMLDivElement>(null);
   const [chartScale, setChartScale] = useState(1);
   const [chartNaturalHeight, setChartNaturalHeight] = useState(0);
 
-  // 监测命盘容器宽度变化，动态计算缩放比例和实际高度
   useEffect(() => {
     const wrapper = chartWrapperRef.current;
     if (!wrapper) return;
     const update = () => {
-      // 容器可用宽度 = 容器总宽度 - 两侧 padding
       const availableWidth = wrapper.clientWidth - CHART_PADDING * 2;
       setChartScale(Math.min(availableWidth / CHART_RENDER_WIDTH, 1));
-      // 测量命盘实际渲染高度（未缩放的自然高度）
       if (chartInnerRef.current) {
         setChartNaturalHeight(chartInnerRef.current.scrollHeight);
       }
@@ -136,14 +114,13 @@ export default function ChartPage() {
     const observer = new ResizeObserver(update);
     observer.observe(wrapper);
     return () => observer.disconnect();
-  }, [astrolabe]);
+  }, [astrolabe, chartPanelOpen]);
 
-  // 页面挂载后立即预加载重型依赖（用户填表时已在后台下载完）
   useEffect(() => {
     preloadHeavyDeps();
   }, []);
 
-  // 页面加载时恢复命盘状态（按需加载 iztro）
+  // 恢复 sessionStorage
   useEffect(() => {
     const raw = sessionStorage.getItem(CHART_STATE_KEY);
     if (!raw) return;
@@ -167,21 +144,18 @@ export default function ChartPage() {
           setHoroscope(horo);
           setTrueSolarTimeInfo(saved.trueSolarTimeInfo ?? "");
         }
-          setParentBirthYears(saved.parentBirthYears);
+        setParentBirthYears(saved.parentBirthYears);
       } catch {
-        // 恢复失败则忽略
+        // 忽略
       }
     })();
   }, []);
 
-  // 处理 URL 参数 ?chartRecordId=xxx：从已保存命盘加载 birthInfo 并自动排盘
-  // 用途：/charts/[id] 页点「AI 解盘」跳转过来时，自动加载该命盘
+  // 处理 ?chartRecordId=xxx
   const searchParams = useSearchParams();
   useEffect(() => {
     const chartRecordId = searchParams.get("chartRecordId");
-    if (!chartRecordId) return;
-    // 已有 astrolabe 则不重复加载（避免覆盖用户当前排的盘）
-    if (astrolabe) return;
+    if (!chartRecordId || astrolabe) return;
     (async () => {
       try {
         const res = await fetch(`/api/charts/${chartRecordId}`);
@@ -200,11 +174,10 @@ export default function ChartPage() {
           "zh-CN",
         );
         setAstrolabe(result);
-        // 复用 snapshot.reading 作为 chartData（让下游 orchestrator 命中 DB 持久缓存，跳过 stage1/2 重算）
         if (snap.reading && typeof snap.reading === "object") {
           setRestoredChartData(snap.reading as Record<string, unknown>);
         }
-        const restoredBirth = {
+        const restoredBirth: BirthData = {
           gender: bi.gender,
           year: bi.year,
           month: bi.month,
@@ -219,7 +192,6 @@ export default function ChartPage() {
         const horo = result.horoscope(new Date(), bi.hour);
         setHoroscope(horo);
         setTrueSolarTimeInfo(bi.trueSolarTimeInfo ?? "");
-        // 写入 sessionStorage 保持刷新一致性
         sessionStorage.setItem(
           CHART_STATE_KEY,
           JSON.stringify({
@@ -228,12 +200,10 @@ export default function ChartPage() {
           }),
         );
       } catch {
-        // 静默失败，回退到表单输入
+        // 静默失败
       }
     })();
   }, [searchParams, astrolabe]);
-
-  // horoscope 运限由 Iztrolabe 内部管理；本页仅维护 horoscopeTimeIndex 与初始 horoscope 供面板
 
   const handleGenerateChart = async (data: {
     solarDate: string;
@@ -247,7 +217,6 @@ export default function ChartPage() {
     parentBirthYears?: { father?: number; mother?: number };
     parentZodiacs?: { father?: string; mother?: string };
   }) => {
-    // 重新排盘：清空从已保存命盘恢复的 reading，走全新序列化路径
     setRestoredChartData(null);
     setIsGenerating(true);
     try {
@@ -275,9 +244,8 @@ export default function ChartPage() {
       }
 
       const dateMatch = data.solarDate.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-      // 构建 birthInfo（用于 state 和 sessionStorage），不依赖 dateMatch 是否存在
-      const birthInfo = {
-        gender: (data.gender === "男" ? "MALE" : "FEMALE") as "MALE" | "FEMALE",
+      const birthInfo: BirthData = {
+        gender: (data.gender === "男" ? "MALE" : "FEMALE"),
         year: dateMatch ? parseInt(dateMatch[1], 10) : new Date().getFullYear(),
         month: dateMatch ? parseInt(dateMatch[2], 10) : 1,
         day: dateMatch ? parseInt(dateMatch[3], 10) : 1,
@@ -286,10 +254,8 @@ export default function ChartPage() {
         birthCity: data.city,
       };
 
-      // 必须先 setBirthData，再渲染 AI 分析面板（否则显示"暂无出生数据"）
       setBirthData(birthInfo);
       setParentBirthYears(data.parentBirthYears);
-
       setAstrolabe(result);
       setTrueSolarTimeInfo(data.trueSolarTimeInfo);
       setBirthTimeIndex(data.timeIndex);
@@ -297,7 +263,6 @@ export default function ChartPage() {
       const horo = result.horoscope(new Date(), data.timeIndex);
       setHoroscope(horo);
 
-      // 保存到 sessionStorage（用于页面刷新后恢复命盘状态）
       sessionStorage.setItem(CHART_STATE_KEY, JSON.stringify({
         ...birthInfo,
         trueSolarTimeInfo: data.trueSolarTimeInfo,
@@ -314,7 +279,6 @@ export default function ChartPage() {
   const handleHoroscopeHourChange = (hour: number) => {
     const clampedHour = Math.max(0, Math.min(12, hour));
     setHoroscopeTimeIndex(clampedHour);
-    // 运限时间变化时，重新生成 horoscope 并更新 chartData
     if (astrolabe) {
       const newHoroscope = astrolabe.horoscope(new Date(), clampedHour);
       setHoroscope(newHoroscope);
@@ -330,67 +294,180 @@ export default function ChartPage() {
     sessionStorage.removeItem(CHART_STATE_KEY);
   };
 
-  // 排盘前：居中输入表单
+  const toggleChartPanel = useCallback(() => {
+    setChartPanelOpen((v) => !v);
+  }, []);
+
+  // ── 新建态：出生信息表单 ─────────────────────────────────
   if (!astrolabe) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
-        <div className="mb-8 text-center">
-          <h1 className="mb-2 font-serif-sc text-2xl font-bold text-primary md:text-3xl">
-            微著排盘
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            输入出生信息，生成专属紫微命盘，解码你的生命轨迹
-          </p>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "24px 24px 60px" }}>
+        {/* 步骤条 */}
+        <div className="step-bar">
+          <div className="step active">
+            <div className="dot">1</div> 出生信息
+          </div>
+          <div className="step-line" />
+          <div className="step">
+            <div className="dot">2</div> 排盘确认
+          </div>
+          <div className="step-line" />
+          <div className="step">
+            <div className="dot">3</div> AI 对话
+          </div>
         </div>
-        <div className="mx-auto max-w-md">
+
+        {/* 提示 */}
+        <div className="help-note" style={{ marginBottom: 20 }}>
+          <b>首次排盘免费。</b>排盘后可永久保存到「<Link href="/charts" style={{ color: "var(--brand)" }}>我的命盘</Link>」,后续 AI 解盘与报告生成会消耗星币。
+        </div>
+
+        {/* 表单卡（BirthInputForm 内部已是完整 shadcn 表单，外层用 testUI card 视觉容器） */}
+        <div className="card" style={{ padding: 24 }}>
+          <div className="card-title" style={{ marginBottom: 4 }}>
+            <i className="ti ti-user" /> 命主基本信息
+          </div>
+          <div className="card-sub" style={{ marginBottom: 18 }}>
+            标 * 为必填,其余可留空,但越完整解盘越精准
+          </div>
           <BirthInputForm onSubmit={handleGenerateChart} isLoading={isGenerating} />
         </div>
       </div>
     );
   }
 
-  // 排盘后：左右分栏（PC）或上下堆叠（移动端）
+  // ── 对话态：三栏 reading-layout + 命盘抽屉 ─────────────────
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-4 md:py-6">
-      {/* 标题栏 */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="min-w-0">
-          <h1 className="font-serif-sc text-lg font-bold text-primary md:text-2xl">
-            微著排盘
-          </h1>
-          <p className="text-xs text-muted-foreground">{trueSolarTimeInfo}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <SaveChartButton
-            visible={!!birthData}
-            chartData={chartDataForPipeline}
-            birthInfo={{
-              gender: birthData!.gender,
-              year: birthData!.year,
-              month: birthData!.month,
-              day: birthData!.day,
-              hour: birthData!.hour,
-              solar: birthData!.solar,
-              birthCity: birthData!.birthCity,
-              trueSolarTimeInfo,
-            }}
-          />
-          <Button variant="outline" size="sm" onClick={handleReenter}>
-            重新排盘
-          </Button>
-        </div>
+    <>
+      {/* 三栏布局 */}
+      <div className="reading-layout" style={{ padding: "14px 18px", maxWidth: "100%" }}>
+        {/* 左栏：历史会话 + 模型选择 */}
+        <aside className="reading-sidebar">
+          <h4>历史会话</h4>
+          <div className="model-bar">
+            <i className="ti ti-cpu" />
+            <select aria-label="AI 模型选择" defaultValue="minimax">
+              <option value="minimax">MiniMax v1</option>
+              <option value="deepseek">DeepSeek V3</option>
+              <option value="glm">智谱 GLM-4</option>
+              <option value="qwen">通义千问 Max</option>
+              <option value="claude">Claude Sonnet</option>
+            </select>
+          </div>
+          <div className="consult-list">
+            <div className="consult-item" style={{ background: "var(--soft)" }}>
+              <i className="ti ti-briefcase" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ctitle">当前咨询</div>
+                <div className="cmeta">{trueSolarTimeInfo || "新会话"}</div>
+              </div>
+            </div>
+            <Link href="/charts" className="consult-item">
+              <i className="ti ti-clipboard-list" style={{ color: "var(--brand)" }} />
+              <div style={{ flex: 1 }}>
+                <div className="ctitle" style={{ color: "var(--brand)" }}>从命盘继续</div>
+                <div className="cmeta">选择已保存命盘</div>
+              </div>
+            </Link>
+          </div>
+        </aside>
+
+        {/* 中栏：Chat 主区 */}
+        <section className="reading-main">
+          <div className="chat-wrap" style={{ padding: 0 }}>
+            <div className="chat-shell">
+              {/* DualChatPanel 已含消息流 + 输入框，包一层 chat 容器；后续阶段 3 可重写 DOM 为 .msg/.msg-bubble */}
+              <DualChatPanel
+                chartData={chartDataForPipeline}
+                parentBirthYears={parentBirthYears}
+              />
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* 主体：左右分栏 */}
-      <div className="flex flex-col gap-4 md:flex-row md:gap-4 md:items-stretch">
-        {/* 左侧：命盘（transform scale 缩放） */}
-        <div className="w-full md:w-[460px] md:flex-none md:self-stretch">
+      {/* 命盘抽屉（绝对定位右侧） */}
+      <div
+        className={`backdrop${chartPanelOpen ? "" : " hide"}`}
+        onClick={toggleChartPanel}
+        aria-hidden={!chartPanelOpen}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.18)",
+          opacity: chartPanelOpen ? 0.6 : 0,
+          pointerEvents: chartPanelOpen ? "auto" : "none",
+          transition: "opacity .3s",
+          zIndex: 15,
+        }}
+      />
+      <aside className={`chart-panel${chartPanelOpen ? " open" : ""}`} aria-label="命盘抽屉">
+        <div className="chart-panel-head">
+          <div className="chart-panel-title">
+            <i className="ti ti-clipboard-list" style={{ marginRight: 6 }} />
+            {birthData ? "当前命盘" : "命盘"}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className="iconbtn"
+              onClick={handleReenter}
+              title="重新排盘"
+              aria-label="重新排盘"
+            >
+              <i className="ti ti-refresh" />
+            </button>
+            <button
+              type="button"
+              className="iconbtn"
+              onClick={toggleChartPanel}
+              title="收起"
+              aria-label="收起命盘抽屉"
+            >
+              <i className="ti ti-x" />
+            </button>
+          </div>
+        </div>
+
+        <div className="chart-panel-body">
+          {/* 命盘摘要 */}
+          {birthData && (
+            <div
+              style={{
+                fontSize: 12,
+                color: "var(--text-muted)",
+                lineHeight: 1.9,
+                paddingBottom: 14,
+                borderBottom: "1px dashed var(--line)",
+              }}
+            >
+              <strong style={{ color: "var(--brand)" }}>
+                {birthData.gender === "MALE" ? "阳男" : "阴女"} · {birthData.year}-{birthData.month}-{birthData.day}
+              </strong>
+              <br />
+              {trueSolarTimeInfo}
+            </div>
+          )}
+
+          {/* 运限切换提示 */}
+          <div className="yunlin-bar" style={{ marginTop: 14 }}>
+            <button type="button" className="active">本命</button>
+            <button type="button">大运</button>
+            <button type="button">流年</button>
+            <button type="button">流月</button>
+            <button type="button">流日</button>
+          </div>
+
+          {/* iztro 命盘（react-iztro 组件） */}
           <div
             ref={chartWrapperRef}
-            className="rounded-lg border bg-card overflow-hidden md:h-full"
             style={{
-              padding: `${CHART_PADDING}px`,
-              height: chartNaturalHeight > 0 ? chartNaturalHeight * chartScale + CHART_PADDING * 2 : undefined,
+              marginTop: 14,
+              padding: CHART_PADDING,
+              background: "var(--panel)",
+              border: "1px solid var(--line)",
+              borderRadius: "var(--radius-sm)",
+              overflow: "hidden",
             }}
           >
             <div
@@ -419,32 +496,74 @@ export default function ChartPage() {
               />
             </div>
           </div>
-        </div>
 
-        {/* 右侧：AI 分析 + 对话 */}
-        <div className="flex w-full flex-col gap-4 md:flex-1 md:min-w-0 md:self-stretch">
-          {/* 移动端分隔线 */}
-          <div className="border-t md:hidden" />
-          {/* 规则解析 */}
-          <div className="w-full flex-none">
-            {birthData ? (
-              <ZiweiAnalysisPanel birthData={birthData} chartData={chartDataForPipeline} parentBirthYears={parentBirthYears} />
-            ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                暂无出生数据，请重新排盘
+          {/* 保存按钮 */}
+          {birthData && (
+            <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+              <SaveChartButton
+                visible={!!birthData}
+                chartData={chartDataForPipeline}
+                birthInfo={{
+                  gender: birthData.gender,
+                  year: birthData.year,
+                  month: birthData.month,
+                  day: birthData.day,
+                  hour: birthData.hour,
+                  solar: birthData.solar,
+                  birthCity: birthData.birthCity,
+                  trueSolarTimeInfo,
+                }}
+              />
+            </div>
+          )}
+
+          {/* 规则解析（折叠区） */}
+          {birthData && (
+            <details style={{ marginTop: 18 }}>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--brand)",
+                  padding: "8px 0",
+                  borderTop: "1px solid var(--line)",
+                }}
+              >
+                <i className="ti ti-list-details" style={{ marginRight: 6 }} />
+                规则解析（能级 / 格局 / 性格）
+              </summary>
+              <div style={{ marginTop: 8 }}>
+                <ZiweiAnalysisPanel
+                  birthData={birthData}
+                  chartData={chartDataForPipeline}
+                  parentBirthYears={parentBirthYears}
+                />
               </div>
-            )}
-          </div>
-
-          {/* AI 对话区 */}
-          <div className="flex-1 min-h-0">
-            <DualChatPanel
-              chartData={chartDataForPipeline}
-              parentBirthYears={parentBirthYears}
-            />
-          </div>
+            </details>
+          )}
         </div>
-      </div>
-    </div>
+      </aside>
+
+      {/* 抽屉收起时的展开按钮（浮在右侧边缘） */}
+      {!chartPanelOpen && (
+        <button
+          type="button"
+          className="chart-toggle"
+          onClick={toggleChartPanel}
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: 0,
+            transform: "translateY(-50%)",
+            zIndex: 20,
+          }}
+          aria-label="显示命盘"
+          title="显示命盘"
+        >
+          <i className="ti ti-clipboard-list" /> 显示命盘
+        </button>
+      )}
+    </>
   );
 }
