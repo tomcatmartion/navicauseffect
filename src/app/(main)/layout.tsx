@@ -1,42 +1,41 @@
-import { Suspense } from "react";
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
+import { Rail } from "@/components/layout/rail";
+import { Topbar } from "@/components/layout/topbar";
+import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import { MobileNav } from "@/components/layout/mobile-nav";
 
-function HeaderFallback() {
-  return (
-    <header className="sticky top-0 z-50 w-full border-b border-primary/10 bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 animate-pulse rounded-full bg-muted" />
-          <div className="hidden h-5 w-20 animate-pulse rounded bg-muted sm:block" />
-        </div>
-        <div className="hidden items-center gap-1 md:flex">
-          <div className="h-8 w-16 animate-pulse rounded-md bg-muted" />
-          <div className="h-8 w-20 animate-pulse rounded-md bg-muted" />
-          <div className="h-8 w-14 animate-pulse rounded-md bg-muted" />
-        </div>
-        <div className="h-8 w-20 animate-pulse rounded-md bg-muted" />
-      </div>
-    </header>
-  );
-}
-
+/**
+ * (main) 路由组的根布局。
+ *
+ * DOM 与 testUI/desktop/*.html 的 <div class="app"> 结构对齐：
+ *   <div class="app">
+ *     <Rail />                 (hidden md:flex)
+ *     <div class="main">
+ *       <Topbar />
+ *       <div class="content">{children}</div>
+ *     </div>
+ *     <ThemeSwitcher />        (右下角悬浮)
+ *     <MobileNav />            (md:hidden, 阶段 5 改造为 testUI tabbar)
+ *   </div>
+ *
+ * 注：未引入 Suspense fallback 因为 Rail/Topbar/ThemeSwitcher 都是轻量客户端组件，
+ * 没有异步依赖；HeaderFallback 已不需要。
+ */
 export default function MainLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Suspense fallback={<HeaderFallback />}>
-        <Header />
-      </Suspense>
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
-      <Footer />
-      <Suspense fallback={null}>
-        <MobileNav />
-      </Suspense>
+    <div className="app">
+      <Rail />
+      <div className="main">
+        <Topbar />
+        {/* 内容滚动容器：testUI 原本 .view.overflow:hidden 是 SPA 内嵌滚动设计，
+            现阶段（业务页尚未全部重构）需要让长列表页可垂直滚动，故用 overflow-y-auto */}
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+      <ThemeSwitcher />
+      <MobileNav />
     </div>
   );
 }

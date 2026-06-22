@@ -8,11 +8,9 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "lucide-react"
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
@@ -22,9 +20,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
     return null
   }
 
+  // 三主题（newspaper/clay/neumorphism）均为浅色基调，Sonner 固定 light。
+  // 颜色由 --popover / --border / --radius 等 CSS 变量自动跟随主题。
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="light"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

@@ -49,38 +49,69 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.98 0.005 300);
-  --foreground: oklch(0.18 0.03 290);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.03 290);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.03 290);
-  --primary: oklch(0.35 0.15 290);
-  --primary-foreground: oklch(0.98 0.005 300);
-  --secondary: oklch(0.93 0.02 80);
-  --secondary-foreground: oklch(0.35 0.10 290);
-  --muted: oklch(0.95 0.01 290);
-  --muted-foreground: oklch(0.50 0.03 290);
-  --accent: oklch(0.75 0.12 80);
-  --accent-foreground: oklch(0.18 0.03 290);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* shadcn → testUI 三主题 token 映射
+   * testUI 通过 <html data-theme="newspaper|clay|neumorphism"> 切换基础变量
+   * (--bg / --ink / --brand / --line / --panel / --soft 等)，
+   * 这里让 shadcn 组件 (--primary / --background / --border 等) 自动跟随主题。
+   * 注意：--muted 在 ziwei.css 中是灰文字色（已重命名为 --text-muted），
+   * shadcn 的 --muted 指 muted 背景，映射到 testUI --soft 浅色。
+   */
+
+  /* 圆角：shadcn 用单一 --radius 派生 sm/md/lg/xl，testUI 用主题感知的 radius-sm/lg */
+  --radius: 0.5rem; /* fallback；实际由各 [data-theme] 块覆盖 */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* 颜色映射 */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--soft);
+  --secondary-foreground: var(--ink-light);
+  --muted: var(--soft);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--accent);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-light);
+  --ring: var(--brand);
+  --chart-1: var(--brand);
+  --chart-2: var(--accent);
+  --chart-3: var(--accent2);
+  --chart-4: var(--warning);
+  --chart-5: var(--success);
+
+  /* sidebar（shadcn Sidebar 组件用，本项目暂未使用）*/
+  --sidebar: var(--soft);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--panel);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--brand);
+}
+
+/* 三主题各自的 --radius 覆盖（与 ziwei.css 的 [data-theme] 块对齐）*/
+[data-theme="newspaper"] {
+  --radius: 0.25rem; /* 4px */
+}
+[data-theme="clay"] {
+  --radius: 1.25rem; /* 20px */
+}
+[data-theme="neumorphism"] {
+  --radius: 1rem; /* 16px */
 }
 
 .dark {
