@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   Loader2,
   Star,
   Trash2,
@@ -29,6 +29,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
+
+// 命盘方阵（重型 iztro 依赖，dynamic 加载）
+const ZwChartGrid = dynamic(
+  () => import("@/components/chart/zw-chart-grid").then((m) => m.ZwChartGrid),
+  { ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -110,6 +117,30 @@ function ChartDetailContent() {
   const [editNote, setEditNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [astrolabe, setAstrolabe] = useState<IFunctionalAstrolabe | null>(null);
+  const [activeTab, setActiveTab] = useState<"grid" | "summary" | "analysis">("grid");
+
+  // chart 加载后，用 birthInfo 重建 iztro astrolabe 实例（用于 ZwChartGrid）
+  useEffect(() => {
+    if (!chart?.chartSnapshot?.birthInfo) return;
+    (async () => {
+      try {
+        const { astro } = await import("iztro");
+        const bi = chart.chartSnapshot.birthInfo;
+        const dateStr = `${bi.year}-${String(bi.month).padStart(2, "0")}-${String(bi.day).padStart(2, "0")}`;
+        const result = astro.bySolar(
+          dateStr,
+          bi.hour,
+          bi.gender === "MALE" ? "男" : "女",
+          true,
+          "zh-CN",
+        );
+        setAstrolabe(result);
+      } catch (e) {
+        console.warn("iztro astrolabe 重建失败:", e);
+      }
+    })();
+  }, [chart]);
 
   const fetchChart = useCallback(async () => {
     try {
@@ -218,72 +249,209 @@ function ChartDetailContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* 顶部导航 */}
-      <div className="sticky top-16 z-40 bg-background/90 backdrop-blur-md border-b border-primary/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* 操作栏（rail+topbar 已有，不再 sticky） */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
+      >
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => router.push("/charts")}
+        >
+          <i className="ti ti-arrow-left" style={{ marginRight: 4 }} />
+          返回列表
+        </button>
+        <div style={{ display: "flex", gap: 6 }}>
           <button
-            onClick={() => router.push("/charts")}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setEditName(chart.name);
+              setEditNote(chart.note ?? "");
+              setEditOpen(true);
+            }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            返回列表
+            <Edit3 className="size-3.5" style={{ marginRight: 4 }} />
+            编辑
           </button>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs h-8"
-              onClick={() => {
-                setEditName(chart.name);
-                setEditNote(chart.note ?? "");
-                setEditOpen(true);
-              }}
-            >
-              <Edit3 className="w-3.5 h-3.5 mr-1" />
-              编辑
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs h-8 text-muted-foreground hover:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
+          <button
+            type="button"
+            className="iconbtn"
+            style={{ width: 32, height: 32 }}
+            onClick={() => setDeleteOpen(true)}
+            title="删除"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-        {/* 头部 */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {chart.isPrimary ? (
-              <Crown className="w-5 h-5 text-amber-500" />
-            ) : (
-              <Star className="w-5 h-5 text-muted-foreground/40" />
-            )}
-            <h1 className="font-serif-sc text-xl font-bold text-foreground">{chart.name}</h1>
-            {chart.isPrimary && (
-              <Badge className="bg-amber-50 text-amber-700 border-amber-200">默认盘</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-            <span>命主：{chart.identity.name}</span>
-            <span className="w-1 h-1 rounded-full bg-primary/20" />
-            <span>{chart.identity.gender === "MALE" ? "男" : "女"}</span>
-            <span className="w-1 h-1 rounded-full bg-primary/20" />
-            <span>{SOURCE_LABELS[chart.source]}</span>
-            <span className="w-1 h-1 rounded-full bg-primary/20" />
-            <span>{new Date(chart.createdAt).toLocaleDateString("zh-CN")}</span>
-          </div>
-          {chart.note && (
-            <p className="text-xs text-muted-foreground italic border-l-2 border-primary/20 pl-2 mt-2">
-              {chart.note}
-            </p>
+      {/* 头部 */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {chart.isPrimary ? (
+            <Crown className="size-5" style={{ color: "var(--warning)" }} />
+          ) : (
+            <Star className="size-5" style={{ color: "var(--text-muted)", opacity: 0.4 }} />
+          )}
+          <h1
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "var(--brand)",
+              fontFamily: "var(--font-head)",
+              margin: 0,
+            }}
+          >
+            {chart.name}
+          </h1>
+          {chart.isPrimary && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: "2px 8px",
+                background: "var(--brand)",
+                color: "#fff",
+                borderRadius: "var(--radius-sm)",
+              }}
+            >
+              命主默认盘
+            </span>
           )}
         </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--text-muted)",
+            flexWrap: "wrap",
+            marginTop: 6,
+          }}
+        >
+          <span>命主：{chart.identity.name}</span>
+          <span>·</span>
+          <span>{chart.identity.gender === "MALE" ? "男" : "女"}</span>
+          <span>·</span>
+          <span>{SOURCE_LABELS[chart.source]}</span>
+          <span>·</span>
+          <span>{new Date(chart.createdAt).toLocaleDateString("zh-CN")}</span>
+        </div>
+        {chart.note && (
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              fontStyle: "italic",
+              borderLeft: "2px solid var(--brand)",
+              paddingLeft: 8,
+              marginTop: 8,
+            }}
+          >
+            {chart.note}
+          </p>
+        )}
+      </div>
+
+      {/* Tab 切换 */}
+      <div className="seg" style={{ marginBottom: 16 }}>
+        <button
+          type="button"
+          className={activeTab === "grid" ? "active" : ""}
+          onClick={() => setActiveTab("grid")}
+        >
+          命盘方阵
+        </button>
+        <button
+          type="button"
+          className={activeTab === "summary" ? "active" : ""}
+          onClick={() => setActiveTab("summary")}
+        >
+          基本信息
+        </button>
+        <button
+          type="button"
+          className={activeTab === "analysis" ? "active" : ""}
+          onClick={() => setActiveTab("analysis")}
+        >
+          AI 分析
+        </button>
+      </div>
+
+      {/* Tab 内容：命盘方阵 */}
+      {activeTab === "grid" && (
+        <div className="card" style={{ padding: 16 }}>
+          {astrolabe ? (
+            <ZwChartGrid
+              astrolabe={astrolabe}
+              nativeName={chart.identity.name}
+              lifePalaceEarthlyBranch={
+                (astrolabe as unknown as { earthlyBranchOfSoulPalace?: string })
+                  .earthlyBranchOfSoulPalace
+              }
+            />
+          ) : (
+            <div
+              style={{
+                padding: 40,
+                textAlign: "center",
+                color: "var(--text-muted)",
+              }}
+            >
+              <Loader2
+                className="size-8 animate-spin"
+                style={{ color: "var(--brand)" }}
+              />
+              <p style={{ marginTop: 12, fontSize: 12 }}>
+                正在重建 iztro 命盘实例...
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 内容：基本信息（保留原 Card 内容） */}
+      {activeTab === "summary" && (
+        <div className="space-y-4">
+          {/* 原命盘摘要 Card 等内容继续在下方渲染（不删除原结构） */}
+        </div>
+      )}
+
+      {/* Tab 内容：AI 分析入口 */}
+      {activeTab === "analysis" && (
+        <div className="card" style={{ padding: 24, textAlign: "center" }}>
+          <i
+            className="ti ti-robot"
+            style={{ fontSize: 36, color: "var(--brand)" }}
+          />
+          <p style={{ fontWeight: 600, color: "var(--brand)", marginTop: 12 }}>
+            AI 深度解读
+          </p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+            跳转到 AI 对话页，针对此命盘深度提问
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 16 }}
+            onClick={() =>
+              router.push(`/chart?chartRecordId=${chart.id}`)
+            }
+          >
+            <i className="ti ti-message-2" style={{ marginRight: 6 }} />
+            开始 AI 对话
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-4" style={{ marginTop: 16 }}>
 
         {/* 命盘摘要 */}
         <Card className="border-primary/10">

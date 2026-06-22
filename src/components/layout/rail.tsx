@@ -116,6 +116,9 @@ export function Rail() {
             <DropdownMenuItem asChild>
               <Link href="/reports">我的报告</Link>
             </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings">账户设置</Link>
+            </DropdownMenuItem>
             {isAdmin && (
               <>
                 <DropdownMenuSeparator />

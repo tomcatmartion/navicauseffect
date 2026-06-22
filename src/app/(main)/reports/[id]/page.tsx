@@ -256,40 +256,47 @@ export default function ReportDetailPage() {
   const isFailed = report.status === "FAILED";
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* 顶部导航 */}
-      <div className="sticky top-16 z-40 bg-background/90 backdrop-blur-md border-b border-primary/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => {
-              // 子报告 → 返回父报告；主报告 → 返回列表
-              if (report.parentReportId) {
-                router.push(`/reports/${report.parentReportId}`);
-              } else {
-                router.push("/reports");
-              }
-            }}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {report.parentReportId ? "返回主报告" : "返回"}
-          </button>
-          <div className="flex items-center gap-2">
-            <StatusDisplay status={report.status} progress={report.progress} />
-            {isCompleted && (
-              <button
-                onClick={() => setShowDeleteDialog(true)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors"
-                title="删除报告"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* 操作栏（rail+topbar 已有，不再 sticky） */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
+      >
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => {
+            if (report.parentReportId) {
+              router.push(`/reports/${report.parentReportId}`);
+            } else {
+              router.push("/reports");
+            }
+          }}
+        >
+          <i className="ti ti-arrow-left" style={{ marginRight: 4 }} />
+          {report.parentReportId ? "返回主报告" : "返回列表"}
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <StatusDisplay status={report.status} progress={report.progress} />
+          {isCompleted && (
+            <button
+              type="button"
+              className="iconbtn"
+              style={{ width: 32, height: 32 }}
+              onClick={() => setShowDeleteDialog(true)}
+              title="删除报告"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <div className="space-y-6">
         {/* 报告头部 */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
