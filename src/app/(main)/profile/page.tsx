@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { toast } from "sonner";
+
+import { PageContainer } from "@/components/shared/page-container";
+import { SectionTitle } from "@/components/shared/section-title";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface UserProfile {
   id: string;
@@ -39,6 +38,15 @@ const PLAN_LABELS: Record<string, string> = {
   MONTHLY: "月度会员",
   QUARTERLY: "季度会员",
   YEARLY: "年度会员",
+};
+
+const statCardStyle: CSSProperties = {
+  background: "var(--panel)",
+  border: "1px solid var(--line-light)",
+  borderRadius: "var(--radius-sm)",
+  padding: "16px 12px",
+  textAlign: "center",
+  boxShadow: "var(--shadow)",
 };
 
 export default function ProfilePage() {
@@ -107,13 +115,21 @@ export default function ProfilePage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="space-y-4">
+      <PageContainer maxWidth={900}>
+        <div className="log-list">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-lg bg-muted" />
+            <div
+              key={i}
+              style={{
+                height: 128,
+                background: "var(--soft)",
+                borderRadius: "var(--radius-sm)",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }}
+            />
           ))}
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -129,193 +145,251 @@ export default function ProfilePage() {
     new Date(profile.membership.endDate) < new Date();
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-6 font-serif-sc text-2xl font-bold text-primary">
-        个人中心
-      </h1>
+    <PageContainer maxWidth={900}>
+      <SectionTitle as="h1" icon="ti-user-circle" title="个人中心" />
 
-      <Card className="mb-6 border-primary/15">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-xl font-medium text-primary">
-                {profile.nickname?.charAt(0) || "U"}
-              </div>
-              <div>
-                {editing ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={newNickname}
-                      onChange={(e) => setNewNickname(e.target.value)}
-                      className="h-8 w-32 border-primary/20 text-sm"
-                      maxLength={20}
-                    />
-                    <Button size="sm" variant="ghost" onClick={handleUpdateNickname} className="h-8 px-2 text-xs">
-                      保存
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)} className="h-8 px-2 text-xs text-muted-foreground">
-                      取消
-                    </Button>
-                  </div>
-                ) : (
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    {profile.nickname || "未设置昵称"}
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="text-xs text-muted-foreground hover:text-primary"
-                    >
-                      编辑
-                    </button>
-                  </CardTitle>
-                )}
-                <div className="mt-1 flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={
-                      isPremium && !membershipExpired
-                        ? "border-amber-400 text-amber-600 text-xs"
-                        : "border-primary/30 text-xs"
-                    }
-                  >
-                    {isPremium && !membershipExpired
-                      ? PLAN_LABELS[profile.membership!.plan]
-                      : membershipExpired
-                      ? "会员已过期"
-                      : "普通用户"}
-                  </Badge>
-                  {profile.role === "ADMIN" && (
-                    <Badge variant="outline" className="border-red-300 text-red-500 text-xs">
-                      管理员
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </div>
+      {/* 用户卡 */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "var(--soft)",
+              border: "1px solid var(--line)",
+              color: "var(--brand)",
+              fontSize: 22,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {profile.nickname?.charAt(0) || "U"}
           </div>
-          {(profile.email || profile.phone) && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {profile.email && `邮箱：${profile.email}`}
-              {profile.email && profile.phone && " | "}
-              {profile.phone && `手机：${profile.phone}`}
-            </p>
-          )}
-        </CardHeader>
-      </Card>
-
-      {isPremium && profile.membership?.endDate && (
-        <Card className="mb-6 border-amber-200 bg-amber-50/50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-amber-800">
-                  {PLAN_LABELS[profile.membership.plan]} · {membershipExpired ? "已过期" : "有效中"}
-                </p>
-                <p className="text-xs text-amber-600">
-                  到期时间：{new Date(profile.membership.endDate).toLocaleDateString("zh-CN")}
-                </p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {editing ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  className="input"
+                  value={newNickname}
+                  onChange={(e) => setNewNickname(e.target.value)}
+                  style={{ height: 32, width: 160, padding: "4px 10px", fontSize: 14 }}
+                  maxLength={20}
+                />
+                <button className="btn btn-primary btn-sm" onClick={handleUpdateNickname}>
+                  <i className="ti ti-check" /> 保存
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
+                  取消
+                </button>
               </div>
-              {membershipExpired && (
-                <Link href="/pricing">
-                  <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
-                    续费
-                  </Button>
-                </Link>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <h2 style={{ fontSize: 18, color: "var(--ink)", fontWeight: 600, margin: 0 }}>
+                  {profile.nickname || "未设置昵称"}
+                </h2>
+                <button
+                  className="iconbtn"
+                  onClick={() => setEditing(true)}
+                  title="编辑昵称"
+                  style={{ width: 28, height: 28, fontSize: 13 }}
+                >
+                  <i className="ti ti-edit" />
+                </button>
+              </div>
+            )}
+            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span
+                className="chip"
+                style={
+                  isPremium && !membershipExpired
+                    ? { background: "var(--warning)", color: "#fff", border: "none" }
+                    : {}
+                }
+              >
+                <i className="ti ti-crown" />
+                {isPremium && !membershipExpired
+                  ? PLAN_LABELS[profile.membership!.plan]
+                  : membershipExpired
+                  ? "会员已过期"
+                  : "普通用户"}
+              </span>
+              {profile.role === "ADMIN" && (
+                <span
+                  className="chip"
+                  style={{ background: "var(--danger)", color: "#fff", border: "none" }}
+                >
+                  管理员
+                </span>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <Card className="border-primary/10">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">{profile.totalPoints}</p>
-            <p className="text-xs text-muted-foreground">积分</p>
-          </CardContent>
-        </Card>
-        <Card className="border-primary/10">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">{profile.bonusQueries}</p>
-            <p className="text-xs text-muted-foreground">奖励次数</p>
-          </CardContent>
-        </Card>
-        <Card className="border-primary/10">
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-primary">{profile.stats.consultations}</p>
-            <p className="text-xs text-muted-foreground">排盘次数</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="mb-6 border-primary/10">
-        <CardHeader>
-          <CardTitle className="text-base">邀请好友</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-3 text-sm text-muted-foreground">
-            分享给好友，每次有效分享获得 1 积分，每 10 积分可兑换 1 次免费测算
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-md bg-muted p-2 text-center text-sm font-mono">
-              {profile.inviteCode}
-            </code>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-primary/20"
-              onClick={handleCopyInviteCode}
-            >
-              复制
-            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        {(profile.email || profile.phone) && (
+          <p style={{ marginTop: 12, fontSize: 12, color: "var(--text-muted)" }}>
+            {profile.email && <><i className="ti ti-mail" style={{ marginRight: 4 }} />{profile.email}</>}
+            {profile.email && profile.phone && <span style={{ margin: "0 8px" }}>·</span>}
+            {profile.phone && <><i className="ti ti-device-mobile" style={{ marginRight: 4 }} />{profile.phone}</>}
+          </p>
+        )}
+      </div>
 
-      {!isPremium && (
-        <Card className="mb-6 border-primary/10">
-          <CardContent className="p-4 text-center">
-            <p className="mb-2 text-sm text-muted-foreground">
-              升级会员，解锁完整 AI 分析和更多功能
+      {/* 会员状态（仅 premium 显示） */}
+      {isPremium && profile.membership?.endDate && (
+        <div
+          className="card"
+          style={{
+            marginTop: 14,
+            background: "var(--warning-soft, rgba(196, 154, 74, 0.08))",
+            borderColor: "var(--warning)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", margin: 0 }}>
+              <i className="ti ti-crown" style={{ marginRight: 6, color: "var(--warning)" }} />
+              {PLAN_LABELS[profile.membership.plan]} · {membershipExpired ? "已过期" : "有效中"}
             </p>
-            <Link href="/pricing">
-              <Button className="bg-primary hover:bg-primary/90">
-                查看会员方案
-              </Button>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, marginBottom: 0 }}>
+              到期时间：{new Date(profile.membership.endDate).toLocaleDateString("zh-CN")}
+            </p>
+          </div>
+          {membershipExpired && (
+            <Link href="/pricing" className="btn btn-primary btn-sm">
+              <i className="ti ti-refresh" /> 续费
             </Link>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
 
-      <Card className="mb-6 border-primary/10">
-        <CardHeader>
-          <CardTitle className="text-base">历史记录</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {profile.stats.consultations > 0 ? (
-            <p className="text-sm text-muted-foreground">
-              共 {profile.stats.consultations} 次排盘记录
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">暂无排盘记录</p>
-          )}
-          <Separator className="my-4" />
-          <Link href="/chart">
-            <Button className="w-full bg-primary hover:bg-primary/90">
-              去排盘
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
-      <div className="text-center">
-        <Button
-          variant="ghost"
-          className="text-sm text-muted-foreground hover:text-destructive"
-          onClick={() => signOut({ callbackUrl: "/" })}
-        >
-          退出登录
-        </Button>
+      {/* 三宫统计 */}
+      <div className="share-stats" style={{ marginTop: 14 }}>
+        <div className="ss">
+          <div className="ss-v">{profile.totalPoints}</div>
+          <div className="ss-l">积分</div>
+        </div>
+        <div className="ss">
+          <div className="ss-v">{profile.bonusQueries}</div>
+          <div className="ss-l">奖励次数</div>
+        </div>
+        <div className="ss">
+          <div className="ss-v">{profile.stats.consultations}</div>
+          <div className="ss-l">排盘次数</div>
+        </div>
       </div>
-    </div>
+
+      {/* 邀请好友 */}
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle icon="ti-gift" title="邀请好友" />
+      </div>
+      <div className="card" style={{ marginTop: 12 }}>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.8, marginTop: 0 }}>
+          分享给好友，每次有效分享获得 1 积分，每 10 积分可兑换 1 次免费测算
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+          <code
+            style={{
+              flex: 1,
+              background: "var(--soft)",
+              border: "1px dashed var(--line)",
+              borderRadius: "var(--radius-sm)",
+              padding: "8px 12px",
+              textAlign: "center",
+              fontFamily: "var(--font-mono, monospace)",
+              fontSize: 14,
+              color: "var(--brand)",
+              letterSpacing: 1,
+            }}
+          >
+            {profile.inviteCode}
+          </code>
+          <button className="btn btn-ghost btn-sm" onClick={handleCopyInviteCode}>
+            <i className="ti ti-copy" /> 复制
+          </button>
+        </div>
+      </div>
+
+      {/* 升级会员（非 premium） */}
+      {!isPremium && (
+        <div className="card" style={{ marginTop: 14, textAlign: "center" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+            <i className="ti ti-sparkles" style={{ marginRight: 6, color: "var(--brand)" }} />
+            升级会员，解锁完整 AI 分析和更多功能
+          </p>
+          <Link href="/pricing" className="btn btn-primary" style={{ marginTop: 8 }}>
+            查看会员方案
+          </Link>
+        </div>
+      )}
+
+      {/* 历史记录区（占位 — 详细流水待迁入） */}
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle icon="ti-history" title="历史记录" />
+      </div>
+      <div className="card" style={{ marginTop: 12 }}>
+        {profile.stats.consultations > 0 ? (
+          <p style={{ color: "var(--ink-light)", fontSize: 14 }}>
+            共 <strong style={{ color: "var(--brand)" }}>{profile.stats.consultations}</strong> 次排盘记录
+          </p>
+        ) : (
+          <EmptyState icon="ti-history" title="暂无排盘记录" description="点击下方按钮开始第一次排盘" />
+        )}
+        <Link href="/chart" className="btn btn-primary" style={{ width: "100%", marginTop: 12 }}>
+          <i className="ti ti-plus" /> 去排盘
+        </Link>
+      </div>
+
+      {/* 设置入口 */}
+      <div style={{ marginTop: 24 }}>
+        <SectionTitle icon="ti-settings" title="设置" />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <Link
+          href="/settings"
+          className="setting-row"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="sr-l">
+            <div className="sr-icon"><i className="ti ti-adjustments" /></div>
+            <div>
+              <div className="sr-title">偏好设置</div>
+              <div className="sr-desc">主题、历法、通知</div>
+            </div>
+          </div>
+          <i className="ti ti-chevron-right" />
+        </Link>
+        <Link
+          href="/share"
+          className="setting-row"
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          <div className="sr-l">
+            <div className="sr-icon"><i className="ti ti-share" /></div>
+            <div>
+              <div className="sr-title">分享中心</div>
+              <div className="sr-desc">分享给好友，赚取积分</div>
+            </div>
+          </div>
+          <i className="ti ti-chevron-right" />
+        </Link>
+      </div>
+
+      {/* 退出登录 */}
+      <div style={{ textAlign: "center", marginTop: 32 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => signOut({ callbackUrl: "/" })}
+          style={{ color: "var(--danger)" }}
+        >
+          <i className="ti ti-logout" /> 退出登录
+        </button>
+      </div>
+    </PageContainer>
   );
 }

@@ -1,16 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const plans = [
+import { PageContainer } from "@/components/shared/page-container";
+import { SectionTitle } from "@/components/shared/section-title";
+
+interface Plan {
+  id: string;
+  plan: string;
+  name: string;
+  price: string;
+  period: string;
+  originalPrice?: string;
+  features: string[];
+  cta: string;
+  popular: boolean;
+}
+
+const plans: Plan[] = [
   {
     id: "free",
     plan: "FREE",
@@ -92,7 +103,7 @@ export default function PricingPage() {
   } | null>(null);
   const [purchasing, setPurchasing] = useState<string | null>(null);
 
-  const currentPlan = session?.user?.membershipPlan || "FREE";
+  const currentPlan = (session?.user?.membershipPlan as string) || "FREE";
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -158,122 +169,139 @@ export default function PricingPage() {
   const isCurrentPlan = (plan: string) => currentPlan === plan;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 md:py-16">
-      <div className="mb-12 text-center">
-        <h1 className="mb-3 font-serif-sc text-3xl font-bold text-primary md:text-4xl">
-          会员服务
-        </h1>
-        <p className="text-muted-foreground">
+    <PageContainer maxWidth={1100}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <SectionTitle as="h1" icon="ti-crown" title="会员服务" />
+        <p style={{ color: "var(--text-muted)", fontSize: 14, marginTop: 8 }}>
           选择适合你的方案，解锁完整的命理分析与心理洞察
         </p>
         {status === "authenticated" && currentPlan !== "FREE" && membershipInfo?.endDate && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-sm">
-            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: 14,
+              padding: "6px 16px",
+              borderRadius: 100,
+              background: "var(--soft)",
+              border: "1px solid var(--line)",
+              fontSize: 13,
+              color: "var(--ink-light)",
+            }}
+          >
+            <span className="chip" style={{ background: "var(--brand)", color: "#fff", border: "none" }}>
               {PLAN_LABELS[currentPlan]}
-            </Badge>
-            <span className="text-amber-700">
+            </span>
+            <span>
               到期时间：{new Date(membershipInfo.endDate).toLocaleDateString("zh-CN")}
             </span>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="template-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
         {plans.map((plan) => {
           const isCurrent = isCurrentPlan(plan.plan);
           const isActive = isPlanActive(plan.plan);
+          const showCurrentBadge = isCurrent && isActive && plan.plan !== "FREE";
+          const cardStyle: CSSProperties = {
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            textAlign: "center",
+            paddingTop: showCurrentBadge || (plan.popular && !isCurrent) ? 28 : 20,
+            transform: plan.popular && !isCurrent ? "scale(1.03)" : undefined,
+          };
 
           return (
-            <Card
+            <div
               key={plan.id}
-              className={cn(
-                "relative flex flex-col border transition-all hover:shadow-lg",
-                plan.popular
-                  ? "border-primary shadow-lg shadow-primary/10"
-                  : isCurrent && isActive
-                  ? "border-amber-400 shadow-md"
-                  : "border-primary/10"
-              )}
+              className={`plan-card${plan.popular ? " selected" : ""}${showCurrentBadge ? " selected" : ""}`}
+              style={cardStyle}
             >
               {plan.popular && !isCurrent && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-primary px-3">推荐</Badge>
-                </div>
+                <span className="tag-best" style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)" }}>
+                  推荐
+                </span>
               )}
-              {isCurrent && isActive && plan.plan !== "FREE" && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-amber-500 px-3">当前方案</Badge>
-                </div>
-              )}
-              <CardHeader className="pb-2 text-center">
-                <CardTitle className="text-lg">{plan.name}</CardTitle>
-                <div className="mt-2">
-                  {plan.originalPrice && (
-                    <span className="mr-2 text-sm text-muted-foreground line-through">
-                      {plan.originalPrice}
-                    </span>
-                  )}
-                  <span className="text-3xl font-bold text-primary">
-                    {plan.price}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    {plan.period}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-1 flex-col">
-                <ul className="mb-6 flex-1 space-y-2">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm">
-                      <span className="mt-0.5 text-primary">✓</span>
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className={cn(
-                    "w-full",
-                    isCurrent && isActive && plan.plan !== "FREE"
-                      ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                      : plan.popular
-                      ? "bg-primary hover:bg-primary/90"
-                      : plan.id === "free"
-                      ? "bg-muted text-foreground hover:bg-muted/80"
-                      : "bg-primary/80 hover:bg-primary/70"
-                  )}
-                  disabled={
-                    (isCurrent && isActive && plan.plan !== "FREE") ||
-                    purchasing === plan.id
-                  }
-                  onClick={() => handlePurchase(plan.id)}
+              {showCurrentBadge && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -12,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    background: "var(--warning)",
+                    color: "#fff",
+                    padding: "3px 12px",
+                    borderRadius: 100,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    boxShadow: "var(--shadow)",
+                  }}
                 >
-                  {purchasing === plan.id
-                    ? "处理中..."
-                    : isCurrent && isActive && plan.plan !== "FREE"
-                    ? "当前方案"
-                    : plan.cta}
-                </Button>
-              </CardContent>
-            </Card>
+                  当前方案
+                </span>
+              )}
+
+              <h3>{plan.name}</h3>
+              <div className="price">
+                {plan.originalPrice && (
+                  <small style={{ textDecoration: "line-through", marginRight: 6, opacity: 0.6 }}>
+                    {plan.originalPrice}
+                  </small>
+                )}
+                {plan.price}
+                <small> {plan.period}</small>
+              </div>
+
+              <ul>
+                {plan.features.map((feature) => (
+                  <li key={feature} style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                    <i className="ti ti-check" style={{ color: "var(--success)", marginTop: 4 }} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <button
+                className={`btn ${plan.id === "free" ? "btn-ghost" : "btn-primary"}`}
+                disabled={
+                  (isCurrent && isActive && plan.plan !== "FREE") ||
+                  purchasing === plan.id
+                }
+                onClick={() => handlePurchase(plan.id)}
+                style={{ width: "100%", opacity: (isCurrent && isActive && plan.plan !== "FREE") || purchasing === plan.id ? 0.6 : 1 }}
+              >
+                {purchasing === plan.id
+                  ? "处理中..."
+                  : isCurrent && isActive && plan.plan !== "FREE"
+                  ? "当前方案"
+                  : plan.cta}
+              </button>
+            </div>
           );
         })}
       </div>
 
-      <div className="mt-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          也可以按次付费：<strong className="text-primary">¥0.5/次</strong>，无需开通会员即可解锁单次完整分析
+      <div style={{ marginTop: 32, textAlign: "center", fontSize: 13, color: "var(--text-muted)" }}>
+        <p>
+          也可以按次付费：
+          <strong style={{ color: "var(--brand)" }}>¥0.5/次</strong>
+          ，无需开通会员即可解锁单次完整分析
         </p>
         {process.env.NODE_ENV === "development" && (
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p style={{ marginTop: 10, fontSize: 12 }}>
             <Link
               href="/pricing/mock-pay"
-              className="underline-offset-4 hover:text-primary hover:underline"
+              style={{ color: "var(--brand)", textDecoration: "underline", textUnderlineOffset: 4 }}
             >
               开发：模拟支付（无真实扣款）
             </Link>
           </p>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

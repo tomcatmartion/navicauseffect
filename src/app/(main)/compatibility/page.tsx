@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, Suspense, type CSSProperties } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Loader2,
-  Heart,
-  Sparkles,
-  TrendingUp,
-  AlertTriangle,
-  RefreshCw,
-} from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/shared/page-container";
+import { SectionTitle } from "@/components/shared/section-title";
+import { EmptyState } from "@/components/shared/empty-state";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -77,7 +69,23 @@ interface Analysis {
 }
 
 // ---------------------------------------------------------------------------
-// 主内容（用 useSearchParams 需 Suspense）
+// 工具
+// ---------------------------------------------------------------------------
+
+const scoreClass = (s: number): string =>
+  s >= 75 ? "high" : s >= 50 ? "mid" : "low";
+
+const sihuaColor = (t: '禄' | '权' | '科' | '忌'): CSSProperties => {
+  switch (t) {
+    case '禄': return { background: "var(--success-soft, rgba(44,74,30,.08))", color: "var(--success)", border: "1px solid var(--success)" };
+    case '忌': return { background: "var(--danger-soft, rgba(139,26,26,.08))", color: "var(--danger)", border: "1px solid var(--danger)" };
+    case '权': return { background: "var(--warning-soft, rgba(196,154,74,.1))", color: "var(--warning)", border: "1px solid var(--warning)" };
+    case '科': return { background: "var(--soft)", color: "var(--brand)", border: "1px solid var(--brand)" };
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 主内容
 // ---------------------------------------------------------------------------
 
 function CompatibilityContent() {
@@ -126,7 +134,6 @@ function CompatibilityContent() {
     if (sessionStatus === "authenticated") {
       fetchCharts();
       fetchHistories();
-      // URL 参数预填 selfChartId
       const pre = searchParams.get("selfChartId");
       if (pre) setSelfChartId(pre);
     }
@@ -166,128 +173,131 @@ function CompatibilityContent() {
 
   if (loadingCharts) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary/40 animate-spin" />
-      </div>
+      <PageContainer maxWidth={900}>
+        <EmptyState icon="ti-loader-2" title="加载中…" />
+      </PageContainer>
     );
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "20px 24px 60px" }}>
-      <div className="space-y-4">
-        {charts.length < 2 ? (
-          <Card className="border-primary/10">
-            <CardContent className="p-8 text-center space-y-3">
-              <Sparkles className="w-12 h-12 text-primary/40 mx-auto" />
-              <p className="font-serif-sc text-sm font-bold">至少需要 2 张已保存的命盘</p>
-              <p className="text-xs text-muted-foreground">
-                请先在排盘页保存至少 2 张命盘（自己 + 对方），才能进行合盘分析
-              </p>
-              <Button
-                className="bg-primary hover:bg-primary/90"
-                onClick={() => router.push("/chart")}
+    <PageContainer maxWidth={900}>
+      <SectionTitle as="h1" icon="ti-hearts" title="双人合盘" />
+
+      {charts.length < 2 ? (
+        <div className="card" style={{ marginTop: 16 }}>
+          <EmptyState
+            icon="ti-sparkles"
+            title="至少需要 2 张已保存的命盘"
+            description="请先在排盘页保存至少 2 张命盘（自己 + 对方），才能进行合盘分析"
+          >
+            <button className="btn btn-primary" onClick={() => router.push("/chart")}>
+              <i className="ti ti-plus" /> 去排盘
+            </button>
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          {/* 选择区 */}
+          <div className="card" style={{ marginTop: 16 }}>
+            <SectionTitle icon="ti-arrows-left-right" title="选择命盘" />
+
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                自己（甲方）
+              </label>
+              <select
+                className="select"
+                value={selfChartId}
+                onChange={(e) => setSelfChartId(e.target.value)}
+                style={{ width: "100%" }}
               >
-                去排盘
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {/* 命盘选择 */}
-            <Card className="border-primary/10">
-              <CardContent className="p-4 space-y-3">
-                <h2 className="font-serif-sc text-sm font-bold">选择命盘</h2>
+                <option value="">请选择...</option>
+                {charts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}（{c.summary?.mingGongMajorStars.join("·") ?? "空宫"}）
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">自己（甲方）</label>
-                  <select
-                    value={selfChartId}
-                    onChange={(e) => setSelfChartId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
-                  >
-                    <option value="">请选择...</option>
-                    {charts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}（{c.summary?.mingGongMajorStars.join("·") ?? "空宫"}）
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">对方（乙方）</label>
-                  <select
-                    value={partnerChartId}
-                    onChange={(e) => setPartnerChartId(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
-                  >
-                    <option value="">请选择...</option>
-                    {charts
-                      .filter((c) => c.id !== selfChartId)
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}（{c.summary?.mingGongMajorStars.join("·") ?? "空宫"}）
-                        </option>
-                      ))}
-                  </select>
-                </div>
-
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
-                  disabled={!selfChartId || !partnerChartId || analyzing}
-                  onClick={handleAnalyze}
-                >
-                  {analyzing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      分析中（AI 解读需 ~30 秒）...
-                    </>
-                  ) : (
-                    <>
-                      <Heart className="w-4 h-4 mr-2" />
-                      开始合盘
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* 历史记录 */}
-            {!analysis && histories.length > 0 && (
-              <Card className="border-primary/10">
-                <CardContent className="p-4 space-y-2">
-                  <h3 className="font-serif-sc text-sm font-bold text-muted-foreground">历史合盘</h3>
-                  {histories.slice(0, 5).map((h) => (
-                    <button
-                      key={h.id}
-                      onClick={() => setAnalysis(h)}
-                      className="block w-full text-left p-2 rounded-md hover:bg-primary/5 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">
-                          {h.selfChart.name} × {h.partnerChart.name}
-                        </span>
-                        <Badge variant="outline" className="text-xs">
-                          综合 {h.result.dimensionScores.overall}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(h.createdAt).toLocaleString("zh-CN")}
-                      </div>
-                    </button>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
+                对方（乙方）
+              </label>
+              <select
+                className="select"
+                value={partnerChartId}
+                onChange={(e) => setPartnerChartId(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="">请选择...</option>
+                {charts
+                  .filter((c) => c.id !== selfChartId)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}（{c.summary?.mingGongMajorStars.join("·") ?? "空宫"}）
+                    </option>
                   ))}
-                </CardContent>
-              </Card>
-            )}
+              </select>
+            </div>
 
-            {/* 合盘结果 */}
-            {analysis && (
+            <button
+              className="btn btn-primary"
+              disabled={!selfChartId || !partnerChartId || analyzing}
+              style={{ width: "100%", marginTop: 16, opacity: !selfChartId || !partnerChartId ? 0.6 : 1 }}
+              onClick={handleAnalyze}
+            >
+              {analyzing ? (
+                <><i className="ti ti-loader-2 ti-spin" /> 分析中（AI 解读需 ~30 秒）...</>
+              ) : (
+                <><i className="ti ti-heart" /> 开始合盘</>
+              )}
+            </button>
+          </div>
+
+          {/* 历史合盘 */}
+          {!analysis && histories.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <SectionTitle icon="ti-history" title="历史合盘" />
+            </div>
+          )}
+          {!analysis && histories.length > 0 && (
+            <div className="log-list" style={{ marginTop: 12 }}>
+              {histories.slice(0, 5).map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => setAnalysis(h)}
+                  className="log-item"
+                  style={{
+                    background: "var(--panel)",
+                    cursor: "pointer",
+                    border: "1px solid var(--line-light)",
+                    alignItems: "center",
+                  }}
+                >
+                  <div className="log-info">
+                    <div className="log-title" style={{ fontSize: 14 }}>
+                      {h.selfChart.name} <span style={{ color: "var(--text-muted)", margin: "0 4px" }}>×</span> {h.partnerChart.name}
+                    </div>
+                    <div className="log-meta">{new Date(h.createdAt).toLocaleString("zh-CN")}</div>
+                  </div>
+                  <span className="chip">
+                    <i className="ti ti-star" /> 综合 {h.result.dimensionScores.overall}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 结果 */}
+          {analysis && (
+            <div style={{ marginTop: 16 }}>
               <CompatibilityResultView analysis={analysis} onReset={() => setAnalysis(null)} />
-            )}
-          </>
-        )}
-      </div>
-    </div>
+            </div>
+          )}
+        </>
+      )}
+    </PageContainer>
   );
 }
 
@@ -311,181 +321,189 @@ function CompatibilityResultView({
     { key: 'family', label: '家庭' },
   ] as const;
 
-  const scoreColor = (s: number) =>
-    s >= 75 ? 'text-green-600' : s >= 50 ? 'text-amber-600' : 'text-red-500';
-
   return (
-    <div className="space-y-4">
+    <div className="compat-result">
       {/* 头部 */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <h2 className="font-serif-sc text-base font-bold">
-            {analysis.selfChart.name} × {analysis.partnerChart.name}
+          <h2 style={{ fontSize: 16, color: "var(--ink)", fontWeight: 600, margin: 0 }}>
+            {analysis.selfChart.name} <span style={{ color: "var(--brand)", margin: "0 6px" }}>×</span> {analysis.partnerChart.name}
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
             {new Date(analysis.createdAt).toLocaleString("zh-CN")}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onReset}>
-          <RefreshCw className="w-3 h-3 mr-1" />
-          重新选
-        </Button>
+        <button className="btn btn-ghost btn-sm" onClick={onReset}>
+          <i className="ti ti-refresh" /> 重新选
+        </button>
       </div>
 
-      {/* 综合评分 */}
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-        <CardContent className="p-5 text-center space-y-3">
-          <div className="text-xs text-muted-foreground">综合契合度</div>
-          <div className={`text-5xl font-bold ${scoreColor(r.dimensionScores.overall)}`}>
-            {r.dimensionScores.overall}
-          </div>
-          <div className="flex justify-center gap-3 flex-wrap">
-            {dims.map((d) => (
-              <div key={d.key} className="text-center">
-                <div className="text-xs text-muted-foreground">{d.label}</div>
-                <div className={`text-lg font-bold ${scoreColor(r.dimensionScores[d.key])}`}>
-                  {r.dimensionScores[d.key]}
-                </div>
+      {/* 综合评分 + 维度 */}
+      <div
+        className="card"
+        style={{
+          marginBottom: 14,
+          textAlign: "center",
+          background: "linear-gradient(135deg, var(--soft), var(--panel))",
+          borderColor: "var(--brand)",
+        }}
+      >
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>综合契合度</p>
+        <div
+          className={`score-pill ${scoreClass(r.dimensionScores.overall)}`}
+          style={{ width: 96, height: 96, fontSize: 36, margin: "0 auto 16px", borderWidth: 3 }}
+        >
+          {r.dimensionScores.overall}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+          {dims.map((d) => (
+            <div key={d.key} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{d.label}</div>
+              <div
+                className={`score-pill ${scoreClass(r.dimensionScores[d.key])}`}
+                style={{ width: 36, height: 36, fontSize: 13, marginTop: 4 }}
+              >
+                {r.dimensionScores[d.key]}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* 关键亮点 / 风险 */}
       {(r.highlights.length > 0 || r.risks.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           {r.highlights.length > 0 && (
-            <Card className="border-green-200 bg-green-50/50">
-              <CardContent className="p-3 space-y-1">
-                <div className="flex items-center gap-1 text-xs font-bold text-green-700">
-                  <TrendingUp className="w-3 h-3" />
-                  关键亮点
-                </div>
-                {r.highlights.map((h, i) => (
-                  <p key={i} className="text-xs text-green-800">• {h}</p>
-                ))}
-              </CardContent>
-            </Card>
+            <div
+              className="card"
+              style={{ background: "var(--success-soft, rgba(44,74,30,.06))", borderColor: "var(--success)", padding: 12 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--success)", marginBottom: 6 }}>
+                <i className="ti ti-trending-up" /> 关键亮点
+              </div>
+              {r.highlights.map((h, i) => (
+                <p key={i} style={{ fontSize: 12, color: "var(--ink)", lineHeight: 1.7, margin: "2px 0" }}>• {h}</p>
+              ))}
+            </div>
           )}
           {r.risks.length > 0 && (
-            <Card className="border-amber-200 bg-amber-50/50">
-              <CardContent className="p-3 space-y-1">
-                <div className="flex items-center gap-1 text-xs font-bold text-amber-700">
-                  <AlertTriangle className="w-3 h-3" />
-                  风险提示
-                </div>
-                {r.risks.map((r2, i) => (
-                  <p key={i} className="text-xs text-amber-800">• {r2}</p>
-                ))}
-              </CardContent>
-            </Card>
+            <div
+              className="card"
+              style={{ background: "var(--warning-soft, rgba(196,154,74,.08))", borderColor: "var(--warning)", padding: 12 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--warning)", marginBottom: 6 }}>
+                <i className="ti ti-alert-triangle" /> 风险提示
+              </div>
+              {r.risks.map((r2, i) => (
+                <p key={i} style={{ fontSize: 12, color: "var(--ink)", lineHeight: 1.7, margin: "2px 0" }}>• {r2}</p>
+              ))}
+            </div>
           )}
         </div>
       )}
 
       {/* 四化交叉 */}
       {r.crossSihua.length > 0 && (
-        <Card className="border-primary/10">
-          <CardContent className="p-4 space-y-2">
-            <h3 className="font-serif-sc text-sm font-bold">四化交叉</h3>
-            <div className="space-y-1.5">
-              {r.crossSihua.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <Badge
-                    className={`shrink-0 ${
-                      s.type === '禄'
-                        ? 'bg-green-50 text-green-700 border-green-200'
-                        : s.type === '忌'
-                        ? 'bg-red-50 text-red-700 border-red-200'
-                        : s.type === '权'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}
-                  >
-                    {s.from === 'self' ? '我' : '对方'}·化{s.type}
-                  </Badge>
-                  <span className="text-foreground">{s.note}</span>
-                </div>
-              ))}
+        <div style={{ marginBottom: 14 }}>
+          <SectionTitle icon="ti-arrows-shuffle" title="四化交叉" />
+        </div>
+      )}
+      {r.crossSihua.length > 0 && (
+        <div className="log-list" style={{ marginTop: 8 }}>
+          {r.crossSihua.map((s, i) => (
+            <div key={i} className="log-item" style={{ alignItems: "flex-start" }}>
+              <span className="chip" style={{ ...sihuaColor(s.type), padding: "2px 10px", fontSize: 11, flexShrink: 0 }}>
+                {s.from === 'self' ? '我' : '对方'}·化{s.type}
+              </span>
+              <span style={{ fontSize: 13, color: "var(--ink)", flex: 1 }}>{s.note}</span>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
 
       {/* 星曜互动 */}
       {r.starInteraction.length > 0 && (
-        <Card className="border-primary/10">
-          <CardContent className="p-4 space-y-2">
-            <h3 className="font-serif-sc text-sm font-bold">星曜互动</h3>
-            <div className="space-y-1.5">
-              {r.starInteraction.slice(0, 10).map((it, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <Badge
-                    variant="outline"
-                    className={`shrink-0 ${
-                      it.nature === '吉'
-                        ? 'border-green-300 text-green-700'
-                        : it.nature === '凶'
-                        ? 'border-red-300 text-red-700'
-                        : ''
-                    }`}
-                  >
-                    {it.relation}·{it.nature}
-                  </Badge>
-                  <span className="text-foreground">{it.note}</span>
-                </div>
-              ))}
+        <div style={{ marginTop: 16, marginBottom: 8 }}>
+          <SectionTitle icon="ti-stars" title="星曜互动" />
+        </div>
+      )}
+      {r.starInteraction.length > 0 && (
+        <div className="log-list" style={{ marginTop: 8 }}>
+          {r.starInteraction.slice(0, 10).map((it, i) => (
+            <div key={i} className="log-item" style={{ alignItems: "flex-start" }}>
+              <span
+                className="chip"
+                style={{
+                  padding: "2px 10px",
+                  fontSize: 11,
+                  flexShrink: 0,
+                  background: it.nature === '吉' ? "var(--success-soft, rgba(44,74,30,.08))" : it.nature === '凶' ? "var(--danger-soft, rgba(139,26,26,.08))" : "var(--soft)",
+                  color: it.nature === '吉' ? "var(--success)" : it.nature === '凶' ? "var(--danger)" : "var(--text-muted)",
+                  border: "1px solid " + (it.nature === '吉' ? "var(--success)" : it.nature === '凶' ? "var(--danger)" : "var(--line)"),
+                }}
+              >
+                {it.relation}·{it.nature}
+              </span>
+              <span style={{ fontSize: 13, color: "var(--ink)", flex: 1 }}>{it.note}</span>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
 
-      {/* 宫位对照 */}
-      <Card className="border-primary/10">
-        <CardContent className="p-4 space-y-2">
-          <h3 className="font-serif-sc text-sm font-bold">十二宫对照</h3>
-          <div className="space-y-1.5">
-            {r.palaceComparison
-              .filter((p) => p.harmony !== 'neutral')
-              .map((p, i) => (
-                <div
-                  key={i}
-                  className={`text-xs p-2 rounded-md ${
-                    p.harmony === 'harmony'
-                      ? 'bg-green-50 text-green-800'
-                      : 'bg-red-50 text-red-800'
-                  }`}
-                >
-                  <div className="font-bold">
-                    {p.palace} {p.harmony === 'harmony' ? '✓' : '⚠'}
-                  </div>
-                  <div className="opacity-90">{p.note}</div>
-                  <div className="opacity-75 mt-0.5">
-                    我：{p.self.stars.join('·') || '空'} | 对方：{p.partner.stars.join('·') || '空'}
-                  </div>
-                </div>
-              ))}
-            {r.palaceComparison.every((p) => p.harmony === 'neutral') && (
-              <p className="text-xs text-muted-foreground">十二宫能量平稳，无显著吉凶对照</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* 十二宫对照 */}
+      <div style={{ marginTop: 16, marginBottom: 8 }}>
+        <SectionTitle icon="ti-layout-grid" title="十二宫对照" />
+      </div>
+      <div className="log-list" style={{ marginTop: 8 }}>
+        {r.palaceComparison
+          .filter((p) => p.harmony !== 'neutral')
+          .map((p, i) => (
+            <div
+              key={i}
+              className="log-item"
+              style={{
+                flexDirection: "column",
+                alignItems: "stretch",
+                gap: 6,
+                background: p.harmony === 'harmony'
+                  ? "var(--success-soft, rgba(44,74,30,.06))"
+                  : "var(--danger-soft, rgba(139,26,26,.06))",
+                borderColor: p.harmony === 'harmony' ? "var(--success)" : "var(--danger)",
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+                {p.palace} {p.harmony === 'harmony' ? '✓' : '⚠'}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-light)" }}>{p.note}</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                我：{p.self.stars.join('·') || '空'} <span style={{ margin: "0 4px" }}>|</span> 对方：{p.partner.stars.join('·') || '空'}
+              </div>
+            </div>
+          ))}
+        {r.palaceComparison.every((p) => p.harmony === 'neutral') && (
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>十二宫能量平稳，无显著吉凶对照</p>
+        )}
+      </div>
 
       {/* AI 解读 */}
       {analysis.aiSummary && (
-        <Card className="border-primary/20">
-          <CardContent className="p-4 space-y-2">
-            <h3 className="font-serif-sc text-sm font-bold flex items-center gap-1">
-              <Sparkles className="w-4 h-4 text-primary" />
-              AI 深度解读
-            </h3>
-            <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-              {analysis.aiSummary}
-            </div>
-          </CardContent>
-        </Card>
+        <div
+          className="card"
+          style={{ marginTop: 14, borderColor: "var(--brand)" }}
+        >
+          <SectionTitle icon="ti-sparkles" title="AI 深度解读" />
+          <div
+            style={{
+              fontSize: 14,
+              color: "var(--ink-light)",
+              lineHeight: 1.9,
+              whiteSpace: "pre-wrap",
+              marginTop: 10,
+            }}
+          >
+            {analysis.aiSummary}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -493,7 +511,13 @@ function CompatibilityResultView({
 
 export default function CompatibilityPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary/40 animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <PageContainer maxWidth={900}>
+          <EmptyState icon="ti-loader-2" title="加载中…" />
+        </PageContainer>
+      }
+    >
       <CompatibilityContent />
     </Suspense>
   );
