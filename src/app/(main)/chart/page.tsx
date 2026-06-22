@@ -9,6 +9,13 @@ import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
 import { SaveChartButton } from "@/components/chart/save-chart-button";
 import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 // 重型依赖：排盘后才需要，用 dynamic import 按需加载
 const Iztrolabe = dynamic(
@@ -72,6 +79,7 @@ export default function ChartPage() {
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
   const [restoredChartData, setRestoredChartData] = useState<Record<string, unknown> | null>(null);
   const [chartPanelOpen, setChartPanelOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const chartDataForPipeline = useMemo(() => {
     if (restoredChartData) return restoredChartData;
@@ -374,6 +382,92 @@ export default function ChartPage() {
 
         {/* 中栏：Chat 主区（DualChatPanel 自包含 .chat-shell） */}
         <section className="reading-main">
+          {/* 移动端 sidebar 触发器（md:hidden） */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              borderBottom: "1px solid var(--line-light)",
+            }}
+            className="md:hidden"
+          >
+            <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+              <SheetTrigger asChild>
+                <button
+                  type="button"
+                  className="iconbtn"
+                  style={{ width: 32, height: 32 }}
+                  title="历史会话"
+                  aria-label="历史会话"
+                >
+                  <i className="ti ti-menu-2" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] p-0">
+                <SheetHeader className="p-4 pb-2">
+                  <SheetTitle className="text-base" style={{ color: "var(--brand)" }}>
+                    <i className="ti ti-message-2" style={{ marginRight: 6 }} />
+                    历史会话
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="model-bar" style={{ margin: "0 12px 10px" }}>
+                  <i className="ti ti-cpu" />
+                  <select aria-label="AI 模型选择" defaultValue="minimax">
+                    <option value="minimax">MiniMax v1</option>
+                    <option value="deepseek">DeepSeek V3</option>
+                    <option value="glm">智谱 GLM-4</option>
+                    <option value="qwen">通义千问 Max</option>
+                    <option value="claude">Claude Sonnet</option>
+                  </select>
+                </div>
+                <div className="consult-list">
+                  <div
+                    className="consult-item"
+                    style={{ background: "var(--soft)" }}
+                    onClick={() => setMobileSidebarOpen(false)}
+                  >
+                    <i className="ti ti-briefcase" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="ctitle">当前咨询</div>
+                      <div className="cmeta">
+                        {trueSolarTimeInfo || "新会话"}
+                      </div>
+                    </div>
+                  </div>
+                  <Link
+                    href="/charts"
+                    className="consult-item"
+                    onClick={() => setMobileSidebarOpen(false)}
+                  >
+                    <i
+                      className="ti ti-clipboard-list"
+                      style={{ color: "var(--brand)" }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div
+                        className="ctitle"
+                        style={{ color: "var(--brand)" }}
+                      >
+                        从命盘继续
+                      </div>
+                      <div className="cmeta">选择已保存命盘</div>
+                    </div>
+                  </Link>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-ui)",
+              }}
+            >
+              AI 对话
+            </span>
+          </div>
           <DualChatPanel
             chartData={chartDataForPipeline}
             parentBirthYears={parentBirthYears}
