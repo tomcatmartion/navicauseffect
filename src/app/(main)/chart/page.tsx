@@ -372,17 +372,12 @@ export default function ChartPage() {
           </div>
         </aside>
 
-        {/* 中栏：Chat 主区 */}
+        {/* 中栏：Chat 主区（DualChatPanel 自包含 .chat-shell） */}
         <section className="reading-main">
-          <div className="chat-wrap" style={{ padding: 0 }}>
-            <div className="chat-shell">
-              {/* DualChatPanel 已含消息流 + 输入框，包一层 chat 容器；后续阶段 3 可重写 DOM 为 .msg/.msg-bubble */}
-              <DualChatPanel
-                chartData={chartDataForPipeline}
-                parentBirthYears={parentBirthYears}
-              />
-            </div>
-          </div>
+          <DualChatPanel
+            chartData={chartDataForPipeline}
+            parentBirthYears={parentBirthYears}
+          />
         </section>
       </div>
 

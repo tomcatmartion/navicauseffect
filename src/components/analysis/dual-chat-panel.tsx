@@ -2,10 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Bug, MessageCircle, Send } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, Bug } from "lucide-react";
 import type { HybridDebugInfo } from "@/types/hybrid-debug";
 import { HybridDebugPanel } from "./hybrid-debug-panel";
 
@@ -208,93 +205,151 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
 
   return (
     <>
-      <Card className="flex h-full flex-col border-primary/15">
-        <CardHeader className="pb-0 shrink-0">
-          <CardTitle className="flex items-center gap-2 text-base text-primary">
-            <MessageCircle className="h-4 w-4" />
-            AI 精准解盘
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-1 flex-col gap-2 p-4 pt-3 overflow-hidden">
-          {/* 流式输出状态提示 */}
-          {streaming && (
-            <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary/80">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>正在调动各类知识，结合科学与玄学全面分析，请稍候...</span>
+      <div className="chat-shell">
+        {/* 流式输出状态提示（用 testUI .tool-call 风格） */}
+        {streaming && (
+          <div
+            className="tool-call"
+            style={{ margin: "8px 2px 0" }}
+          >
+            <Loader2
+              className="size-3 animate-spin"
+              style={{ marginRight: 6 }}
+            />
+            正在调动各类知识，结合科学与玄学全面分析，请稍候...
+          </div>
+        )}
+
+        {/* 消息列表 */}
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleContainerScroll}
+          className="chat-stream"
+        >
+          {messages.length === 0 && !streamContent && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                padding: "20px 0",
+                color: "var(--text-muted)",
+                fontSize: 12,
+              }}
+            >
+              <i
+                className="ti ti-message-2"
+                style={{ fontSize: 32, opacity: 0.4 }}
+              />
+              <p>输入你的命理问题，或点击下方事项快速开始</p>
+              <div className="suggest-chips" style={{ margin: 0 }}>
+                {presetQuestions.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="chip"
+                    onClick={() => sendMessage(q)}
+                    disabled={streaming || !session?.user}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* 消息列表 */}
-          <div ref={messagesContainerRef} onScroll={handleContainerScroll}
-            className="flex-1 overflow-y-auto rounded-lg border border-primary/10 bg-muted/20 p-3"
-            style={{ minHeight: "200px", maxHeight: "min(400px, 50vh)" }}
-          >
-            {messages.length === 0 && !streamContent && (
-              <div className="flex h-full flex-col items-center justify-center gap-3 py-4">
-                <p className="text-xs text-muted-foreground">点击问题快速开始解盘</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {presetQuestions.map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => sendMessage(q)}
-                      disabled={streaming || !session?.user}
-                      className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-primary/80 transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {q}
-                    </button>
-                  ))}
+          {messages.map((msg, i) => (
+            <div key={i} className={`msg ${msg.role === "user" ? "user" : "ai"}`}>
+              {msg.role === "assistant" && (
+                <div className="msg-avatar" aria-hidden>
+                  紫
                 </div>
-              </div>
-            )}
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "mb-3 rounded-lg px-3 py-2 text-sm",
-                  msg.role === "user"
-                    ? "ml-8 bg-primary/10 text-foreground"
-                    : "mr-4 bg-card text-foreground"
-                )}
-              >
-                <div className="mb-1 text-[10px] font-medium text-muted-foreground">
+              )}
+              <div className="msg-bubble">
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    marginBottom: 4,
+                    fontFamily: "var(--font-ui)",
+                  }}
+                >
                   {msg.role === "user" ? "你" : "AI 解读"}
                 </div>
                 <div className="whitespace-pre-wrap leading-relaxed">
                   {renderContent(msg.content)}
                 </div>
-                {/* 调试按钮 */}
                 {msg.role === "assistant" && msg.debugInfo && (
-                  <div className="mt-2 flex justify-end border-t border-border/30 pt-1.5">
+                  <div
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 6,
+                      borderTop: "1px dashed var(--line-light)",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => setActiveDebug(msg.debugInfo ?? null)}
-                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                      className="iconbtn"
+                      style={{ width: "auto", height: "auto", padding: "4px 10px", fontSize: 11 }}
+                      title="查看调试信息"
                     >
-                      <Bug className="h-3 w-3" />
-                      查看调试信息
+                      <Bug style={{ width: 12, height: 12, marginRight: 4 }} />
+                      调试
                     </button>
                   </div>
                 )}
               </div>
-            ))}
-            {/* 流式输出 */}
-            {streamContent && (
-              <div className="mb-3 mr-4 rounded-lg bg-card px-3 py-2 text-sm">
-                <div className="mb-1 text-[10px] font-medium text-muted-foreground">
+              {msg.role === "user" && (
+                <div className="msg-avatar" aria-hidden>
+                  我
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* 流式输出 */}
+          {streamContent && (
+            <div className="msg ai">
+              <div className="msg-avatar">紫</div>
+              <div className="msg-bubble">
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--text-muted)",
+                    marginBottom: 4,
+                  }}
+                >
                   AI 解读
                 </div>
                 <div className="whitespace-pre-wrap leading-relaxed">
                   {renderContent(streamContent)}
-                  <span className="inline-block h-4 w-0.5 animate-pulse bg-primary" />
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: 2,
+                      height: 14,
+                      background: "var(--brand)",
+                      marginLeft: 2,
+                      verticalAlign: "middle",
+                      animation: "pulse 1s infinite",
+                    }}
+                  />
                 </div>
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-          {/* 输入区 */}
-          <div className="flex gap-2">
+        {/* 输入区 */}
+        <div className="chat-composer">
+          <div className="composer-box">
             <textarea
               ref={textareaRef}
               value={input}
@@ -302,33 +357,35 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
               onKeyDown={handleKeyDown}
               placeholder={
                 session?.user
-                  ? "输入你的命理问题..."
+                  ? "输入你的命理问题，Shift+Enter 换行..."
                   : "登录后可使用 AI 解盘功能"
               }
               disabled={streaming || !session?.user}
               rows={1}
-              className="flex-1 resize-none rounded-md border border-primary/20 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="composer-input"
             />
-            <Button
+            <button
+              type="button"
+              className="composer-send"
               onClick={handleSend}
               disabled={streaming || !input.trim() || !session?.user}
-              size="sm"
-              className="h-auto bg-primary px-4 hover:bg-primary/90"
+              title="发送（Enter）"
+              aria-label="发送"
             >
               {streaming ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="hidden sm:inline">正在分析中...</span>
-                </span>
+                <Loader2 className="size-4 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+                <i className="ti ti-send" />
               )}
-            </Button>
+            </button>
           </div>
-        </CardContent>
-      </Card>
+          <div className="composer-hint">
+            每次 AI 解盘消耗 <strong style={{ color: "var(--brand)" }}>2 星币</strong> · 年卡会员 7 折
+          </div>
+        </div>
+      </div>
 
-      {/* 调试面板 — 仅 hybrid */}
+      {/* 调试面板 */}
       {activeDebug && (
         <HybridDebugPanel
           open={!!activeDebug}
@@ -346,7 +403,11 @@ function renderContent(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={i} className="font-semibold text-primary">{part.slice(2, -2)}</strong>;
+      return (
+        <strong key={i} style={{ color: "var(--brand)", fontWeight: 600 }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
     }
     return part;
   });
