@@ -38,11 +38,19 @@ function resolveTopbarConfig(pathname: string): TopbarConfig {
   if (pathname.startsWith("/pricing")) {
     return { title: "会员充值", icon: "ti-crown" };
   }
+  if (pathname.startsWith("/promoter")) {
+    return {
+      title: "推广中心",
+      icon: "ti-megaphone",
+      sub: "邀请好友 · 赚取星币",
+    };
+  }
   if (pathname.startsWith("/profile")) {
     return { title: "个人中心", icon: "ti-user" };
   }
   if (pathname.startsWith("/share")) {
-    return { title: "分享中心", icon: "ti-share-3" };
+    // /share 已永久重定向到 /promoter，但仍保留 topbar 兼容（短暂闪现）
+    return { title: "推广中心", icon: "ti-megaphone" };
   }
   return { title: "紫微问道", icon: "ti-home" };
 }

@@ -38,6 +38,21 @@ function LoginForm() {
       .catch(() => setWechatConfigured(false));
   }, []);
 
+  // 从 cookie / localStorage 读取 pendingInviteCode（首页 ?ref= 捕获的）
+  useEffect(() => {
+    try {
+      const fromStorage = localStorage.getItem("pendingInviteCode");
+      if (fromStorage) {
+        setRegInviteCode(fromStorage);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    const m = document.cookie.match(/(?:^|;\s*)pendingInviteCode=([^;]+)/);
+    if (m?.[1]) setRegInviteCode(decodeURIComponent(m[1]));
+  }, []);
+
   const handleWechatLogin = useCallback(
     async (code: string) => {
       setLoading(true);

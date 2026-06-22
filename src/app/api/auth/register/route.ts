@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { generateInviteCode } from "@/lib/utils/invite-code";
-
-// 邀请注册奖励星币数
-const INVITER_REWARD = 20; // 邀请人获得
-const INVITEE_REWARD = 10; // 被邀请人获得
+import { processInviteReward, INVITEE_REWARD } from "@/lib/auth/invite-reward";
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,72 +77,12 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // 处理邀请奖励
+        // 处理邀请奖励（抽到 src/lib/auth/invite-reward.ts，3 个注册入口共用）
         if (inviter) {
-          await prisma.$transaction([
-            // 邀请人获得星币
-            prisma.user.update({
-              where: { id: inviter.id },
-              data: { totalPoints: { increment: INVITER_REWARD } },
-            }),
-            prisma.pointRecord.create({
-              data: {
-                userId: inviter.id,
-                points: INVITER_REWARD,
-                source: "INVITE",
-                detail: `邀请用户 ${username} 注册奖励`,
-              },
-            }),
-            // 被邀请人记录流水
-            prisma.pointRecord.create({
-              data: {
-                userId: user.id,
-                points: INVITEE_REWARD,
-                source: "INVITE",
-                detail: `使用邀请码注册奖励`,
-              },
-            }),
-          ]);
-
-          // 更新或创建推广员档案
-          let promoterProfileId: string;
-          const existingProfile = await prisma.promoterProfile.findUnique({
-            where: { userId: inviter.id },
-          });
-          if (!existingProfile) {
-            const newProfile = await prisma.promoterProfile.create({
-              data: {
-                userId: inviter.id,
-                inviteCode: inviter.inviteCode,
-                level: 1,
-                totalEarned: INVITER_REWARD,
-              },
-            });
-            promoterProfileId = newProfile.id;
-          } else {
-            await prisma.promoterProfile.update({
-              where: { userId: inviter.id },
-              data: { totalEarned: { increment: INVITER_REWARD } },
-            });
-            promoterProfileId = existingProfile.id;
-          }
-
-          // 记录到推广团队（promoterId 指向 PromoterProfile.id）
-          await prisma.promoterTeam.create({
-            data: {
-              promoterId: promoterProfileId,
-              memberId: user.id,
-            },
-          });
-
-          // 记录推广收益（promoterId 指向 PromoterProfile.id）
-          await prisma.promoterEarning.create({
-            data: {
-              promoterId: promoterProfileId,
-              userId: user.id,
-              eventType: "REGISTER",
-              points: INVITER_REWARD,
-            },
+          await processInviteReward({
+            inviterId: inviter.id,
+            newUserId: user.id,
+            newUsername: username,
           });
         }
 

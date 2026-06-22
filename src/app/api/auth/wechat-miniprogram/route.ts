@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db";
 import { jscode2session, isMiniprogramMockMode } from "@/lib/wechat-miniprogram";
 import { signMiniprogramToken } from "@/lib/jwt-miniprogram";
 import { generateUniqueInviteCode } from "@/lib/utils/invite-code";
+import { processInviteReward } from "@/lib/auth/invite-reward";
 
 // 小程序 openid 前缀，与 H5 OAuth 的 wechatOpenId 区分（避免冲突）
 const MP_OPENID_PREFIX = "mp_";
@@ -55,12 +56,17 @@ export async function POST(request: NextRequest) {
     // openid 加前缀，避免与 H5 OAuth 冲突
     const compositeOpenid = MP_OPENID_PREFIX + sessionInfo.openid;
 
+    // 邀请码（从 body 取，可选）
+    const inviteCodeParam =
+      typeof body?.inviteCode === "string" ? body.inviteCode.trim().toUpperCase() : "";
+
     // 2. 查/建 User
     let user = await prisma.user.findFirst({
       where: { wechatOpenId: compositeOpenid },
       include: { membership: true },
     });
 
+    let isNewUser = false;
     if (!user) {
       // 创建新用户
       const inviteCode = await generateUniqueInviteCode();
@@ -78,7 +84,44 @@ export async function POST(request: NextRequest) {
         },
         include: { membership: true },
       });
+      isNewUser = true;
       console.log(`[wechat-miniprogram] 新用户注册: ${user.id} openid=${sessionInfo.openid.slice(0, 8)}***`);
+    }
+
+    // 3. 邀请奖励（仅新用户 + 有邀请码）
+    let inviteReward: { rewarded: boolean; inviterPoints?: number; inviteePoints?: number; reason?: string } = {
+      rewarded: false,
+    };
+    if (isNewUser && inviteCodeParam) {
+      const inviter = await prisma.user.findUnique({
+        where: { inviteCode: inviteCodeParam },
+        select: { id: true },
+      });
+      if (!inviter) {
+        inviteReward = { rewarded: false, reason: "邀请码无效" };
+      } else if (inviter.id === user.id) {
+        inviteReward = { rewarded: false, reason: "不能邀请自己" };
+      } else {
+        try {
+          const result = await processInviteReward({
+            inviterId: inviter.id,
+            newUserId: user.id,
+            newUsername: user.username ?? undefined,
+          });
+          if (result.ok) {
+            inviteReward = {
+              rewarded: true,
+              inviterPoints: result.inviterPoints,
+              inviteePoints: result.inviteePoints,
+            };
+          } else {
+            inviteReward = { rewarded: false, reason: result.reason };
+          }
+        } catch (err) {
+          console.error("[wechat-miniprogram] processInviteReward 失败:", err);
+          inviteReward = { rewarded: false, reason: "奖励发放失败" };
+        }
+      }
     }
 
     // 3. 签 JWT
@@ -99,6 +142,8 @@ export async function POST(request: NextRequest) {
         totalPoints: user.totalPoints,
         inviteCode: user.inviteCode,
       },
+      // 邀请奖励反馈（小程序前端可据提示"获得 X 星币"）
+      inviteReward,
       // 调试信息（生产可考虑去掉）
       mockMode: isMiniprogramMockMode(),
     });

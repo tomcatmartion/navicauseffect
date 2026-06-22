@@ -76,6 +76,8 @@ enum RelationType {
 enum PaymentType {
   MEMBERSHIP
   PER_QUERY
+  COIN_PACK
+  CREDIT_PACK
 }
 
 enum PaymentChannel {
@@ -97,11 +99,20 @@ enum PointSource {
   INVITE
   RECHARGE
   CONSUME
+  COIN_PACK
+  CREDIT_PACK
+  PURCHASE_REBATE
 }
 
 enum SharePlatform {
   WECHAT
   MOMENTS
+  WEIBO
+  QQ
+  LINK
+  QRCODE
+  REDBOOK
+  ZHIHU
 }
 
 model User {
@@ -241,14 +252,17 @@ model PointRecord {
 }
 
 model ShareRecord {
-  id        String        @id @default(cuid())
-  userId    String        @map("user_id")
-  platform  SharePlatform
-  shareUrl  String        @map("share_url")
-  createdAt DateTime      @default(now()) @map("created_at")
+  id           String        @id @default(cuid())
+  userId       String        @map("user_id")
+  platform     SharePlatform
+  shareUrl     String        @map("share_url")
+  rewardPoints Int           @default(0) @map("reward_points")
+  clicks       Int           @default(0)
+  createdAt    DateTime      @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("share_records")
 }
 

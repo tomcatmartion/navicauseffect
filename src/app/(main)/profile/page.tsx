@@ -365,15 +365,15 @@ export default function ProfilePage() {
           <i className="ti ti-chevron-right" />
         </Link>
         <Link
-          href="/share"
+          href="/promoter"
           className="setting-row"
           style={{ textDecoration: "none", color: "inherit" }}
         >
           <div className="sr-l">
-            <div className="sr-icon"><i className="ti ti-share" /></div>
+            <div className="sr-icon"><i className="ti ti-megaphone" /></div>
             <div>
-              <div className="sr-title">分享中心</div>
-              <div className="sr-desc">分享给好友，赚取积分</div>
+              <div className="sr-title">我的推广</div>
+              <div className="sr-desc">邀请好友注册，赚取星币</div>
             </div>
           </div>
           <i className="ti ti-chevron-right" />

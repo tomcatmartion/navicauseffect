@@ -34,6 +34,7 @@ const RAIL_ITEMS: RailItem[] = [
   { href: "/reports", label: "报告", icon: "ti-file-text", match: "prefix" },
   { href: "/compatibility", label: "合盘", icon: "ti-hearts", match: "prefix" },
   { href: "/pricing", label: "会员", icon: "ti-crown", match: "prefix" },
+  { href: "/promoter", label: "推广", icon: "ti-megaphone", match: "prefix" },
 ];
 
 function isItemActive(item: RailItem, pathname: string): boolean {

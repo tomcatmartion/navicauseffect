@@ -20,9 +20,9 @@ type PendingOrder = {
 };
 
 const PLAN_OPTIONS = [
-  { plan: "MONTHLY", label: "月度会员", price: "¥10" },
-  { plan: "QUARTERLY", label: "季度会员", price: "¥25" },
-  { plan: "YEARLY", label: "年度会员", price: "¥99" },
+  { plan: "MONTHLY", label: "月度会员", price: "¥29" },
+  { plan: "QUARTERLY", label: "季度会员", price: "¥79" },
+  { plan: "YEARLY", label: "年度会员", price: "¥268" },
 ];
 
 const codeStyle: CSSProperties = {

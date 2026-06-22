@@ -69,15 +69,15 @@ async function main() {
   }
 
   const plans = [
-    { plan: "MONTHLY" as const, originalPrice: 10 },
-    { plan: "QUARTERLY" as const, originalPrice: 25 },
-    { plan: "YEARLY" as const, originalPrice: 99 },
+    { plan: "MONTHLY" as const, originalPrice: 29 },
+    { plan: "QUARTERLY" as const, originalPrice: 79 },
+    { plan: "YEARLY" as const, originalPrice: 268 },
   ];
 
   for (const p of plans) {
     await prisma.membershipPricing.upsert({
       where: { id: `seed-${p.plan.toLowerCase()}` },
-      update: {},
+      update: { originalPrice: p.originalPrice },
       create: {
         id: `seed-${p.plan.toLowerCase()}`,
         plan: p.plan,
@@ -86,14 +86,42 @@ async function main() {
       },
     });
   }
-  console.log("会员价格初始化完成（包月10/包季25/包年99）");
+  console.log("会员价格初始化完成（月29/季79/年268）");
 
   await prisma.adminConfig.upsert({
     where: { configKey: "per_query_price" },
     update: {},
     create: { configKey: "per_query_price", configValue: 0.5 },
   });
-  console.log("按次付费价格初始化完成（0.5元/次）");
+  console.log("按次付费单价初始化完成（0.5元/次，向后兼容）");
+
+  // ─── 按次付费套餐（4 档，对照 testUI/desktop/pricing.html）─────────────
+  const creditPacks = [
+    { id: "p1", count: 1, price: 6, label: "≈ 1 次 AI 解盘" },
+    { id: "p5", count: 5, price: 28, label: "省 ¥2 · ≈ 1 次报告" },
+    { id: "p20", count: 20, price: 98, label: "省 ¥22 · 含 2 赠送", popular: true },
+    { id: "p100", count: 100, price: 398, label: "省 ¥202 · 含 15 赠送" },
+  ];
+  await prisma.adminConfig.upsert({
+    where: { configKey: "credit_packs" },
+    update: { configValue: JSON.stringify(creditPacks) },
+    create: { configKey: "credit_packs", configValue: JSON.stringify(creditPacks) },
+  });
+  console.log("按次付费套餐初始化完成（4 档：¥6/¥28/¥98/¥398）");
+
+  // ─── 星币充值包（4 档，对照 testUI/desktop/pricing.html）─────────────
+  const coinPacks = [
+    { id: "c50", amount: 50, price: 18, bonus: 0, label: "基础包" },
+    { id: "c200", amount: 200, price: 68, bonus: 20, label: "热门 · 赠 20", popular: true },
+    { id: "c500", amount: 500, price: 158, bonus: 80, label: "赠 80" },
+    { id: "c1000", amount: 1000, price: 288, bonus: 200, label: "最划算 · 赠 200" },
+  ];
+  await prisma.adminConfig.upsert({
+    where: { configKey: "coin_packs" },
+    update: { configValue: JSON.stringify(coinPacks) },
+    create: { configKey: "coin_packs", configValue: JSON.stringify(coinPacks) },
+  });
+  console.log("星币充值包初始化完成（4 档：¥18/¥68/¥158/¥288）");
 
   // ─── 报告模板初始化 ─────────────────────────────────────
   // 来源：原 scripts/seed-report-templates.ts，合并到标准 seed 流程

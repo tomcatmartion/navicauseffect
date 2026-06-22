@@ -2,6 +2,32 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+
+/**
+ * 捕获 URL ?ref=XXXX 邀请码，存入 localStorage + cookie（30 天）。
+ * 注册时表单会读取并附在 body.inviteCode，触发邀请奖励。
+ *
+ * try-catch 防 ad-blocker 阻止 localStorage / cookie 写入。
+ */
+function useRefCapture() {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (!ref) return;
+    try {
+      localStorage.setItem("pendingInviteCode", ref.toUpperCase());
+    } catch {
+      /* ignore */
+    }
+    try {
+      document.cookie = `pendingInviteCode=${ref.toUpperCase()}; max-age=2592000; path=/; SameSite=Lax`;
+    } catch {
+      /* ignore */
+    }
+  }, [searchParams]);
+}
 
 const features = [
   {
@@ -77,6 +103,7 @@ const QUICK_ENTRIES = [
 export default function HomePage() {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated" && !!session?.user;
+  useRefCapture();
 
   // 加载中：显示原 hero（避免水合不匹配）
   if (status === "loading") {
