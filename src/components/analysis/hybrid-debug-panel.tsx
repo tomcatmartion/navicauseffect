@@ -2,9 +2,54 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, X, Cpu, Layers, Timer, MessageSquare } from "lucide-react";
+
+// 本地 shadcn 组件 shim（用 testUI 类替代，便于一次性迁移）
+function Button({
+  children,
+  variant,
+  size,
+  className,
+  ...rest
+}: {
+  children?: React.ReactNode;
+  variant?: "ghost" | "outline" | "default";
+  size?: "sm" | "default" | "icon";
+  className?: string;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const cls = [
+    "btn",
+    variant === "default" ? "btn-primary" : "btn-ghost",
+    size === "sm" ? "btn-sm" : "",
+    className ?? "",
+  ].filter(Boolean).join(" ");
+  return (
+    <button type="button" className={cls} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+function Badge({
+  children,
+  variant,
+  className,
+}: {
+  children: React.ReactNode;
+  variant?: "outline" | "secondary";
+  className?: string;
+}) {
+  return (
+    <span
+      className={`chip ${className ?? ""}`}
+      style={{
+        fontSize: 11,
+        ...(variant === "secondary" ? { background: "var(--soft)" } : {}),
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 type PromptMessage = {
   role: "system" | "user" | "assistant";
@@ -34,13 +79,13 @@ type Props = {
 /** 可折叠的区块 */
 function Section({
   label,
-  icon: Icon,
+  icon,
   badge,
   defaultOpen = false,
   children,
 }: {
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: string; // ti-* icon name (e.g. "ti-layers")
   badge?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -53,12 +98,8 @@ function Section({
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40"
         onClick={() => setOpen(!open)}
       >
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
-        <Icon className="h-4 w-4 shrink-0 text-primary" />
+        <i className={`ti ${open ? "ti-chevron-down" : "ti-chevron-right"} shrink-0`} style={{ fontSize: 14, color: "var(--text-muted)" }} />
+        <i className={`ti ${icon} shrink-0`} style={{ fontSize: 14, color: "var(--brand)" }} />
         <span className="text-xs font-semibold uppercase tracking-wide text-primary">
           {label}
         </span>
@@ -248,7 +289,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               onClick={onClose}
               aria-label="关闭"
             >
-              <X className="h-5 w-5" />
+              <i className="ti ti-x" style={{ fontSize: 18 }} />
             </Button>
           </div>
 
@@ -259,7 +300,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
           >
             <div className="space-y-3 pb-1">
               {/* 阶段与问题 */}
-              <Section label="阶段与问题" icon={Layers} defaultOpen={true}>
+              <Section label="阶段与问题" icon="ti-layers" defaultOpen={true}>
                 <div className="space-y-2 text-xs">
                   <div>
                     <span className="mr-2 text-muted-foreground">用户问题：</span>
@@ -283,7 +324,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               </Section>
 
               {/* 计算结果 */}
-              <Section label="确定性计算结果" icon={Cpu} defaultOpen={true}>
+              <Section label="确定性计算结果" icon="ti-cpu" defaultOpen={true}>
                 <div className="space-y-2 text-xs">
                   {palaceCount !== undefined && (
                     <div>
@@ -318,7 +359,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               {debugInfo.irDataJson && (
                 <Section
                   label="#2 IR 数据注入（计算结果）"
-                  icon={Cpu}
+                  icon="ti-cpu"
                   badge={`${debugInfo.irDataJson.length} 字符`}
                   defaultOpen={false}
                 >
@@ -335,7 +376,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               {debugInfo.promptMessages && debugInfo.promptMessages.some(m => m.role === "user") && (
                 <Section
                   label="#5 用户问题（组装 Prompt）"
-                  icon={MessageSquare}
+                  icon="ti-message-2"
                   defaultOpen={false}
                 >
                   <div className="space-y-2">
@@ -351,7 +392,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               {/* 耗时分析 */}
               <Section
                 label="耗时分析"
-                icon={Timer}
+                icon="ti-clock-pause"
                 badge={`${timingEntries.length} 步`}
                 defaultOpen={false}
               >
@@ -369,7 +410,7 @@ export function HybridDebugPanel({ open, onClose, debugInfo }: Props) {
               {promptMessages && promptMessages.length > 0 && (
                 <Section
                   label="组装后的 Prompt 消息"
-                  icon={MessageSquare}
+                  icon="ti-message-2"
                   badge={`${promptMessages.length} 条`}
                   defaultOpen={false}
                 >
