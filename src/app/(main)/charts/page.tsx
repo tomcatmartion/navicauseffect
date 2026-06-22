@@ -1,24 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  Loader2,
-  Plus,
-  Star,
-  Trash2,
-  FileText,
-  MessageSquare,
-  Crown,
-  AlertCircle,
-  Sparkles,
-} from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,287 +85,356 @@ export default function ChartsListPage() {
   const fetchCharts = useCallback(async () => {
     try {
       const res = await fetch("/api/charts");
-      if (res.ok) {
-        const data = await res.json();
-        setCharts(data.charts ?? []);
-      }
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (data.charts) setCharts(data.charts);
+    } catch (e) {
+      console.error("加载命盘失败:", e);
     }
   }, []);
 
   const fetchIdentities = useCallback(async () => {
     try {
       const res = await fetch("/api/identities");
-      if (res.ok) {
-        const data = await res.json();
-        setIdentities(data.identities ?? []);
-      }
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (data.identities) setIdentities(data.identities);
+    } catch (e) {
+      console.error("加载命主失败:", e);
     }
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.push("/auth/login");
-      return;
-    }
-    if (sessionStatus === "authenticated") {
-      Promise.all([fetchCharts(), fetchIdentities()]).finally(() => setLoading(false));
-    }
-  }, [sessionStatus, router, fetchCharts, fetchIdentities]);
+    if (sessionStatus !== "authenticated") return;
+    setLoading(true);
+    Promise.all([fetchCharts(), fetchIdentities()]).finally(() => setLoading(false));
+  }, [sessionStatus, fetchCharts, fetchIdentities]);
 
-  const handleSetPrimary = async (chart: ChartSummary) => {
-    try {
-      const res = await fetch(`/api/charts/${chart.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPrimary: true }),
-      });
-      if (res.ok) {
-        toast.success(`已设为「${chart.identityId}」默认盘`);
-        fetchCharts();
-      } else {
-        toast.error("设置失败");
-      }
-    } catch {
-      toast.error("网络错误");
-    }
-  };
-
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       const res = await fetch(`/api/charts/${deleteTarget.id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("命盘已删除");
-        setDeleteTarget(null);
-        fetchCharts();
-      } else {
-        toast.error("删除失败");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "删除失败");
       }
-    } catch {
-      toast.error("网络错误");
+      toast.success(`已删除「${deleteTarget.name}」`);
+      setDeleteTarget(null);
+      await fetchCharts();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "删除失败");
     } finally {
       setDeleting(false);
     }
-  };
+  }, [deleteTarget, fetchCharts]);
+
+  const handleSetPrimary = useCallback(
+    async (chart: ChartSummary) => {
+      try {
+        const res = await fetch(`/api/charts/${chart.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isPrimary: true }),
+        });
+        if (!res.ok) throw new Error("设置失败");
+        toast.success(`已将「${chart.name}」设为命主默认盘`);
+        await fetchCharts();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "设置失败");
+      }
+    },
+    [fetchCharts],
+  );
 
   // 按命主分组
-  const grouped: Record<string, { identity?: IdentityBrief; charts: ChartSummary[] }> = {};
-  for (const chart of charts) {
-    if (!grouped[chart.identityId]) {
-      grouped[chart.identityId] = {
-        identity: identities.find((i) => i.id === chart.identityId),
-        charts: [],
-      };
+  const grouped = useMemo(() => {
+    const map: Record<string, { identity?: IdentityBrief; charts: ChartSummary[] }> = {};
+    for (const chart of charts) {
+      if (!map[chart.identityId]) {
+        map[chart.identityId] = { charts: [] };
+      }
+      map[chart.identityId].charts.push(chart);
     }
-    grouped[chart.identityId].charts.push(chart);
+    for (const identity of identities) {
+      if (map[identity.id]) {
+        map[identity.id].identity = identity;
+      }
+    }
+    // 每组内：默认盘排前 + 按更新时间倒序
+    return Object.entries(map)
+      .map(([identityId, group]) => ({
+        identityId,
+        identity: group.identity,
+        charts: group.charts.sort((a, b) => {
+          if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }),
+      }))
+      .sort((a, b) => {
+        const aHasPrimary = a.charts.some((c) => c.isPrimary) ? 0 : 1;
+        const bHasPrimary = b.charts.some((c) => c.isPrimary) ? 0 : 1;
+        return aHasPrimary - bHasPrimary;
+      });
+  }, [charts, identities]);
+
+  // 未登录
+  if (sessionStatus === "unauthenticated") {
+    return (
+      <div style={{ maxWidth: 480, margin: "80px auto", padding: 24, textAlign: "center" }}>
+        <i className="ti ti-lock" style={{ fontSize: 48, color: "var(--text-muted)" }} />
+        <p style={{ marginTop: 16, color: "var(--text-muted)" }}>请先登录后查看命盘</p>
+        <Button className="btn btn-primary" onClick={() => router.push("/auth/login")}>
+          去登录
+        </Button>
+      </div>
+    );
   }
 
   // 加载中
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-primary/40 animate-spin" />
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+        <Loader2 className="size-8 animate-spin" style={{ color: "var(--brand)" }} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* 顶部导航 */}
-      <div className="sticky top-16 z-40 bg-background/90 backdrop-blur-md border-b border-primary/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "20px 24px 60px" }}>
+      {/* 标题栏 */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+        }}
+      >
+        <div>
+          <h2
+            className="home-section-title"
+            style={{ margin: 0, fontSize: 18, color: "var(--brand)", fontFamily: "var(--font-head)" }}
           >
-            <ArrowLeft className="w-4 h-4" />
-            返回
-          </button>
-          <h1 className="font-serif-sc text-sm font-bold text-foreground">我的命盘</h1>
-          <Button
-            size="sm"
-            className="bg-primary hover:bg-primary/90"
+            <i className="ti ti-clipboard-list" style={{ marginRight: 8 }} />
+            我的命盘
+          </h2>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+            共 {charts.length} 张 · 按命主分组
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => router.push("/chart")}
+        >
+          <i className="ti ti-plus" style={{ marginRight: 4 }} />
+          新建排盘
+        </button>
+      </div>
+
+      {charts.length === 0 ? (
+        <div className="card" style={{ padding: 32, textAlign: "center" }}>
+          <i
+            className="ti ti-clipboard-list"
+            style={{ fontSize: 48, color: "var(--text-muted)", opacity: 0.4 }}
+          />
+          <p style={{ marginTop: 16, fontWeight: 600, color: "var(--brand)" }}>
+            还没有保存的命盘
+          </p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+            排盘后点击「保存为命盘」，可在 AI 对话、报告生成、合盘分析中复用
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 20 }}
             onClick={() => router.push("/chart")}
           >
-            <Plus className="w-4 h-4 mr-1" />
-            排盘
-          </Button>
+            <i className="ti ti-plus" style={{ marginRight: 6 }} />
+            开始排盘
+          </button>
         </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {charts.length === 0 ? (
-          <Card className="border-primary/10">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-primary/5 flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-primary/40" />
-              </div>
-              <div>
-                <p className="font-serif-sc text-sm font-bold text-foreground">还没有保存的命盘</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  排盘后点击「保存为命盘」，可在 AI 对话、报告生成、合盘分析中复用
-                </p>
-              </div>
-              <Button
-                className="bg-primary hover:bg-primary/90"
-                onClick={() => router.push("/chart")}
+      ) : (
+        grouped.map((group) => (
+          <div key={group.identityId} style={{ marginBottom: 24 }}>
+            {/* 命主分组标题 */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "0 4px 8px",
+                borderBottom: "1px solid var(--line-light)",
+                marginBottom: 10,
+              }}
+            >
+              <i className="ti ti-user" style={{ fontSize: 14, color: "var(--brand)" }} />
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--brand)",
+                  fontFamily: "var(--font-head)",
+                }}
               >
-                <Plus className="w-4 h-4 mr-1" />
-                开始排盘
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          Object.entries(grouped).map(([identityId, group]) => (
-            <div key={identityId} className="space-y-2">
-              {/* 命主分组标题 */}
-              <div className="flex items-center gap-2 px-1">
-                <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                  {group.identity?.name ?? "未知命主"}
-                </h2>
-                {group.identity && (
-                  <Badge variant="outline" className="text-[10px] border-primary/20 text-primary">
-                    {group.identity.gender === "MALE" ? "男" : "女"}
-                  </Badge>
-                )}
-              </div>
-
-              {/* 命盘卡片 */}
-              <div className="space-y-2">
-                {group.charts.map((chart) => (
-                  <Card
-                    key={chart.id}
-                    className="border-primary/10 hover:border-primary/30 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/charts/${chart.id}`)}
-                  >
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2 min-w-0 flex-1">
-                          {chart.isPrimary ? (
-                            <Crown className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                          ) : (
-                            <Star className="w-4 h-4 text-muted-foreground/40 shrink-0 mt-0.5" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-bold text-foreground truncate">
-                                {chart.name}
-                              </span>
-                              {chart.isPrimary && (
-                                <Badge className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                                  默认
-                                </Badge>
-                              )}
-                              <Badge variant="outline" className="text-[10px]">
-                                {SOURCE_LABELS[chart.source]}
-                              </Badge>
-                            </div>
-                            {chart.note && (
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                                {chart.note}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground shrink-0 text-right">
-                          {new Date(chart.createdAt).toLocaleDateString("zh-CN")}
-                        </div>
-                      </div>
-
-                      {/* 命盘摘要 */}
-                      {chart.summary ? (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="rounded-md bg-primary/5 px-2 py-1">
-                            <span className="text-muted-foreground">命宫：</span>
-                            <span className="text-foreground font-medium">
-                              {chart.summary.mingGongMajorStars.join("·") || "空宫"}
-                            </span>
-                          </div>
-                          <div className="rounded-md bg-primary/5 px-2 py-1">
-                            <span className="text-muted-foreground">身宫：</span>
-                            <span className="text-foreground font-medium">{chart.summary.shenGongName}</span>
-                          </div>
-                          <div className="rounded-md bg-primary/5 px-2 py-1">
-                            <span className="text-muted-foreground">生年：</span>
-                            <span className="text-foreground font-medium">{chart.summary.birthGanZhi}</span>
-                          </div>
-                          <div className="rounded-md bg-primary/5 px-2 py-1">
-                            <span className="text-muted-foreground">五行局：</span>
-                            <span className="text-foreground font-medium">{chart.summary.fiveElementsClass}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">
-                          {chart.birthSolarDate} · {timeIndexLabel(chart.timeIndex)}时
-                          {chart.birthCity ? ` · ${chart.birthCity}` : ""}
-                        </div>
-                      )}
-
-                      {/* 操作 */}
-                      <div className="flex items-center gap-2 pt-1 border-t border-primary/5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/charts/${chart.id}?action=chat`);
-                          }}
-                        >
-                          <MessageSquare className="w-3 h-3 mr-1" />
-                          AI 解盘
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/charts/${chart.id}?action=report`);
-                          }}
-                        >
-                          <FileText className="w-3 h-3 mr-1" />
-                          生成报告
-                        </Button>
-                        {!chart.isPrimary && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs h-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSetPrimary(chart);
-                            }}
-                          >
-                            <Star className="w-3 h-3 mr-1" />
-                            设默认
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7 ml-auto text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(chart);
-                          }}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                {group.identity?.name ?? "未知命主"}
+              </span>
+              {group.identity && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 8px",
+                    background: "var(--soft)",
+                    border: "1px solid var(--line)",
+                    borderRadius: "var(--radius-sm)",
+                    color: "var(--brand)",
+                  }}
+                >
+                  {group.identity.gender === "MALE" ? "男" : "女"} ·{" "}
+                  {group.identity.relation || "本人"}
+                </span>
+              )}
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
+                {group.charts.length} 张
+              </span>
             </div>
-          ))
-        )}
-      </div>
+
+            {/* 命盘卡片列表 */}
+            <div>
+              {group.charts.map((chart) => (
+                <div
+                  key={chart.id}
+                  className="chart-list-item"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => router.push(`/charts/${chart.id}`)}
+                >
+                  {/* thumb */}
+                  <div
+                    className="thumb"
+                    style={{
+                      background: chart.isPrimary ? "var(--brand)" : "var(--soft)",
+                      color: chart.isPrimary ? "#fff" : "var(--brand)",
+                    }}
+                    title={chart.isPrimary ? "命主默认盘" : undefined}
+                  >
+                    {chart.isPrimary ? (
+                      <i className="ti ti-crown" />
+                    ) : (
+                      chart.name.charAt(0) || "?"
+                    )}
+                  </div>
+
+                  {/* info */}
+                  <div className="info">
+                    <div className="name">
+                      {chart.name}
+                      {chart.isPrimary && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            padding: "1px 6px",
+                            background: "var(--brand)",
+                            color: "#fff",
+                            borderRadius: "var(--radius-sm)",
+                          }}
+                        >
+                          默认
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 10,
+                          padding: "1px 6px",
+                          background: "var(--soft)",
+                          border: "1px solid var(--line)",
+                          borderRadius: "var(--radius-sm)",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        {SOURCE_LABELS[chart.source]}
+                      </span>
+                    </div>
+                    {chart.summary ? (
+                      <div className="meta">
+                        命宫 <strong style={{ color: "var(--brand)" }}>
+                          {chart.summary.mingGongMajorStars.join("·") || "空宫"}
+                        </strong>{" "}
+                        · 身宫 {chart.summary.shenGongName} ·{" "}
+                        {chart.summary.birthGanZhi} · {chart.summary.fiveElementsClass}
+                      </div>
+                    ) : (
+                      <div className="meta">
+                        {chart.birthSolarDate} · {timeIndexLabel(chart.timeIndex)}时
+                        {chart.birthCity ? ` · ${chart.birthCity}` : ""}
+                      </div>
+                    )}
+                    {chart.note && (
+                      <div
+                        className="meta"
+                        style={{ fontStyle: "italic", opacity: 0.7 }}
+                      >
+                        📝 {chart.note}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* actions */}
+                  <div
+                    className="card-actions"
+                    style={{ flexShrink: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="AI 解盘"
+                      onClick={() => router.push(`/chart?chartRecordId=${chart.id}`)}
+                    >
+                      <i className="ti ti-message-2" /> 解盘
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="生成报告"
+                      onClick={() => router.push(`/reports/new?chartId=${chart.id}`)}
+                    >
+                      <i className="ti ti-file-text" /> 报告
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="合盘"
+                      onClick={() => router.push(`/compatibility?selfChartId=${chart.id}`)}
+                    >
+                      <i className="ti ti-hearts" /> 合盘
+                    </button>
+                    {!chart.isPrimary && (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        title="设为命主默认盘"
+                        onClick={() => handleSetPrimary(chart)}
+                      >
+                        <i className="ti ti-star" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="iconbtn"
+                      title="删除"
+                      style={{ width: 32, height: 32 }}
+                      onClick={() => setDeleteTarget(chart)}
+                    >
+                      <Trash2 style={{ width: 14, height: 14 }} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* 删除确认 */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>

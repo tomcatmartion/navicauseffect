@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   Loader2,
   Heart,
   Sparkles,
@@ -174,26 +173,8 @@ function CompatibilityContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* 顶部导航 */}
-      <div className="sticky top-16 z-40 bg-background/90 backdrop-blur-md border-b border-primary/10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回
-          </button>
-          <h1 className="font-serif-sc text-sm font-bold text-foreground flex items-center gap-1">
-            <Heart className="w-4 h-4 text-primary" />
-            合盘分析
-          </h1>
-          <div className="w-12" />
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "20px 24px 60px" }}>
+      <div className="space-y-4">
         {charts.length < 2 ? (
           <Card className="border-primary/10">
             <CardContent className="p-8 text-center space-y-3">
