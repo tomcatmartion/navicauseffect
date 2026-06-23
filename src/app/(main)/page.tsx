@@ -29,39 +29,34 @@ function useRefCapture() {
   }, [searchParams]);
 }
 
-const features = [
+// 首页 4 大核心功能（对照 Downloads/index.html mockup）
+const FEATURES = [
   {
-    title: "命理排盘",
-    desc: "基于紫微斗数精准排盘，生成命盘、大限盘、流年盘，支持阴历/阳历与真太阳时自动校正",
-    icon: "☯",
+    title: "精准排盘",
+    desc: "生辰信息秒速生成个人命盘",
+    icon: "ti-spiral",
   },
   {
-    title: "AI 智能解析",
-    desc: "四大顶尖 AI 大模型深度解读命盘，融合紫微智慧与心理学视角，给出全方位分析",
-    icon: "🧠",
+    title: "关系分析",
+    desc: "太岁入卦，洞察人际相处之道",
+    icon: "ti-users",
   },
   {
-    title: "性格分析",
-    desc: "从命宫主星解读你的性格密码，结合大五人格理论，帮助你更好地认识自己",
-    icon: "🔮",
+    title: "行运解读",
+    desc: "大限流年，把握当下时机",
+    icon: "ti-trending-up",
   },
   {
-    title: "感情婚姻",
-    desc: "夫妻宫与桃花星深度分析，结合依恋理论，为你的感情生活提供温暖指引",
-    icon: "💕",
+    title: "知识体系",
+    desc: "星曜宫位，由浅入深系统学习",
+    icon: "ti-books",
   },
-  {
-    title: "事业财运",
-    desc: "官禄宫与财帛宫联合解读，结合职业心理学，助你找到事业发展最优路径",
-    icon: "📈",
-  },
-  {
-    title: "情绪疏导",
-    desc: "福德宫分析内在情绪模式，融合认知行为疗法，提供专业的心理疏导建议",
-    icon: "🌿",
-  },
-];
+] as const;
 
+// 首页 tag（对照 mockup）
+const TAGS = ["紫云派斗数", "太岁入卦法", "AI 深度解读", "性格为底 · 行运为表"] as const;
+
+// 已登录快捷入口（保留原逻辑）
 const QUICK_ENTRIES = [
   {
     href: "/chart",
@@ -92,10 +87,10 @@ const QUICK_ENTRIES = [
     color: "var(--warning)",
   },
   {
-    href: "/share",
-    title: "分享得币",
+    href: "/promoter",
+    title: "推广得币",
     desc: "邀请好友注册获得星币",
-    icon: "ti-share-3",
+    icon: "ti-megaphone",
     color: "var(--success)",
   },
 ];
@@ -202,179 +197,304 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* 功能介绍（折叠区） */}
-        <details style={{ marginTop: 12 }}>
-          <summary
-            style={{
-              cursor: "pointer",
-              fontSize: 13,
-              color: "var(--text-muted)",
-              padding: "10px 0",
-            }}
-          >
-            <i className="ti ti-info-circle" style={{ marginRight: 6 }} />
-            了解紫微问道完整功能
-          </summary>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-              gap: 12,
-              marginTop: 12,
-            }}
-          >
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="card"
-                style={{ padding: 16 }}
-              >
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{f.icon}</div>
-                <h4
-                  style={{
-                    fontSize: 14,
-                    color: "var(--brand)",
-                    fontWeight: 600,
-                    marginBottom: 4,
-                  }}
-                >
-                  {f.title}
-                </h4>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
-                  {f.desc}
-                </p>
-              </div>
-            ))}
-          </div>
-        </details>
-      </div>
-    );
-  }
-
-  // 未登录：原 hero + features + CTA
-  return (
-    <div className="flex flex-col">
-      {/* Hero Section */}
-      <section
-        className="relative overflow-hidden"
-        style={{
-          background: "linear-gradient(180deg, rgba(139, 26, 26, 0.05), transparent)",
-        }}
-      >
-        <div className="relative mx-auto max-w-4xl px-4 py-14 text-center md:py-24">
-          <p
-            className="mb-4 text-xs tracking-[0.3em]"
-            style={{ color: "var(--text-muted)" }}
-          >
-            传统智慧 × 现代科学
-          </p>
-          <h1
-            className="font-serif-sc mb-2 text-4xl font-bold leading-tight md:text-6xl"
-            style={{ color: "var(--brand)" }}
-          >
-            观己观人观世界
-          </h1>
-          <h2
-            className="font-serif-sc mb-8 text-4xl font-bold leading-tight md:text-6xl"
-            style={{ color: "var(--brand)" }}
-          >
-            知微知著知真如
-          </h2>
-          <p
-            className="mx-auto mb-10 max-w-2xl text-base leading-relaxed md:text-lg"
-            style={{ color: "var(--text-muted)" }}
-          >
-            古老的紫微斗数解码生命轨迹，现代心理科学洞察情绪密码。
-            透过星盘与数据，提供经过双重验证的人生优化方案。
-          </p>
-          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link href="/chart">
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ fontSize: 16, padding: "12px 32px" }}
-              >
-                立即排盘
-              </button>
-            </Link>
-            <Link href="/pricing">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ fontSize: 16, padding: "12px 32px" }}
-              >
-                了解会员
-              </button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="mx-auto max-w-6xl px-4 py-16 md:py-24">
-        <div className="mb-12 text-center">
-          <h2
-            className="font-serif-sc mb-3 text-2xl font-bold md:text-3xl"
-            style={{ color: "var(--brand)" }}
-          >
-            核心服务
-          </h2>
-          <p style={{ color: "var(--text-muted)" }}>
-            从命理智慧到心理科学，全方位守护你的人生旅程
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((f) => (
-            <div
-              key={f.title}
-              className="card"
-              style={{ padding: 24, transition: "transform .15s, border-color .2s" }}
-            >
-              <div
-                className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
-                style={{ background: "var(--soft)", color: "var(--brand)" }}
-              >
-                {f.icon}
-              </div>
-              <h3
-                className="mb-2 text-lg font-semibold"
-                style={{ color: "var(--brand)" }}
+        {/* 4 大核心功能（对照 mockup） */}
+        <h3
+          className="home-section-title"
+          style={{ fontSize: 15, color: "var(--brand)", marginBottom: 12, marginTop: 28 }}
+        >
+          <i className="ti ti-sparkles" style={{ marginRight: 6 }} />
+          核心功能
+        </h3>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {FEATURES.map((f) => (
+            <div key={f.title} className="card" style={{ padding: 18, textAlign: "center" }}>
+              <i
+                className={`ti ${f.icon}`}
+                style={{ fontSize: 26, color: "var(--brand)", display: "block", marginBottom: 10 }}
+              />
+              <h4
+                style={{
+                  fontSize: 14,
+                  color: "var(--brand)",
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
               >
                 {f.title}
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "var(--text-muted)" }}
-              >
+              </h4>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
                 {f.desc}
               </p>
             </div>
           ))}
         </div>
-      </section>
+      </div>
+    );
+  }
 
-      {/* CTA */}
+  // ────────────────────────────────────────────────────────────
+  // 未登录：对照 Downloads/index.html 首页内容
+  //   顶部品牌条 · 大字 slogan · 装饰线 · 紫云理念描述 · 4 tag · 2 CTA · 4 features
+  // ────────────────────────────────────────────────────────────
+  return (
+    <div style={{ width: "100%" }}>
+      {/* Hero（首页主视觉） */}
       <section
         style={{
-          background:
-            "linear-gradient(90deg, rgba(139, 26, 26, 0.05), rgba(44, 74, 30, 0.08))",
+          position: "relative",
+          textAlign: "center",
+          padding: "48px 24px 12px",
+          overflow: "hidden",
         }}
       >
-        <div className="mx-auto max-w-4xl px-4 py-16 text-center md:py-20">
-          <h2
-            className="font-serif-sc mb-4 text-2xl font-bold md:text-3xl"
-            style={{ color: "var(--brand)" }}
+        {/* 背景径向光晕 */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background:
+              "radial-gradient(circle at 50% 42%, rgba(139, 111, 71, 0.09), transparent 62%)",
+          }}
+        />
+
+        {/* 顶部品牌条：微著 | 传统斗数 */}
+        <div style={{ position: "relative", zIndex: 1, marginBottom: 36 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 14,
+            }}
           >
-            开启你的自我探索之旅
-          </h2>
-          <p className="mb-8" style={{ color: "var(--text-muted)" }}>
+            <span
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                color: "var(--brand)",
+                letterSpacing: 4,
+                fontFamily: "var(--font-head)",
+              }}
+            >
+              微著
+            </span>
+            <span
+              style={{
+                display: "inline-block",
+                width: 1,
+                height: 20,
+                background: "var(--line)",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 13,
+                color: "var(--text-muted)",
+                letterSpacing: 3,
+              }}
+            >
+              传统斗数
+            </span>
+          </span>
+        </div>
+
+        {/* 大字 slogan */}
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <h1
+            style={{
+              fontSize: 48,
+              fontWeight: 700,
+              color: "var(--brand)",
+              fontFamily: "var(--font-head)",
+              lineHeight: 1.5,
+              letterSpacing: 6,
+              margin: 0,
+            }}
+          >
+            <span style={{ display: "block" }}>观己 观人 观世界</span>
+            <span style={{ display: "block" }}>知微 知著 知真如</span>
+          </h1>
+
+          {/* 装饰线 + 菱形印章 */}
+          <div
+            aria-hidden
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 14,
+              margin: "22px 0 4px",
+            }}
+          >
+            <span
+              style={{
+                width: 72,
+                height: 1,
+                background: "linear-gradient(90deg, transparent, var(--line))",
+              }}
+            />
+            <span
+              style={{
+                width: 9,
+                height: 9,
+                border: "1px solid var(--line)",
+                transform: "rotate(45deg)",
+                display: "inline-block",
+              }}
+            />
+            <span
+              style={{
+                width: 72,
+                height: 1,
+                background: "linear-gradient(90deg, var(--line), transparent)",
+              }}
+            />
+          </div>
+
+          {/* 紫云理念描述 */}
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-muted)",
+              lineHeight: 2,
+              maxWidth: 600,
+              margin: "18px auto 0",
+            }}
+          >
+            秉承紫云老师传统斗数理念
+            <br />
+            以太岁入卦法厘清人与人之间的关系——亲子、感情、合作、职场。
+            <br />
+            性格为底，行运为表，结合你的实际处境，解答当下疑惑。
+          </p>
+
+          {/* 4 个 tag */}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              justifyContent: "center",
+              flexWrap: "wrap",
+              margin: "24px 0 30px",
+            }}
+          >
+            {TAGS.map((t) => (
+              <span
+                key={t}
+                className="chip"
+                style={{
+                  fontSize: 12,
+                  padding: "6px 14px",
+                  background: "var(--panel)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 20,
+                  color: "var(--brand)",
+                }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+
+          {/* 2 CTA */}
+          <div
+            style={{
+              display: "flex",
+              gap: 14,
+              justifyContent: "center",
+              flexWrap: "wrap",
+              marginBottom: 44,
+            }}
+          >
+            <Link href="/chart">
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: 15, padding: "13px 32px" }}
+              >
+                <i className="ti ti-spiral" style={{ marginRight: 6 }} />
+                开始排盘
+              </button>
+            </Link>
+            <a href="#features">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 15, padding: "13px 32px" }}
+              >
+                <i className="ti ti-books" style={{ marginRight: 6 }} />
+                了解斗数
+              </button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* 4 大核心功能 */}
+      <section
+        id="features"
+        style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px 60px", scrollMarginTop: 80 }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 16,
+          }}
+        >
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="card"
+              style={{
+                padding: "22px 14px",
+                textAlign: "center",
+                transition: "transform .2s, border-color .2s",
+              }}
+            >
+              <i
+                className={`ti ${f.icon}`}
+                style={{
+                  fontSize: 28,
+                  color: "var(--brand)",
+                  display: "block",
+                  marginBottom: 10,
+                }}
+              />
+              <h4
+                style={{
+                  fontSize: 14,
+                  color: "var(--brand)",
+                  fontWeight: 600,
+                  marginBottom: 6,
+                }}
+              >
+                {f.title}
+              </h4>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+                {f.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* 底部 CTA */}
+        <div style={{ textAlign: "center", marginTop: 36 }}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
             无需付费，即刻体验紫微排盘与 AI 智能解析
           </p>
           <Link href="/chart">
             <button
               type="button"
               className="btn btn-primary"
-              style={{ fontSize: 16, padding: "12px 40px" }}
+              style={{ fontSize: 15, padding: "12px 36px" }}
             >
               免费体验
             </button>
