@@ -18,7 +18,7 @@ export function Footer() {
       style={{
         position: "fixed",
         bottom: 0,
-        left: 0,
+        left: "84px",  /* 对应 .rail 宽度，避开左侧导航区 */
         right: 0,
         zIndex: 5,
         background: "var(--bg)",
