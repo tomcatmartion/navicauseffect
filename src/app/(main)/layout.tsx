@@ -31,8 +31,10 @@ export default function MainLayout({
       <div className="main">
         <Topbar />
         {/* 内容滚动容器：testUI 原本 .view.overflow:hidden 是 SPA 内嵌滚动设计，
-            现阶段（业务页尚未全部重构）需要让长列表页可垂直滚动，故用 overflow-y-auto */}
-        <div className="flex-1 overflow-y-auto">
+            现阶段（业务页尚未全部重构）需要让长列表页可垂直滚动，故用 overflow-y-auto。
+            padding-bottom 给桌面端 fixed footer 让位（footer 约 60px，留 80px 缓冲）。
+            移动端不需要（由 mobile-tabbar 占据，tabbar 是 absolute 不抢滚动空间）。 */}
+        <div className="flex-1 overflow-y-auto" style={{ paddingBottom: "80px" }}>
           {children}
           <Footer />
         </div>
