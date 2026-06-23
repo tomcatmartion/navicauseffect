@@ -21,9 +21,7 @@ export function Footer() {
         left: 0,
         right: 0,
         zIndex: 5,
-        background: "var(--panel)",
-        borderTop: "1px solid var(--line)",
-        boxShadow: "0 -2px 12px rgba(0,0,0,.04)",
+        background: "var(--bg)",
         padding: "10px 32px",
         color: "var(--text-muted)",
       }}
