@@ -76,6 +76,16 @@ export default function ChartPage() {
   const [horoscopeTimeIndex, setHoroscopeTimeIndex] = useState(0);
   const [birthData, setBirthData] = useState<BirthData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // 是否正在从 sessionStorage / URL chartRecordId 恢复命盘
+  // 关键：惰性初始化「同步」判断是否有待恢复数据，避免首帧渲染表单后又被异步替换
+  // （曾经出现的 bug：刷新 /chart 时先闪一下 BirthInputForm，再切到对话页）
+  const [isHydrating, setIsHydrating] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const hasSession = !!sessionStorage.getItem(CHART_STATE_KEY);
+    const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
+    return hasSession || hasUrlParam;
+  });
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
   const [restoredChartData, setRestoredChartData] = useState<Record<string, unknown> | null>(null);
   const [chartPanelOpen, setChartPanelOpen] = useState(true);
@@ -131,7 +141,12 @@ export default function ChartPage() {
   // 恢复 sessionStorage
   useEffect(() => {
     const raw = sessionStorage.getItem(CHART_STATE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      // 无 sessionStorage 数据：若 URL 同时有 chartRecordId，让 chartRecordId useEffect 负责关闭 hydrating
+      const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
+      if (!hasUrlParam) setIsHydrating(false);
+      return;
+    }
     (async () => {
       try {
         const saved = JSON.parse(raw);
@@ -154,7 +169,11 @@ export default function ChartPage() {
         }
         setParentBirthYears(saved.parentBirthYears);
       } catch {
-        // 忽略
+        // 忽略，落入新建态
+      } finally {
+        // 若 URL 也有 chartRecordId，留给 chartRecordId useEffect 关闭（避免闪现）
+        const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
+        if (!hasUrlParam) setIsHydrating(false);
       }
     })();
   }, []);
@@ -163,7 +182,11 @@ export default function ChartPage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const chartRecordId = searchParams.get("chartRecordId");
-    if (!chartRecordId || astrolabe) return;
+    // astrolabe 已存在 → sessionStorage 路径已恢复成功，无需再 fetch，关 hydrating
+    if (!chartRecordId || astrolabe) {
+      if (astrolabe) setIsHydrating(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(`/api/charts/${chartRecordId}`);
@@ -209,6 +232,8 @@ export default function ChartPage() {
         );
       } catch {
         // 静默失败
+      } finally {
+        setIsHydrating(false);
       }
     })();
   }, [searchParams, astrolabe]);
@@ -305,6 +330,29 @@ export default function ChartPage() {
   const toggleChartPanel = useCallback(() => {
     setChartPanelOpen((v) => !v);
   }, []);
+
+  // ── 恢复中：显示加载占位（避免闪现 BirthInputForm）──────────────
+  // isHydrating 在「同步首帧」时就根据 sessionStorage / URL 参数确定：
+  //   - 有待恢复数据 → true，显示加载态，等待异步恢复完成
+  //   - 无待恢复数据 → false，立即落入下方表单分支
+  if (isHydrating && !astrolabe) {
+    return (
+      <div
+        style={{
+          minHeight: 360,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          gap: 12,
+        }}
+      >
+        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 24, color: "var(--brand)" }} />
+        <p style={{ fontSize: 13, margin: 0 }}>正在恢复命盘…</p>
+      </div>
+    );
+  }
 
   // ── 新建态：出生信息表单 ─────────────────────────────────
   if (!astrolabe) {
