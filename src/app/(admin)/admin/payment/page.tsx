@@ -86,7 +86,15 @@ export default function PaymentConfigPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">支付配置</h2>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <i className="ti ti-credit-card text-xl" style={{ color: "var(--brand)" }} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">支付配置</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">微信支付与支付宝接口参数配置</p>
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
@@ -94,7 +102,21 @@ export default function PaymentConfigPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">微信支付 V3</CardTitle>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: "var(--soft)" }}
+            >
+              <i
+                className="ti ti-brand-wechat"
+                style={{ fontSize: 18, color: "#07c160" }}
+              />
+            </div>
+            <div>
+              <CardTitle className="text-base">微信支付 V3</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">商户号、AppID、API V3 密钥与回调</p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -156,7 +178,21 @@ export default function PaymentConfigPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">支付宝开放平台</CardTitle>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: "var(--soft)" }}
+            >
+              <i
+                className="ti ti-credit-card"
+                style={{ fontSize: 18, color: "#1677ff" }}
+              />
+            </div>
+            <div>
+              <CardTitle className="text-base">支付宝开放平台</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">应用 AppID、私钥、公钥与回调</p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

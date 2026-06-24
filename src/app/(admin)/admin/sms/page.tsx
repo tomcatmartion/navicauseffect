@@ -73,7 +73,15 @@ export default function SmsConfigPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">短信网关配置</h2>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <i className="ti ti-message-sms text-xl" style={{ color: "var(--brand)" }} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">短信网关配置</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">配置短信服务商与验证码模板</p>
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
@@ -81,7 +89,18 @@ export default function SmsConfigPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">短信服务商配置</CardTitle>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: "var(--soft)" }}
+            >
+              <i className="ti ti-settings" style={{ fontSize: 18, color: "var(--brand)" }} />
+            </div>
+            <div>
+              <CardTitle className="text-base">短信服务商配置</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">阿里云 / 腾讯云短信参数</p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -150,7 +169,15 @@ export default function SmsConfigPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">配置说明</CardTitle>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: "var(--soft)" }}
+            >
+              <i className="ti ti-info-circle" style={{ fontSize: 18, color: "var(--brand)" }} />
+            </div>
+            <CardTitle className="text-base">配置说明</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>1. 阿里云短信：需在阿里云控制台创建 AccessKey，并申请短信签名和模板。</p>
