@@ -116,15 +116,15 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>昵称</TableHead>
-                <TableHead>手机号</TableHead>
-                <TableHead>邮箱</TableHead>
-                <TableHead>角色</TableHead>
-                <TableHead>会员等级</TableHead>
-                <TableHead>排盘次数</TableHead>
-                <TableHead>支付订单</TableHead>
-                <TableHead>积分</TableHead>
-                <TableHead>注册时间</TableHead>
+                <TableHead className="font-semibold">昵称</TableHead>
+                <TableHead className="font-semibold">手机号</TableHead>
+                <TableHead className="font-semibold">邮箱</TableHead>
+                <TableHead className="font-semibold">角色</TableHead>
+                <TableHead className="font-semibold">会员等级</TableHead>
+                <TableHead className="text-right font-semibold">排盘次数</TableHead>
+                <TableHead className="text-right font-semibold">支付订单</TableHead>
+                <TableHead className="text-right font-semibold">积分</TableHead>
+                <TableHead className="font-semibold">注册时间</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,8 +140,8 @@ export default function UsersPage() {
                     <TableCell className="font-medium">
                       {user.nickname || "未设置"}
                     </TableCell>
-                    <TableCell>{user.phone || "-"}</TableCell>
-                    <TableCell>{user.email || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.phone || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={user.role === "ADMIN" ? "default" : "outline"}>
                         {user.role === "ADMIN" ? "管理员" : "用户"}
@@ -158,9 +158,9 @@ export default function UsersPage() {
                         {planLabel(user.membership?.plan || "FREE")}
                       </Badge>
                     </TableCell>
-                    <TableCell>{user._count.consultationRecords}</TableCell>
-                    <TableCell>{user._count.paymentOrders}</TableCell>
-                    <TableCell>{user.totalPoints}</TableCell>
+                    <TableCell className="text-right tabular-nums">{user._count.consultationRecords}</TableCell>
+                    <TableCell className="text-right tabular-nums">{user._count.paymentOrders}</TableCell>
+                    <TableCell className="text-right tabular-nums">{user.totalPoints}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString("zh-CN")}
                     </TableCell>
@@ -184,6 +184,7 @@ export default function UsersPage() {
               disabled={page <= 1}
               onClick={() => setPage(page - 1)}
             >
+              <i className="ti ti-chevron-left" style={{ marginRight: 4 }} />
               上一页
             </Button>
             <Button
@@ -193,6 +194,7 @@ export default function UsersPage() {
               onClick={() => setPage(page + 1)}
             >
               下一页
+              <i className="ti ti-chevron-right" style={{ marginLeft: 4 }} />
             </Button>
           </div>
         </div>

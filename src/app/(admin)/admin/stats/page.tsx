@@ -230,12 +230,12 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--soft)" }}>
           <i className="ti ti-chart-bar" style={{ fontSize: 18, color: "var(--brand)" }} />
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-3xl font-bold tracking-tight">{value}</div>
       </CardContent>
     </Card>
   );

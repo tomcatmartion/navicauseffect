@@ -69,12 +69,12 @@ export default function AdminDashboard() {
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 {stat.label}
               </CardTitle>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--soft)" }}>
                 <i className={`ti ${stat.icon}`} style={{ fontSize: 18, color: "var(--brand)" }} />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+              <div className="text-3xl font-bold tracking-tight">{stat.value}</div>
             </CardContent>
           </Card>
         ))}

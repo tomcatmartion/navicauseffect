@@ -350,7 +350,7 @@ export default function ModelsPage() {
           <Card key={model.id}>
             <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--soft)" }}>
                   <i className="ti ti-robot" style={{ fontSize: 20, color: "var(--brand)" }} />
                 </div>
                 <div>
@@ -372,7 +372,7 @@ export default function ModelsPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => openEdit(model)}>
                   编辑
                 </Button>
