@@ -82,17 +82,28 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">用户管理</h2>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <i className="ti ti-users text-xl" style={{ color: "var(--brand)" }} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">用户管理</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">查看和管理所有注册用户</p>
+          </div>
+        </div>
         <div className="flex gap-2">
           <Input
             placeholder="搜索昵称/手机/邮箱..."
-            className="w-64"
+            className="w-72"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           />
-          <Button variant="outline" onClick={handleSearch}>搜索</Button>
+          <Button variant="outline" onClick={handleSearch}>
+            <i className="ti ti-search" style={{ marginRight: 4 }} />
+            搜索
+          </Button>
         </div>
       </div>
 

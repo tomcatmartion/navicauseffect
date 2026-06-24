@@ -76,7 +76,15 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">数据统计</h2>
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <i className="ti ti-chart-line text-xl" style={{ color: "var(--brand)" }} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">数据统计</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">用户、收入、功能使用与行为漏斗分析</p>
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
@@ -220,8 +228,11 @@ export default function StatsPage() {
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+          <i className="ti ti-chart-bar" style={{ fontSize: 18, color: "var(--brand)" }} />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>

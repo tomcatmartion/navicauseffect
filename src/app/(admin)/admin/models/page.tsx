@@ -235,13 +235,16 @@ export default function ModelsPage() {
 
   return (
     <div className="space-y-6">
-      <p className="max-w-3xl text-sm text-muted-foreground">
-        所有大模型（含 <strong className="text-foreground">MiniMax</strong>
-        ）均在下方配置：填写 API Key、Base URL、Model ID，并可将一条设为<strong className="text-foreground">默认</strong>
-        。密钥仅存数据库，不写 .env。
-      </p>
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">AI 模型配置</h2>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <i className="ti ti-robot text-xl" style={{ color: "var(--brand)" }} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">AI 模型配置</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">配置各 AI 大模型的 API Key 与 Base URL，可设一条为默认</p>
+          </div>
+        </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingId(null); }}>
           <DialogTrigger asChild>
             <Button onClick={openCreate}>添加模型</Button>
@@ -347,8 +350,8 @@ export default function ModelsPage() {
           <Card key={model.id}>
             <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-lg">
-                  🤖
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <i className="ti ti-robot" style={{ fontSize: 20, color: "var(--brand)" }} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">

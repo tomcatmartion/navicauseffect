@@ -6,13 +6,13 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { label: "概览", href: "/admin", icon: "📊" },
-  { label: "AI 模型", href: "/admin/models", icon: "🤖" },
-  { label: "用户管理", href: "/admin/users", icon: "👥" },
-  { label: "价格管理", href: "/admin/pricing", icon: "💰" },
-  { label: "短信网关", href: "/admin/sms", icon: "📱" },
-  { label: "支付配置", href: "/admin/payment", icon: "💳" },
-  { label: "数据统计", href: "/admin/stats", icon: "📈" },
+  { label: "概览", href: "/admin", icon: "ti-dashboard" },
+  { label: "AI 模型", href: "/admin/models", icon: "ti-robot" },
+  { label: "用户管理", href: "/admin/users", icon: "ti-users" },
+  { label: "价格管理", href: "/admin/pricing", icon: "ti-cash" },
+  { label: "短信网关", href: "/admin/sms", icon: "ti-message-sms" },
+  { label: "支付配置", href: "/admin/payment", icon: "ti-credit-card" },
+  { label: "数据统计", href: "/admin/stats", icon: "ti-chart-line" },
 ];
 
 export default function AdminLayout({
@@ -47,7 +47,7 @@ export default function AdminLayout({
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <span>{item.icon}</span>
+              <i className={`ti ${item.icon}`} />
               {item.label}
             </Link>
           ))}
@@ -57,7 +57,7 @@ export default function AdminLayout({
             href="/"
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
-            ← 返回前台
+            <i className="ti ti-arrow-left" /> 返回前台
           </Link>
         </div>
       </aside>
@@ -88,7 +88,7 @@ export default function AdminLayout({
             onClick={() => setDrawerOpen(false)}
             className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
           >
-            ✕
+            <i className="ti ti-x" />
           </button>
         </div>
         <nav className="space-y-1 overflow-y-auto p-3" style={{ maxHeight: "calc(100vh - 120px)" }}>
@@ -104,7 +104,7 @@ export default function AdminLayout({
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <span>{item.icon}</span>
+              <i className={`ti ${item.icon}`} />
               {item.label}
             </Link>
           ))}
@@ -115,7 +115,7 @@ export default function AdminLayout({
             onClick={() => setDrawerOpen(false)}
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
-            ← 返回前台
+            <i className="ti ti-arrow-left" /> 返回前台
           </Link>
         </div>
       </aside>
@@ -128,9 +128,7 @@ export default function AdminLayout({
             onClick={() => setDrawerOpen(true)}
             className="mr-3 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:hidden"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            </svg>
+            <i className="ti ti-menu-2" />
           </button>
           <h1 className="text-base font-semibold md:text-lg">微著 · 管理后台</h1>
           {/* 移动端返回前台快捷入口 */}
@@ -141,7 +139,7 @@ export default function AdminLayout({
             返回前台 →
           </Link>
         </header>
-        <div className="p-4 md:p-6">{children}</div>
+        <div className="admin-page p-4 md:p-6">{children}</div>
       </main>
     </div>
   );
