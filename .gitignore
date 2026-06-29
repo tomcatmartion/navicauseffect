@@ -73,3 +73,33 @@ alpha.md
 workresultdoc.md
 /planfiles/
 navicauseffect-*.tar.gz
+
+# ── 临时调试与开发产物（勿提交） ──
+cookies.txt
+*.cookies.txt
+
+# IDE / AI 工具产物
+.trae/
+
+# 临时备份
+.temp_backup/
+
+# 设计 mockup（资产，单独管理）
+testUI/
+testUI.zip
+design-preview/
+
+# 测试与截图产物
+e2e-artifacts/
+screenshots/
+
+# 根目录临时调试脚本
+/test-*.ts
+/test-*.js
+/test-*.json
+/compare-patterns.js
+/migrate-claude-skills.sh
+
+# 开发笔记（按需手动管理）
+/AI-PROMPT.md
+/review-ai-logic.md

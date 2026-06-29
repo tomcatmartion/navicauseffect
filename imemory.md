@@ -6,6 +6,31 @@
 
 ---
 
+## 2026-06-29 腾讯生产部署 + Next.js 16 Build 兼容性教训
+
+### E-69: Next.js 16 middleware `config.matcher` 必须是字面量数组
+
+- **现象**：`pnpm build` 失败：`Next.js can't recognize the exported config field in route "/src/middleware": Unsupported node type "CallExpression" at "config.matcher"`
+- **根因**：`matcher` 字段使用了 `deriveMiddlewareMatcher()` 函数调用，Next.js 16 静态分析阶段无法求值非字面量表达式
+- **教训**：Next.js 16 起 `config.matcher` / `runtime` 等 segment 配置必须用**纯字面量数组/字符串**，不能依赖运行时函数返回值；"单点维护派生逻辑"的诉求只能改成"字面量 + 同步注释"
+- **修复**：`src/middleware.ts` 内联为 16 条字面量 matcher（PROTECTED + ADMIN 路径及其 `:path*`），改动路径分类时需手动同步
+
+### E-70: `useSearchParams()` 必须包在 Suspense 边界内
+
+- **现象**：`pnpm build` 静态预渲染失败：`useSearchParams() should be wrapped in a suspense boundary at page "/auth/bind-wechat"`
+- **根因**：组件直接调用 `useSearchParams()` 但没有 `<Suspense>` 包裹，Next.js 静态预渲染（CSR bailout）无法工作
+- **教训**：App Router 下任何用 `useSearchParams()` 的组件，外层必须有 Suspense 边界；推荐模式：内层 `XxxContent` 含原逻辑 + 默认导出 `<Suspense fallback={...}><XxxContent/></Suspense>`
+- **修复**：`src/app/auth/bind-wechat/page.tsx` 拆为 `BindWechatContent` + `BindWechatPage`（Suspense 包装）
+
+### E-71: quick-deploy.sh 不同步 package.json，新增依赖必须手动补
+
+- **现象**：rsync 部署后远程 build 报模块找不到，但本地 build 通过
+- **根因**：`scripts/quick-deploy.sh` 只 rsync `src/` + `data/` + `sysfiles/` + `prisma/`，**不包含 `package.json` / `pnpm-lock.yaml`**；本地新增依赖（本次为 `qrcode`）时远程 `pnpm install` 不会跑
+- **教训**：每次部署前对比 `package.json` md5（本地 vs 远程），不一致时手动 `scp package.json pnpm-lock.yaml` + SSH `pnpm install`；schema 变更同理需 `prisma generate` + `db push`
+- **修复**：本次部署手动补 scp + 远程 `pnpm install`；后续可考虑改造 quick-deploy.sh 加 package.json 同步步骤
+
+---
+
 ## 2026-06-26 文档编辑误覆写教训
 
 ### E-68: 对已有 `.md` 追加内容时**绝对不能用 `Write` 工具**，必须用 `SearchReplace` 定位后追加
