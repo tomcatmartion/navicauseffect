@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { ThemeSwitcher } from "@/components/layout/theme-switcher";
+import { PaywallProvider } from "@/components/shared/paywall-dialog";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -47,9 +49,24 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const theme = localStorage.getItem('zw-theme') || 'clay';
+                  const valid = ['clay', 'neumorphism', 'newspaper'].includes(theme);
+                  document.documentElement.setAttribute('data-theme', valid ? theme : 'clay');
+                } catch (e) {
+                  document.documentElement.setAttribute('data-theme', 'clay');
+                }
+              })();
+            `,
+          }}
+        />
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/@tabler/icons@2.44.0/tabler-icons.css"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"
         />
       </head>
       <body
@@ -57,8 +74,11 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <AuthSessionProvider>
-            <QueryProvider>{children}</QueryProvider>
+            <QueryProvider>
+              <PaywallProvider>{children}</PaywallProvider>
+            </QueryProvider>
           </AuthSessionProvider>
+          <ThemeSwitcher />
           <Toaster />
         </ThemeProvider>
       </body>

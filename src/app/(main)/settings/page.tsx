@@ -1,30 +1,11 @@
 "use client";
 
-import { useTheme, type ZiweiTheme } from "@/components/providers/theme-provider";
+import { useTheme } from "@/components/providers/theme-provider";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
-
-const THEME_OPTIONS: { key: ZiweiTheme; label: string; desc: string; color: string }[] = [
-  {
-    key: "newspaper",
-    label: "报纸主题",
-    desc: "米黄 + 朱砂 · 圆角 4px · 东方典雅",
-    color: "#F2ECD9",
-  },
-  {
-    key: "clay",
-    label: "粘土风",
-    desc: "暖米色 + 棕褐 · 圆角 14-30px · 柔和浮雕",
-    color: "#F5F2EF",
-  },
-  {
-    key: "neumorphism",
-    label: "新拟态",
-    desc: "冷灰 + 蓝青 · 圆角 10-24px · 极简",
-    color: "#E0E5EC",
-  },
-];
+import { THEME_OPTIONS } from "@/lib/theme/theme-options";
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -127,54 +108,91 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* 偏好设置 */}
-      <h3
-        className="home-section-title"
-        style={{ fontSize: 15, color: "var(--brand)", marginBottom: 12 }}
-      >
-        <i className="ti ti-adjustments" style={{ marginRight: 6 }} />
-        偏好
-      </h3>
-      <div style={{ marginBottom: 24 }}>
-        {[
-          {
-            icon: "ti-language",
-            title: "语言",
-            desc: "简体中文（暂不支持其它语言）",
-            value: "zh-CN",
-          },
-          {
-            icon: "ti-clock-hour-4",
-            title: "时区",
-            desc: "Asia/Shanghai (UTC+8)",
-            value: "auto",
-          },
-          {
-            icon: "ti-calendar-event",
-            title: "默认历法",
-            desc: "阳历（公历）",
-            value: "solar",
-          },
-        ].map((row) => (
-          <div
-            key={row.title}
-            className="setting-row"
-            style={{ margin: 0, marginBottom: 8 }}
+      {/* C-05：偏好设置折叠（暂不可用，避免占用首屏视觉权重） */}
+      <details style={{ marginBottom: 24 }}>
+        <summary
+          style={{
+            cursor: "pointer",
+            listStyle: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 15,
+            color: "var(--brand)",
+            marginBottom: 12,
+            fontWeight: 600,
+            fontFamily: "var(--font-head)",
+            userSelect: "none",
+          }}
+        >
+          <i className="ti ti-adjustments" style={{ marginRight: 6 }} />
+          高级偏好
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 10,
+              padding: "2px 6px",
+              background: "var(--soft)",
+              color: "var(--text-muted)",
+              borderRadius: 4,
+              fontWeight: 400,
+            }}
           >
-            <span className="sr-l">
-              <span className="sr-icon">
-                <i className={`ti ${row.icon}`} />
+            暂不可用
+          </span>
+          <i
+            className="ti ti-chevron-down"
+            style={{ marginLeft: "auto", fontSize: 14, color: "var(--text-muted)" }}
+          />
+        </summary>
+        <div>
+          {[
+            {
+              icon: "ti-language",
+              title: "语言",
+              desc: "暂不支持切换",
+              value: "简体中文",
+            },
+            {
+              icon: "ti-clock-hour-4",
+              title: "时区",
+              desc: "暂不支持切换",
+              value: "Asia/Shanghai (UTC+8)",
+            },
+            {
+              icon: "ti-calendar-event",
+              title: "默认历法",
+              desc: "暂不支持切换",
+              value: "阳历（公历）",
+            },
+          ].map((row) => (
+            <div
+              key={row.title}
+              className="setting-row"
+              style={{
+                margin: 0,
+                marginBottom: 8,
+                opacity: 0.65,
+                cursor: "not-allowed",
+              }}
+              aria-disabled="true"
+            >
+              <span className="sr-l">
+                <span className="sr-icon">
+                  <i className={`ti ${row.icon}`} />
+                </span>
+                <span>
+                  <span className="sr-title">{row.title}</span>
+                  <span className="sr-desc">{row.desc}</span>
+                </span>
               </span>
-              <span>
-                <span className="sr-title">{row.title}</span>
-                <span className="sr-desc">{row.desc}</span>
+              <span className="sr-r" style={{ color: "var(--text-muted)" }}>
+                {row.value}
               </span>
-            </span>
-            <span className="sr-r">{row.value}</span>
-            <i className="ti ti-chevron-right" />
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      </details>
 
       {/* 账户 */}
       <h3
@@ -258,6 +276,21 @@ export default function SettingsPage() {
         反馈邮箱：support@ziyunpai.com
         <br />
         备案号：辽ICP备2026007904号-1
+      </div>
+      {/* C-02：用户协议 / 隐私政策从 /user 合并到 /settings */}
+      <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+        <Link
+          href="/legal/terms"
+          style={{ fontSize: 13, color: "var(--brand)", textDecoration: "none" }}
+        >
+          <i className="ti ti-file-text" style={{ marginRight: 4 }} /> 用户协议
+        </Link>
+        <Link
+          href="/legal/privacy"
+          style={{ fontSize: 13, color: "var(--brand)", textDecoration: "none" }}
+        >
+          <i className="ti ti-shield-lock" style={{ marginRight: 4 }} /> 隐私政策
+        </Link>
       </div>
     </div>
   );

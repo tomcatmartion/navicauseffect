@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -20,7 +19,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminCard } from "@/components/admin/AdminCard";
+import { AdminEmptyState } from "@/components/admin/AdminEmptyState";
 
 interface ModelConfig {
   id: string;
@@ -42,39 +43,14 @@ interface FormData {
 }
 
 const PROVIDERS: { id: string; label: string; baseUrl: string; modelId: string }[] = [
-  {
-    id: "minimax",
-    label: "MiniMax（Embedding 1536 维）",
-    baseUrl: "https://api.minimaxi.com/v1",
-    modelId: "MiniMax-M2",
-  },
-  {
-    id: "openai",
-    label: "OpenAI / GPT（Embedding 1536 维）",
-    baseUrl: "https://api.openai.com/v1",
-    modelId: "gpt-4o-mini",
-  },
-  {
-    id: "google",
-    label: "Google Gemini / Gemma（Embedding 1536 维）",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    modelId: "gemini-2.0-flash",
-  },
+  { id: "minimax", label: "MiniMax（Embedding 1536 维）", baseUrl: "https://api.minimaxi.com/v1", modelId: "MiniMax-M2" },
+  { id: "openai", label: "OpenAI / GPT（Embedding 1536 维）", baseUrl: "https://api.openai.com/v1", modelId: "gpt-4o-mini" },
+  { id: "google", label: "Google Gemini / Gemma（Embedding 1536 维）", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", modelId: "gemini-2.0-flash" },
   { id: "zhipu", label: "智谱 GLM（Embedding 1024 维）", baseUrl: "https://open.bigmodel.cn/api/paas/v4", modelId: "glm-4-flash" },
   { id: "deepseek", label: "DeepSeek（Embedding 1024 维）", baseUrl: "https://api.deepseek.com/v1", modelId: "deepseek-chat" },
-  {
-    id: "deepseek-anthropic",
-    label: "DeepSeek V4（Anthropic 协议 / Embedding 1024 维）",
-    baseUrl: "https://api.deepseek.com/anthropic",
-    modelId: "deepseek-v4-pro[1m]",
-  },
+  { id: "deepseek-anthropic", label: "DeepSeek V4（Anthropic 协议 / Embedding 1024 维）", baseUrl: "https://api.deepseek.com/anthropic", modelId: "deepseek-v4-pro[1m]" },
   { id: "qwen", label: "通义千问（Embedding 1024 维）", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", modelId: "qwen-turbo" },
-  {
-    id: "doubao",
-    label: "豆包 / 火山（Embedding 1024 维）",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    modelId: "doubao-pro-32k",
-  },
+  { id: "doubao", label: "豆包 / 火山（Embedding 1024 维）", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", modelId: "doubao-pro-32k" },
   { id: "claude", label: "Claude（Embedding 1536 维）", baseUrl: "https://api.anthropic.com", modelId: "claude-3-sonnet-20240229" },
 ];
 
@@ -129,7 +105,7 @@ export default function ModelsPage() {
     setDialogOpen(true);
   };
 
-  const openEdit = async (model: ModelConfig) => {
+  const openEdit = (model: ModelConfig) => {
     setEditingId(model.id);
     setForm({
       name: model.name,
@@ -139,6 +115,12 @@ export default function ModelsPage() {
       apiKey: "",
     });
     setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
   };
 
   const handleSave = async () => {
@@ -175,9 +157,7 @@ export default function ModelsPage() {
           throw new Error(data.error || "创建失败");
         }
       }
-      setDialogOpen(false);
-      setForm(emptyForm);
-      setEditingId(null);
+      closeDialog();
       await fetchModels();
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
@@ -233,147 +213,135 @@ export default function ModelsPage() {
       ? "MiniMax：在 https://platform.minimaxi.com/ 创建 API Key。OpenAI 兼容 Base URL 一般为 https://api.minimaxi.com/v1（勿尾斜杠）；模型名如 MiniMax-M2、MiniMax-M2.5 等以控制台为准。"
       : null;
 
+  const canSave =
+    form.name && form.provider && form.modelId && form.baseUrl && (!!editingId || !!form.apiKey.trim());
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <i className="ti ti-robot text-xl" style={{ color: "var(--brand)" }} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">AI 模型配置</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">配置各 AI 大模型的 API Key 与 Base URL，可设一条为默认</p>
-          </div>
+    <>
+      <AdminPageHeader
+        icon="ti-robot"
+        title="AI 模型配置"
+        desc="配置各 AI 大模型的 API Key 与 Base URL，可设一条为默认"
+        actions={
+          <Button onClick={openCreate}>
+            <i className="ti ti-plus" />
+            添加模型
+          </Button>
+        }
+      />
+
+      {error && (
+        <div className="admin-alert error">
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingId(null); }}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>添加模型</Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{dialogTitle}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>模型名称</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="例如：智谱 GLM-4"
-                />
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="admin-dialog-form">
+            <div className="field">
+              <Label className="field-label">模型名称</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="例如：智谱 GLM-4"
+              />
+            </div>
+            <div className="field">
+              <Label className="field-label">提供商</Label>
+              <Select value={form.provider} onValueChange={(v) => fillProvider(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择提供商" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {providerHint && (
+              <div className="help-note">
+                <p>{providerHint}</p>
               </div>
-              <div className="space-y-2">
-                <Label>提供商</Label>
-                <Select
-                  value={form.provider}
-                  onValueChange={(v) => fillProvider(v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择提供商" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {providerHint && (
-                <p className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                  {providerHint}
-                </p>
-              )}
-              <div className="space-y-2">
-                <Label>Model ID</Label>
+            )}
+            <div className="field-row">
+              <div className="field">
+                <Label className="field-label">Model ID</Label>
                 <Input
                   value={form.modelId}
                   onChange={(e) => setForm({ ...form, modelId: e.target.value })}
                   placeholder="例如：glm-4-flash"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>API Base URL</Label>
+              <div className="field">
+                <Label className="field-label">API Base URL</Label>
                 <Input
                   value={form.baseUrl}
                   onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
                   placeholder="https://open.bigmodel.cn/api/paas/v4"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>API Key {editingId && <span className="text-muted-foreground font-normal">（留空则不修改）</span>}</Label>
-                <Input
-                  type="password"
-                  value={form.apiKey}
-                  onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-                  placeholder={editingId ? "留空则不修改" : "sk-..."}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={handleSave}
-                  disabled={saving || !form.name || !form.provider || !form.modelId || !form.baseUrl || (!editingId && !form.apiKey.trim())}
-                >
-                  {saving ? "保存中..." : "保存"}
-                </Button>
-                {editingId && (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => handleDelete(editingId)}
-                    disabled={saving}
-                  >
-                    删除
-                  </Button>
-                )}
-              </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <div className="field">
+              <Label className="field-label">
+                API Key
+                {editingId && <span className="opt">（留空则不修改）</span>}
+              </Label>
+              <Input
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                placeholder={editingId ? "留空则不修改" : "sk-..."}
+                autoComplete="off"
+              />
+            </div>
+            <div className="admin-dialog-actions">
+              <Button className="flex-1" onClick={handleSave} disabled={saving || !canSave}>
+                {saving ? "保存中..." : "保存"}
+              </Button>
+              {editingId && (
+                <Button type="button" variant="destructive" onClick={() => handleDelete(editingId)} disabled={saving}>
+                  删除
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-      {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-      )}
-
-      {models.length === 0 && !error && (
-        <div className="py-12 text-center text-muted-foreground">
-          暂无模型配置，点击「添加模型」开始。可选择 MiniMax、DeepSeek、智谱等在排盘页使用 AI 解盘；至少启用一条并设默认。
-        </div>
-      )}
-
-      <div className="grid gap-4">
-        {models.map((model) => (
-          <Card key={model.id}>
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--soft)" }}>
-                  <i className="ti ti-robot" style={{ fontSize: 20, color: "var(--brand)" }} />
+      {models.length === 0 && !error ? (
+        <AdminEmptyState
+          icon="ti-robot"
+          title="暂无模型配置"
+          desc="点击「添加模型」开始。可选择 MiniMax、DeepSeek、智谱等在排盘页使用 AI 解盘；至少启用一条并设默认。"
+        />
+      ) : (
+        <div className="admin-stat-grid" style={{ gridTemplateColumns: "1fr" }}>
+          {models.map((model) => (
+            <AdminCard
+              key={model.id}
+              icon="ti-robot"
+              title={model.name}
+              desc={`${model.provider} · ${model.modelId}`}
+              headActions={
+                <div className="flex items-center gap-2">
+                  {model.isDefault && <span className="admin-badge info">默认</span>}
+                  {model.isActive && !model.isDefault && <span className="admin-badge success">已启用</span>}
+                  {!model.isActive && <span className="admin-badge neutral">已禁用</span>}
+                  {model.hasApiKey === false && <span className="admin-badge warning">未配置 Key</span>}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{model.name}</h3>
-                    {model.isDefault && <Badge className="bg-primary">默认</Badge>}
-                    {model.isActive && !model.isDefault && (
-                      <Badge variant="outline">已启用</Badge>
-                    )}
-                    {!model.isActive && (
-                      <Badge variant="secondary">已禁用</Badge>
-                    )}
-                    {model.hasApiKey === false && (
-                      <Badge variant="secondary">未配置 Key</Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {model.provider} · {model.modelId}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
+              }
+            >
+              <div className="admin-card-ops">
                 <Button variant="outline" size="sm" onClick={() => openEdit(model)}>
+                  <i className="ti ti-edit" />
                   编辑
                 </Button>
                 <Button
@@ -382,17 +350,18 @@ export default function ModelsPage() {
                   onClick={() => setDefault(model)}
                   disabled={model.isDefault}
                 >
+                  <i className="ti ti-star" />
                   设为默认
                 </Button>
-                <Switch
-                  checked={model.isActive}
-                  onCheckedChange={() => toggleActive(model)}
-                />
+                <div className="flex items-center gap-2" style={{ marginLeft: 4 }}>
+                  <span className="admin-switch-label">{model.isActive ? "已启用" : "已禁用"}</span>
+                  <Switch checked={model.isActive} onCheckedChange={() => toggleActive(model)} />
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+            </AdminCard>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

@@ -341,19 +341,27 @@ function AnalysisLogicPanel({
 }) {
   return (
     <div className="space-y-2.5">
-      {/* 分析流程 */}
+      {/* 分析流程（C-10：三级折叠，每步独立可展开看详情） */}
       {logic.analysisFlow.length > 0 && (
         <details className="rounded border border-primary/8 bg-muted/10" open>
           <summary className="cursor-pointer px-2 py-1 text-[11px] font-medium text-muted-foreground">
             分析流程（{logic.analysisFlow.length}步）
           </summary>
-          <div className="border-t border-primary/8 px-2 py-1.5 space-y-1">
-            {logic.analysisFlow.map(step => (
-              <div key={step.step} className="text-[10px] leading-relaxed">
-                <span className="text-muted-foreground">{step.step}.</span>
-                <span className="font-medium"> {step.name}</span>
-                <span className="text-muted-foreground"> — {step.content}</span>
-              </div>
+          <div className="border-t border-primary/8 px-2 py-1.5 space-y-0.5">
+            {logic.analysisFlow.map((step) => (
+              <details
+                key={step.step}
+                className="rounded-sm border border-primary/5 bg-card/30"
+              >
+                <summary className="cursor-pointer px-1.5 py-1 text-[10px] leading-relaxed">
+                  <span className="text-muted-foreground">{step.step}.</span>
+                  <span className="font-medium"> {step.name}</span>
+                  <span className="text-muted-foreground/70"> — 点击展开详情</span>
+                </summary>
+                <div className="border-t border-primary/5 px-1.5 py-1 text-[10px] leading-relaxed text-muted-foreground">
+                  {step.content}
+                </div>
+              </details>
             ))}
           </div>
         </details>

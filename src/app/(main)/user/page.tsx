@@ -328,12 +328,11 @@ export default function UserPage() {
   const userName = session?.user?.name || "未登录";
   const userId = session?.user?.id || "--";
 
+  // C-02：关于/用户协议/隐私政策已合并到 /settings，user 页只保留核心操作入口
   const menuItems = [
     { title: "服务权益", subtitle: "查看会员专属权益", icon: "ti-gift", action: () => router.push("/pricing") },
-    { title: "兑换中心", subtitle: "使用兑换码获取积分", icon: "ti-ticket", action: () => setShowRedeemModal(true) },
-    { title: "关于我们", subtitle: undefined, icon: "ti-info-circle", action: () => router.push("/") },
+    { title: "兑换中心", subtitle: "使用兑换码获取星币", icon: "ti-ticket", action: () => setShowRedeemModal(true) },
     { title: "偏好设置", subtitle: undefined, icon: "ti-settings", action: () => router.push("/settings") },
-    { title: "隐私协议", subtitle: undefined, icon: "ti-shield-lock", action: () => {} },
   ];
 
   const rechargeOptions = [
@@ -572,20 +571,44 @@ export default function UserPage() {
         </div>
       )}
 
-      {/* 关系网络图入口 */}
-      <button
+      {/* 关系网络图入口（即将推出） */}
+      <div
         className="setting-row"
-        style={{ marginTop: 12, width: "100%", cursor: "pointer", textDecoration: "none", color: "inherit" }}
+        style={{
+          marginTop: 12,
+          width: "100%",
+          textDecoration: "none",
+          color: "inherit",
+          opacity: 0.6,
+          cursor: "not-allowed",
+        }}
+        title="功能开发中，敬请期待"
+        aria-disabled="true"
       >
         <div className="sr-l">
           <div className="sr-icon"><i className="ti ti-topology-star-ring-3" /></div>
           <div>
-            <div className="sr-title">关系网络图</div>
+            <div className="sr-title">
+              关系网络图
+              <span
+                style={{
+                  marginLeft: 8,
+                  fontSize: 10,
+                  padding: "2px 6px",
+                  background: "var(--soft)",
+                  color: "var(--text-muted)",
+                  borderRadius: 4,
+                  fontWeight: 400,
+                }}
+              >
+                即将推出
+              </span>
+            </div>
             <div className="sr-desc">可视化查看命主间关系</div>
           </div>
         </div>
-        <i className="ti ti-chevron-right" />
-      </button>
+        <i className="ti ti-hourglass-high" style={{ color: "var(--text-muted)" }} />
+      </div>
 
       {/* ================================================================
           资产与会籍
@@ -617,21 +640,40 @@ export default function UserPage() {
           <div className="coin-price">查看全部</div>
         </button>
 
-        <button
-          className="coin-card"
-          style={{
-            cursor: "pointer",
-            textAlign: "left",
-            background: "var(--brand)",
-            color: "#fff",
-            borderColor: "var(--brand)",
-          }}
-          onClick={() => setShowRechargeModal(true)}
-        >
-          <i className="ti ti-plus" style={{ fontSize: 22 }} />
-          <div className="coin-amount" style={{ color: "#fff", fontSize: 16 }}>立即充值</div>
-          <div className="coin-price" style={{ color: "rgba(255,255,255,.7)" }}>获取更多星币</div>
-        </button>
+        {/* B-07 + C-04：mock 充值入口仅 dev 环境显示，生产环境改为跳 /pricing 正规充值 */}
+        {process.env.NODE_ENV === "development" ? (
+          <button
+            className="coin-card"
+            style={{
+              cursor: "pointer",
+              textAlign: "left",
+              background: "var(--brand)",
+              color: "#fff",
+              borderColor: "var(--brand)",
+            }}
+            onClick={() => setShowRechargeModal(true)}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 22 }} />
+            <div className="coin-amount" style={{ color: "#fff", fontSize: 16 }}>立即充值</div>
+            <div className="coin-price" style={{ color: "rgba(255,255,255,.7)" }}>获取更多星币（测试）</div>
+          </button>
+        ) : (
+          <button
+            className="coin-card"
+            style={{
+              cursor: "pointer",
+              textAlign: "left",
+              background: "var(--brand)",
+              color: "#fff",
+              borderColor: "var(--brand)",
+            }}
+            onClick={() => router.push("/pricing")}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 22 }} />
+            <div className="coin-amount" style={{ color: "#fff", fontSize: 16 }}>立即充值</div>
+            <div className="coin-price" style={{ color: "rgba(255,255,255,.7)" }}>前往会员中心</div>
+          </button>
+        )}
       </div>
 
       {/* ================================================================
@@ -953,7 +995,7 @@ export default function UserPage() {
               兑换中心
             </DialogTitle>
             <DialogDescription>
-              输入兑换码获取积分，兑换码不区分大小写
+              输入兑换码获取星币，兑换码不区分大小写
             </DialogDescription>
           </DialogHeader>
 
@@ -1126,7 +1168,8 @@ export default function UserPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 充值 */}
+      {/* 充值（B-07 + C-04：mock 仅 dev 环境）*/}
+      {process.env.NODE_ENV === "development" && (
       <Dialog open={showRechargeModal} onOpenChange={setShowRechargeModal}>
         <DialogContent className="paywall-dialog">
           <DialogHeader>
@@ -1223,6 +1266,7 @@ export default function UserPage() {
           </div>
         </DialogContent>
       </Dialog>
+      )}
     </PageContainer>
   );
 }

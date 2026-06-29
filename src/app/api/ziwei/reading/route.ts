@@ -8,7 +8,7 @@ import 'server-only'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
+import { consumeRights, consumeErrorToResponse } from '@/lib/auth/consume-rights'
 import { runHybridPipeline, appendAssistantReply } from '@/orchestration/hybrid'
 import type { HybridDebugInfo } from '@/types/hybrid-debug'
 import { ReadingRequestSchema } from '@/lib/ziwei/session/types'
@@ -21,11 +21,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '未登录' }, { status: 401 })
   }
 
+  // 统一权益消耗(会员免费,非会员走免费额度 100/日)
   const ip = request.headers.get('x-forwarded-for') || 'unknown'
-  const membershipPlan = session.user.membershipPlan || 'FREE'
-  const limitResult = await checkDailyLimit(session.user.id, ip, membershipPlan)
-  if (!limitResult.allowed) {
-    return NextResponse.json({ error: '今日使用次数已达上限' }, { status: 429 })
+  const consume = await consumeRights({
+    userId: session.user.id,
+    ip,
+    resourceType: 'READING',
+    baseCost: 0, // 走免费额度模式
+  })
+  if (!consume.ok) {
+    const err = consumeErrorToResponse(consume.error)
+    return NextResponse.json(err.body, { status: err.status })
   }
 
   let body: unknown
@@ -64,7 +70,7 @@ export async function POST(request: NextRequest) {
       routingAnswers: parsed.data.routingAnswers,
     })
 
-    await incrementDailyUsage(session.user.id, ip)
+    // consumeRights 已在前面消耗,无需再 incrementDailyUsage
 
     if (useStream) {
       const transformedStream = createSseStream(stream, newSessionId, debugInfo, (fullReply) => {

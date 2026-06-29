@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
+import { consumeRights, consumeErrorToResponse } from '@/lib/auth/consume-rights'
 import { generateReportContent, resolveReportInstruction } from '@/core/report/report-generator'
 import {
   buildReportContext,
@@ -90,13 +90,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
     }
 
-    // 日限额：报告生成是重资源（调用 AI 多次）
+    // 日限额由 consumeRights 统一处理(baseCost > 0 走扣费,不再单独 checkDailyLimit)
     const ip = req.headers.get('x-forwarded-for') || 'unknown'
-    const membershipPlan = session.user.membershipPlan || 'FREE'
-    const limitResult = await checkDailyLimit(session.user.id, ip, membershipPlan)
-    if (!limitResult.allowed) {
-      return NextResponse.json({ error: '今日使用次数已达上限' }, { status: 429 })
-    }
 
     let body: unknown
     try {
@@ -150,51 +145,23 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── 步骤 1：计算会员折扣后价格并扣费 ──
+    // ── 步骤 1：统一权益消耗(会员折扣 + 扣星币 + bonusQueries 优先) ──
     if (template.pointCost > 0) {
-      // 查询会员状态以计算折扣
-      const userWithMembership = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        include: { membership: true },
+      const consume = await consumeRights({
+        userId: session.user.id,
+        ip,
+        resourceType: 'REPORT',
+        baseCost: template.pointCost,
+        memberFree: false, // 会员享受折扣但仍扣星币
       })
-
-      // 会员折扣：年度7折、季度8折、月度9折
-      const plan = userWithMembership?.membership?.plan
-      let discountRate = 1.0
-      let discountLabel = ''
-      if (plan === 'YEARLY') { discountRate = 0.7; discountLabel = '(年度会员7折)' }
-      else if (plan === 'QUARTERLY') { discountRate = 0.8; discountLabel = '(季度会员8折)' }
-      else if (plan === 'MONTHLY') { discountRate = 0.9; discountLabel = '(月度会员9折)' }
-
-      const actualCost = Math.ceil(template.pointCost * discountRate)
-
-      if (!userWithMembership || userWithMembership.totalPoints < actualCost) {
-        return NextResponse.json(
-          { error: '星币不足', required: actualCost, current: userWithMembership?.totalPoints ?? 0, originalCost: template.pointCost, discount: discountLabel || undefined },
-          { status: 402 }
-        )
+      if (!consume.ok) {
+        const err = consumeErrorToResponse(consume.error)
+        return NextResponse.json(err.body, { status: err.status })
       }
-
-      // 事务：扣除星币 + 记录流水
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: session.user.id },
-          data: { totalPoints: { decrement: actualCost } },
-        }),
-        prisma.pointRecord.create({
-          data: {
-            userId: session.user.id,
-            points: -actualCost,
-            source: 'CONSUME',
-            detail: `生成报告: ${template.name}${discountLabel}`,
-          },
-        }),
-      ])
     }
 
     // ── 步骤 2：创建报告记录（PENDING） ──
-    // 入参校验通过 → 计入日限额（坏请求不计）
-    await incrementDailyUsage(session.user.id, ip)
+    // 注:consumeRights 内部已处理日限流(baseCost=0 场景)或扣费(baseCost>0 场景)
     const report = await prisma.report.create({
       data: {
         userId: session.user.id,

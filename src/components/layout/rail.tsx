@@ -100,40 +100,59 @@ export function Rail() {
               {initial}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="right" className="w-48">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{user?.name || "用户"}</p>
-              <p className="text-xs text-muted-foreground">
-                {PLAN_LABELS[user?.membershipPlan || "FREE"]}
-              </p>
+          <DropdownMenuContent align="end" side="right" className="user-menu">
+            <div className="user-menu-header">
+              <div className="user-menu-avatar">{initial}</div>
+              <div>
+                <p className="user-menu-name">{user?.name || "用户"}</p>
+                <p className="user-menu-plan">
+                  {PLAN_LABELS[user?.membershipPlan || "FREE"]}
+                </p>
+              </div>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/profile">个人中心</Link>
+              <Link href="/profile" className="user-menu-item">
+                <i className="ti ti-user" />
+                <span>个人中心</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/charts">我的命盘</Link>
+              <Link href="/charts" className="user-menu-item">
+                <i className="ti ti-clipboard-list" />
+                <span>我的命盘</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/reports">我的报告</Link>
+              <Link href="/reports" className="user-menu-item">
+                <i className="ti ti-file-text" />
+                <span>我的报告</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/settings">账户设置</Link>
+              <Link href="/settings" className="user-menu-item">
+                <i className="ti ti-settings" />
+                <span>账户设置</span>
+              </Link>
             </DropdownMenuItem>
             {isAdmin && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/admin">管理后台</Link>
+                  <Link href="/admin" className="user-menu-item">
+                    <i className="ti ti-shield-check" />
+                    <span>管理后台</span>
+                  </Link>
                 </DropdownMenuItem>
               </>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => signOut({ callbackUrl: "/" })}
-              className="text-destructive focus:text-destructive"
+              className="user-menu-item danger"
             >
-              退出登录
+              <i className="ti ti-logout" />
+              <span>退出登录</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

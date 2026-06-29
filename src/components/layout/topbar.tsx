@@ -48,6 +48,18 @@ function resolveTopbarConfig(pathname: string): TopbarConfig {
   if (pathname.startsWith("/profile")) {
     return { title: "个人中心", icon: "ti-user" };
   }
+  if (pathname.startsWith("/user")) {
+    return { title: "命主档案", icon: "ti-id-badge-2", sub: "命盘与星币" };
+  }
+  if (pathname.startsWith("/settings")) {
+    return { title: "偏好设置", icon: "ti-settings" };
+  }
+  if (pathname.startsWith("/legal")) {
+    return { title: "法律信息", icon: "ti-shield-lock" };
+  }
+  if (pathname.startsWith("/auth")) {
+    return { title: "账号", icon: "ti-login" };
+  }
   if (pathname.startsWith("/share")) {
     // /share 已永久重定向到 /promoter，但仍保留 topbar 兼容（短暂闪现）
     return { title: "推广中心", icon: "ti-megaphone" };

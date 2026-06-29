@@ -8,6 +8,8 @@ import { toast } from "sonner";
 
 import { PageContainer } from "@/components/shared/page-container";
 import { SectionTitle } from "@/components/shared/section-title";
+import { ErrorRetryCard } from "@/components/shared/error-retry-card";
+import { LoadingState } from "@/components/shared/loading-state";
 
 // ──────────────────────────────────────────────────────────────
 // 类型定义
@@ -73,7 +75,7 @@ const COMPARE_ROWS: Array<{
   highlight?: number; // 第几列高亮（0-based）
 }> = [
   { feature: "命盘生成", values: ["✓ 无限", "✓ 无限", "✓ 无限", "✓ 无限"] },
-  { feature: "AI 解盘", values: ["每日 3 次", "✓ 无限", "✓ 无限", "✓ 无限"] },
+  { feature: "AI 对话", values: ["每日 3 次", "✓ 无限", "✓ 无限", "✓ 无限"] },
   { feature: "报告折扣", values: ["—", "9 折", "8 折", "7 折"], highlight: 3 },
   { feature: "合盘折扣", values: ["—", "9 折", "8 折", "7 折"] },
   { feature: "每日赠送星币", values: ["—", "5", "6", "8"] },
@@ -101,6 +103,15 @@ export default function PricingPage() {
   } | null>(null);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [payChannel, setPayChannel] = useState<"WECHAT" | "ALIPAY">("WECHAT");
+  // O-09：下单失败时展示结构化错误卡片（记录重试所需参数）
+  const [purchaseError, setPurchaseError] = useState<{
+    title: string;
+    detail: string;
+    code?: string | number;
+    retryType?: "MEMBERSHIP" | "CREDIT_PACK" | "COIN_PACK";
+    retryPayload?: { plan?: string; packId?: string };
+    retryLabel?: string;
+  } | null>(null);
 
   const currentPlan = (session?.user?.membershipPlan as string) || "FREE";
 
@@ -136,8 +147,15 @@ export default function PricingPage() {
       router.push("/auth/login");
       return;
     }
+    // B-17：微信登录未绑定手机的用户，付费前强制引导绑定
+    if ((session?.user as { phoneBindingRequired?: boolean }).phoneBindingRequired) {
+      toast.info("微信登录用户需先绑定手机号，才能完成购买");
+      router.push(`/auth/bind-phone?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
     const key = `${type}:${payload.plan ?? payload.packId ?? ""}`;
     setPurchasing(key);
+    setPurchaseError(null);
     try {
       const res = await fetch("/api/payment", {
         method: "POST",
@@ -157,10 +175,24 @@ export default function PricingPage() {
           toast.success(`${label} 订单已创建（¥${data.amount}）`);
         }
       } else {
-        toast.error(data.error || "创建订单失败");
+        setPurchaseError({
+          title: "创建订单失败",
+          detail: data.error || "支付服务暂时不可用，请稍后重试",
+          code: res.status,
+          retryType: type,
+          retryPayload: payload,
+          retryLabel: label,
+        });
       }
     } catch {
-      toast.error("网络错误，请稍后重试");
+      setPurchaseError({
+        title: "网络错误",
+        detail: "无法连接到支付服务，请检查网络后重试",
+        code: "NETWORK_ERROR",
+        retryType: type,
+        retryPayload: payload,
+        retryLabel: label,
+      });
     } finally {
       setPurchasing(null);
     }
@@ -181,10 +213,7 @@ export default function PricingPage() {
   if (loading) {
     return (
       <PageContainer maxWidth={1100}>
-        <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-          <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 24 }} />
-          <p style={{ marginTop: 12, fontSize: 13 }}>加载会员方案中…</p>
-        </div>
+        <LoadingState title="加载会员方案中…" description="请稍候" />
       </PageContainer>
     );
   }
@@ -205,7 +234,7 @@ export default function PricingPage() {
       price: 0,
       period: "/永久",
       features: [
-        "每日 3 次 AI 解盘",
+        "每日 3 次 AI 对话",
         "基础命盘生成",
         "查看分析预览（1/3）",
         "报告原价购买",
@@ -229,7 +258,7 @@ export default function PricingPage() {
         `报告 / 合盘 ${feat.reportDiscount}`,
         `每日赠送 ${feat.dailyCoins} 星币`,
         feat.exclusive,
-        "无限次 AI 解盘",
+        "无限次 AI 对话",
         ...(planDef === "YEARLY" ? ["历史报告永久保存", "专属客服 + 1v1 顾问"] : []),
       ],
       cta: planDef === "YEARLY" ? "开通年度" : `开通${planDef === "MONTHLY" ? "月度" : "季度"}`,
@@ -273,6 +302,22 @@ export default function PricingPage() {
           </div>
         )}
       </div>
+
+      {/* O-09：下单失败重试卡片 */}
+      {purchaseError && (
+        <ErrorRetryCard
+          title={purchaseError.title}
+          detail={purchaseError.detail}
+          code={purchaseError.code}
+          retrying={purchasing !== null}
+          onRetry={() => {
+            if (purchaseError.retryType && purchaseError.retryPayload && purchaseError.retryLabel) {
+              handlePurchase(purchaseError.retryType, purchaseError.retryPayload, purchaseError.retryLabel);
+            }
+          }}
+          style={{ marginBottom: 20 }}
+        />
+      )}
 
       {/* ─── 1. 会员套餐 ────────────────────────────────── */}
       <div className="page-header" style={{ textAlign: "center", marginBottom: 16 }}>
@@ -467,7 +512,7 @@ export default function PricingPage() {
         <SectionTitle icon="ti-coin" title="星币充值（消耗品）" />
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 16, marginTop: 4 }}>
-        星币可直接用于报告、合盘、AI 解盘，无有效期
+        星币可直接用于报告、合盘、AI 对话，无有效期
       </p>
 
       <div
@@ -529,7 +574,7 @@ export default function PricingPage() {
           <span className="sr-l">
             <span
               className="sr-icon"
-              style={{ background: "rgba(7,193,96,.12)", color: "#07c160" }}
+              style={{ background: "var(--brand-wechat-soft)", color: "var(--brand-wechat)" }}
             >
               <i className="ti ti-brand-wechat" />
             </span>
@@ -549,7 +594,7 @@ export default function PricingPage() {
           <span className="sr-l">
             <span
               className="sr-icon"
-              style={{ background: "rgba(0,160,233,.12)", color: "#00a0e9" }}
+              style={{ background: "var(--brand-alipay-soft)", color: "var(--brand-alipay)" }}
             >
               <i className="ti ti-brand-alipay" />
             </span>

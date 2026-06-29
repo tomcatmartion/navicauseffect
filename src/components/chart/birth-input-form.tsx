@@ -120,6 +120,42 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
   const [fatherZodiac, setFatherZodiac] = useState(() => yearToZodiac(1970)); // 狗
   const [motherZodiac, setMotherZodiac] = useState(() => yearToZodiac(1973)); // 牛
   const [isLunar, setIsLunar] = useState(false);
+  // S-10：即时校验错误状态
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // S-10：单字段即时校验
+  const validateField = (name: string): string => {
+    if (name === "city") {
+      return city.trim() ? "" : "请输入或选择出生城市";
+    }
+    if (name === "year") {
+      const y = parseInt(isLunar ? lunarYear : solarYear, 10);
+      if (Number.isNaN(y)) return "年份无效";
+      if (y < 1900 || y > thisYear) return `年份应在 1900-${thisYear} 之间`;
+      return "";
+    }
+    if (name === "day") {
+      const y = parseInt(solarYear, 10);
+      const m = parseInt(solarMonth, 10);
+      const d = parseInt(solarDay, 10);
+      if (!Number.isNaN(y) && !Number.isNaN(m) && !Number.isNaN(d)) {
+        const max = getDaysInMonth(y, m);
+        if (d < 1 || d > max) return `日期应为 1-${max} 之间`;
+      }
+      return "";
+    }
+    return "";
+  };
+
+  const handleBlur = (name: string) => {
+    const err = validateField(name);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[name] = err;
+      else delete next[name];
+      return next;
+    });
+  };
 
   // 年份变化时自动重置生肖为当年生肖
   const handleFatherYearChange = (val: string) => {
@@ -171,6 +207,20 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // S-10：提交前全字段校验，定位到第一个错误
+    const errs: Record<string, string> = {};
+    const cityErr = validateField("city");
+    const yearErr = validateField("year");
+    const dayErr = validateField("day");
+    if (cityErr) errs.city = cityErr;
+    if (yearErr) errs.year = yearErr;
+    if (dayErr) errs.day = dayErr;
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({});
 
     if (!isLunar && !birthDateSolar) return;
 
@@ -360,7 +410,13 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
       {/* 父母出生年份（可选） */}
       <div className="field" style={{ padding: 14, border: "1px solid var(--border)", borderRadius: 12 }}>
         <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-          <label className="field-label" style={{ marginBottom: 0, fontSize: 12 }}>父母出生年份（可选）</label>
+          <label
+            className="field-label"
+            style={{ marginBottom: 0, fontSize: 12, cursor: "help" }}
+            title="用于四化评分修正：父母生年天干决定父母宫化禄/化忌落点，影响家庭缘、长辈助力评分。留空则跳过此维度，不影响主盘排布。"
+          >
+            父母出生年份（可选）
+          </label>
           <Switch checked={showParentInfo} onCheckedChange={setShowParentInfo} />
         </div>
         {showParentInfo && (
@@ -462,6 +518,29 @@ export function BirthInputForm({ onSubmit, isLoading }: BirthInputFormProps) {
               </option>
             ))}
           </NativeSelect>
+        </div>
+      )}
+
+      {/* S-10：即时校验错误提示 */}
+      {Object.keys(fieldErrors).length > 0 && (
+        <div
+          className="help-note"
+          style={{
+            marginBottom: 12,
+            borderColor: "var(--danger)",
+            color: "var(--danger)",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: 4,
+          }}
+          role="alert"
+        >
+          {Object.entries(fieldErrors).map(([k, v]) => (
+            <div key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <i className="ti ti-alert-circle" />
+              <span>{v}</span>
+            </div>
+          ))}
         </div>
       )}
 

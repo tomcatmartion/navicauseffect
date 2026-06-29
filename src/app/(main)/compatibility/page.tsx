@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useCallback, Suspense, type CSSProperties } from "react";
 import { useSession } from "next-auth/react";
+import { useRequirePhoneBinding } from "@/lib/auth/use-require-phone-binding";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { PageContainer } from "@/components/shared/page-container";
 import { SectionTitle } from "@/components/shared/section-title";
-import { EmptyState } from "@/components/shared/empty-state";
+import { usePaywall } from "@/components/shared/paywall-dialog";
+import { ErrorRetryCard } from "@/components/shared/error-retry-card";
+import { LoadingState } from "@/components/shared/loading-state";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -90,8 +93,10 @@ const sihuaColor = (t: '禄' | '权' | '科' | '忌'): CSSProperties => {
 
 function CompatibilityContent() {
   const { status: sessionStatus } = useSession();
+  const requirePhoneBinding = useRequirePhoneBinding();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { showPaywall } = usePaywall();
 
   const [charts, setCharts] = useState<ChartPicker[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(true);
@@ -101,6 +106,15 @@ function CompatibilityContent() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [histories, setHistories] = useState<Analysis[]>([]);
+  // O-16：合盘 loading 阶段文案（每 ~8 秒切换）
+  const [analyzePhase, setAnalyzePhase] = useState(0);
+  // O-09：分析失败时展示结构化错误卡片
+  const [analysisError, setAnalysisError] = useState<{ title: string; detail: string; code?: string | number } | null>(null);
+  const ANALYZE_PHASES = [
+    { icon: "ti-database", text: "加载命盘数据…" },
+    { icon: "ti-brain", text: "AI 正在分析契合度…" },
+    { icon: "ti-file-text", text: "生成合盘报告…" },
+  ];
 
   const fetchCharts = useCallback(async () => {
     try {
@@ -148,7 +162,15 @@ function CompatibilityContent() {
       toast.error("不能与自己合盘");
       return;
     }
+    // B-17：微信登录用户付费前强制绑定手机
+    if (requirePhoneBinding()) return;
     setAnalyzing(true);
+    setAnalyzePhase(0);
+    setAnalysisError(null);
+    // O-16：阶段文案轮播
+    const phaseTimer = setInterval(() => {
+      setAnalyzePhase((p) => Math.min(p + 1, ANALYZE_PHASES.length - 1));
+    }, 8000);
     try {
       const res = await fetch("/api/ziwei/compatibility", {
         method: "POST",
@@ -160,13 +182,23 @@ function CompatibilityContent() {
         setAnalysis(data.analysis);
         if (!data.cached) toast.success("合盘分析完成");
         fetchHistories();
+      } else if (res.status === 402) {
+        // S-08：触发统一付费前置弹层
+        const err = await res.json().catch(() => ({}));
+        showPaywall({
+          reason: (err as Record<string, string>).code,
+          message: (err as Record<string, string>).error,
+          resource: "COMPATIBILITY",
+        });
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error ?? "分析失败");
+        const msg = err.error ?? "分析失败";
+        setAnalysisError({ title: "合盘分析失败", detail: msg, code: res.status });
       }
     } catch {
-      toast.error("网络错误");
+      setAnalysisError({ title: "网络错误", detail: "无法连接到服务，请检查网络后重试", code: "NETWORK_ERROR" });
     } finally {
+      clearInterval(phaseTimer);
       setAnalyzing(false);
     }
   };
@@ -174,7 +206,7 @@ function CompatibilityContent() {
   if (loadingCharts) {
     return (
       <PageContainer maxWidth={900}>
-        <EmptyState icon="ti-loader-2" title="加载中…" />
+        <LoadingState title="加载命盘列表中…" description="请稍候" />
       </PageContainer>
     );
   }
@@ -184,16 +216,69 @@ function CompatibilityContent() {
       <SectionTitle as="h1" icon="ti-hearts" title="双人合盘" />
 
       {charts.length < 2 ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <EmptyState
-            icon="ti-sparkles"
-            title="至少需要 2 张已保存的命盘"
-            description="请先在排盘页保存至少 2 张命盘（自己 + 对方），才能进行合盘分析"
+        <div
+          className="card"
+          style={{
+            marginTop: 16,
+            padding: 28,
+            textAlign: "center",
+            borderColor: "var(--brand)",
+            background: "linear-gradient(135deg, var(--soft), var(--panel))",
+          }}
+        >
+          {/* 进度环 */}
+          <div
+            style={{
+              width: 88,
+              height: 88,
+              margin: "0 auto 16px",
+              position: "relative",
+              borderRadius: "50%",
+              background: `conic-gradient(var(--brand) ${(charts.length / 2) * 360}deg, var(--line) 0deg)`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
-            <button className="btn btn-primary" onClick={() => router.push("/chart")}>
-              <i className="ti ti-plus" /> 去排盘
-            </button>
-          </EmptyState>
+            <div
+              style={{
+                width: 70,
+                height: 70,
+                borderRadius: "50%",
+                background: "var(--panel)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0,
+              }}
+            >
+              <span style={{ fontSize: 20, fontWeight: 700, color: "var(--brand)" }}>
+                {charts.length}/2
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>已保存</span>
+            </div>
+          </div>
+
+          <h3
+            className="home-section-title"
+            style={{ fontSize: 16, color: "var(--brand)", marginBottom: 6 }}
+          >
+            {charts.length === 0
+              ? "开始排盘，开启合盘分析"
+              : "再排一张盘即可合盘"}
+          </h3>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 18px", lineHeight: 1.7 }}>
+            合盘需要 2 张已保存的命盘（自己 + 对方）。
+            {charts.length === 1 && " 您已有 1 张盘，再排一张即可开始。"}
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={() => router.push("/chart")}
+            style={{ minWidth: 140 }}
+          >
+            <i className="ti ti-stars" /> {charts.length === 0 ? "去排盘" : "再排一张"}
+          </button>
         </div>
       ) : (
         <>
@@ -248,11 +333,57 @@ function CompatibilityContent() {
               onClick={handleAnalyze}
             >
               {analyzing ? (
-                <><i className="ti ti-loader-2 ti-spin" /> 分析中（AI 解读需 ~30 秒）...</>
+                <>
+                  <i className={`ti ${ANALYZE_PHASES[analyzePhase].icon} ti-spin`} />
+                  {ANALYZE_PHASES[analyzePhase].text}
+                </>
               ) : (
                 <><i className="ti ti-heart" /> 开始合盘</>
               )}
             </button>
+
+            {/* O-16：阶段进度指示 */}
+            {analyzing && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 8,
+                  fontSize: 11,
+                }}
+              >
+                {ANALYZE_PHASES.map((p, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      background: i <= analyzePhase ? "var(--brand)" : "var(--soft)",
+                      color: i <= analyzePhase ? "#fff" : "var(--text-muted)",
+                      transition: "all .2s",
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                ))}
+                <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
+                  预计 ~30 秒
+                </span>
+              </div>
+            )}
+
+            {/* O-09：合盘失败重试卡片 */}
+            {analysisError && !analyzing && (
+              <ErrorRetryCard
+                title={analysisError.title}
+                detail={analysisError.detail}
+                code={analysisError.code}
+                onRetry={handleAnalyze}
+                retrying={analyzing}
+                style={{ marginTop: 16 }}
+              />
+            )}
           </div>
 
           {/* 历史合盘 */}
@@ -324,7 +455,7 @@ function CompatibilityResultView({
   return (
     <div className="compat-result">
       {/* 头部 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <div>
           <h2 style={{ fontSize: 16, color: "var(--ink)", fontWeight: 600, margin: 0 }}>
             {analysis.selfChart.name} <span style={{ color: "var(--brand)", margin: "0 6px" }}>×</span> {analysis.partnerChart.name}
@@ -333,9 +464,27 @@ function CompatibilityResultView({
             {new Date(analysis.createdAt).toLocaleString("zh-CN")}
           </p>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={onReset}>
-          <i className="ti ti-refresh" /> 重新选
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          {/* S-07：分享按钮 */}
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={async () => {
+              const url = `${window.location.origin}/compatibility?id=${analysis.id}`;
+              try {
+                await navigator.clipboard.writeText(url);
+                toast.success("已复制链接，可发给好友查看");
+              } catch {
+                toast.error("复制失败，请手动复制：" + url);
+              }
+            }}
+            title="复制只读链接"
+          >
+            <i className="ti ti-link" /> 复制链接
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={onReset}>
+            <i className="ti ti-refresh" /> 重新选
+          </button>
+        </div>
       </div>
 
       {/* 综合评分 + 维度 */}
@@ -514,7 +663,7 @@ export default function CompatibilityPage() {
     <Suspense
       fallback={
         <PageContainer maxWidth={900}>
-          <EmptyState icon="ti-loader-2" title="加载中…" />
+          <LoadingState title="加载合盘页面中…" description="请稍候" />
         </PageContainer>
       }
     >

@@ -59,20 +59,39 @@ type ShareChannel = {
   label: string;
   desc: string;
   icon: string;
-  color?: string;
-  action: "copy" | "intent" | "toast";
+  action: "copy" | "intent" | "qr" | "copyText";
   intentUrl?: string;
+  /** C-12：常用渠道默认显示，其他收进「更多渠道」抽屉 */
+  primary?: boolean;
 };
 
 const CHANNELS: ShareChannel[] = [
+  {
+    key: "link",
+    platform: "LINK",
+    label: "复制链接",
+    desc: "复制专属邀请链接，可粘贴到任意位置",
+    icon: "ti-link",
+    action: "copy",
+    primary: true,
+  },
   {
     key: "wechat",
     platform: "WECHAT",
     label: "微信好友",
     desc: "复制链接后粘贴给微信好友",
     icon: "ti-brand-wechat",
-    color: "#07c160",
     action: "copy",
+    primary: true,
+  },
+  {
+    key: "qrcode",
+    platform: "QRCODE",
+    label: "二维码",
+    desc: "生成二维码图片（B-09 真实化）",
+    icon: "ti-qrcode",
+    action: "qr",
+    primary: true,
   },
   {
     key: "moments",
@@ -80,7 +99,6 @@ const CHANNELS: ShareChannel[] = [
     label: "朋友圈",
     desc: "复制链接 + 推荐文案发朋友圈",
     icon: "ti-device-imessage",
-    color: "#07c160",
     action: "copy",
   },
   {
@@ -89,7 +107,6 @@ const CHANNELS: ShareChannel[] = [
     label: "新浪微博",
     desc: "跳转微博分享",
     icon: "ti-brand-weibo",
-    color: "#e6162d",
     action: "intent",
     intentUrl: "https://service.weibo.com/share/share.php",
   },
@@ -99,43 +116,24 @@ const CHANNELS: ShareChannel[] = [
     label: "QQ",
     desc: "跳转 QQ 分享",
     icon: "ti-brand-qq",
-    color: "#12b7f5",
     action: "intent",
     intentUrl: "https://connect.qq.com/widget/shareqq/index.html",
-  },
-  {
-    key: "link",
-    platform: "LINK",
-    label: "复制链接",
-    desc: "复制专属邀请链接",
-    icon: "ti-link",
-    action: "copy",
-  },
-  {
-    key: "qrcode",
-    platform: "QRCODE",
-    label: "二维码",
-    desc: "生成二维码图片",
-    icon: "ti-qrcode",
-    action: "toast",
   },
   {
     key: "redbook",
     platform: "REDBOOK",
     label: "小红书",
-    desc: "复制推荐文案（手动发布）",
+    desc: "复制推荐文案，打开小红书 App 粘贴",
     icon: "ti-brand-redhat",
-    color: "#ff2741",
-    action: "toast",
+    action: "copyText",
   },
   {
     key: "zhihu",
     platform: "ZHIHU",
     label: "知乎",
-    desc: "跳转知乎",
+    desc: "复制推荐文案，打开知乎 App 粘贴",
     icon: "ti-brand-zhihu",
-    color: "#0084ff",
-    action: "toast",
+    action: "copyText",
   },
 ];
 
@@ -157,6 +155,11 @@ export default function PromoterPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"share" | "team" | "earnings">("share");
   const [sharing, setSharing] = useState<string | null>(null);
+  // B-09：二维码 dialog 状态
+  const [qrCode, setQrCode] = useState<{ url: string; dataUrl: string } | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  // C-12：更多渠道抽屉
+  const [showMoreChannels, setShowMoreChannels] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -168,6 +171,19 @@ export default function PromoterPage() {
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setData(statsData);
+        // S-15：收益到账提醒 — 对比 localStorage 上次访问的 totalRewardPoints
+        try {
+          const currentTotal = statsData.stats?.totalRewardPoints ?? 0;
+          const last = window.localStorage.getItem("zw-promoter-last-earning");
+          const lastNum = last ? parseInt(last, 10) : null;
+          if (lastNum !== null && currentTotal > lastNum) {
+            const delta = currentTotal - lastNum;
+            toast.success(`自上次访问起新增 ${delta} 星币收益`, { duration: 4000 });
+          }
+          window.localStorage.setItem("zw-promoter-last-earning", String(currentTotal));
+        } catch {
+          // localStorage 异常静默
+        }
         // 拉取最近 10 条收益
         if (earningsRes.ok) {
           const eData = await earningsRes.json();
@@ -218,13 +234,39 @@ export default function PromoterPage() {
             channel.key === "link" ? shareUrl : shareText,
           );
           toast.success(`已复制${channel.key === "link" ? "邀请链接" : "分享文案"}`);
+        } else if (channel.action === "copyText") {
+          // B-09：小红书/知乎等无 web 分享 SDK 的平台，诚实告知 + 复制文案
+          await navigator.clipboard.writeText(shareText);
+          toast.success(`已复制分享文案，请打开 ${channel.label} App 粘贴发布`, {
+            duration: 4000,
+          });
         } else if (channel.action === "intent" && channel.intentUrl) {
           const url = `${channel.intentUrl}?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`;
           window.open(url, "_blank", "noopener,noreferrer");
           toast.info(`已打开${channel.label}，请确认发布`);
-        } else {
-          toast.info(`${channel.label}：请手动复制以下链接发布`);
-          await navigator.clipboard.writeText(shareText);
+        } else if (channel.action === "qr") {
+          // B-09：真实生成二维码图片
+          if (!shareUrl) {
+            toast.error("邀请链接尚未生成，请稍候");
+            return;
+          }
+          setQrLoading(true);
+          try {
+            const QRCode = (await import("qrcode")).default;
+            const dataUrl = await QRCode.toDataURL(shareUrl, {
+              width: 320,
+              margin: 2,
+              color: { dark: "#2a2520", light: "#ffffff" },
+              errorCorrectionLevel: "M",
+            });
+            setQrCode({ url: shareUrl, dataUrl });
+            toast.success("二维码已生成");
+          } catch (err) {
+            console.error("QR 生成失败:", err);
+            toast.error("二维码生成失败，请尝试复制链接");
+          } finally {
+            setQrLoading(false);
+          }
         }
         // 记录分享到后端
         try {
@@ -430,11 +472,11 @@ export default function PromoterPage() {
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
               gap: 14,
-              marginBottom: 24,
+              marginBottom: 12,
               marginTop: 12,
             }}
           >
-            {CHANNELS.map((channel) => (
+            {CHANNELS.filter((c) => c.primary).map((channel) => (
               <button
                 key={channel.key}
                 type="button"
@@ -460,7 +502,7 @@ export default function PromoterPage() {
                   className={`ti ${channel.icon}`}
                   style={{
                     fontSize: 28,
-                    color: channel.color || "var(--brand)",
+                    color: "var(--brand)",
                   }}
                 />
                 <h4 style={{ fontSize: 14, color: "var(--brand)", fontWeight: 600 }}>
@@ -471,6 +513,69 @@ export default function PromoterPage() {
                 </p>
               </button>
             ))}
+          </div>
+
+          {/* C-12：更多渠道（折叠） */}
+          <div style={{ marginBottom: 24 }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setShowMoreChannels((v) => !v)}
+              aria-expanded={showMoreChannels}
+              style={{ marginTop: 4 }}
+            >
+              <i className={`ti ${showMoreChannels ? "ti-chevron-up" : "ti-chevron-down"}`} />
+              {showMoreChannels ? "收起更多渠道" : "更多渠道（朋友圈 / 微博 / QQ / 小红书 / 知乎）"}
+            </button>
+            {showMoreChannels && (
+              <div
+                className="share-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                  gap: 14,
+                  marginTop: 12,
+                }}
+              >
+                {CHANNELS.filter((c) => !c.primary).map((channel) => (
+                  <button
+                    key={channel.key}
+                    type="button"
+                    className="share-card"
+                    style={{
+                      background: "var(--panel)",
+                      border: "1px solid var(--line)",
+                      borderRadius: "var(--radius)",
+                      padding: 18,
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 6,
+                      textAlign: "left",
+                      boxShadow: "var(--shadow)",
+                      opacity: sharing === channel.key ? 0.6 : 1,
+                    }}
+                    onClick={() => handleShare(channel)}
+                    disabled={sharing === channel.key}
+                  >
+                    <i
+                      className={`ti ${channel.icon}`}
+                      style={{
+                        fontSize: 28,
+                        color: "var(--brand)",
+                      }}
+                    />
+                    <h4 style={{ fontSize: 14, color: "var(--brand)", fontWeight: 600 }}>
+                      {channel.label}
+                    </h4>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      {channel.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 分享奖励规则 */}
@@ -573,6 +678,112 @@ export default function PromoterPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* B-09：二维码 Dialog */}
+      {qrCode && (
+        <div
+          onClick={() => setQrCode(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="card"
+            style={{
+              padding: 24,
+              maxWidth: 360,
+              width: "100%",
+              textAlign: "center",
+              background: "var(--panel)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button
+                type="button"
+                className="iconbtn"
+                onClick={() => setQrCode(null)}
+                aria-label="关闭"
+                style={{ width: 28, height: 28 }}
+              >
+                <i className="ti ti-x" />
+              </button>
+            </div>
+            <h3
+              className="home-section-title"
+              style={{ fontSize: 16, color: "var(--brand)", marginBottom: 6 }}
+            >
+              <i className="ti ti-qrcode" style={{ marginRight: 6 }} />
+              我的邀请二维码
+            </h3>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 16px" }}>
+              扫码即可进入紫微问道，自动绑定您的邀请码
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrCode.dataUrl}
+              alt="邀请二维码"
+              style={{
+                width: 280,
+                height: 280,
+                margin: "0 auto",
+                border: "1px solid var(--line)",
+                borderRadius: 8,
+                background: "#fff",
+                display: "block",
+              }}
+            />
+            <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "center" }}>
+              <a
+                href={qrCode.dataUrl}
+                download={`invite-${inviteCode || "qrcode"}.png`}
+                className="btn btn-primary btn-sm"
+                style={{ textDecoration: "none" }}
+              >
+                <i className="ti ti-download" /> 保存图片
+              </a>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(qrCode.url);
+                  toast.success("链接已复制");
+                }}
+              >
+                <i className="ti ti-link" /> 复制链接
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 二维码生成中提示 */}
+      {qrLoading && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99,
+            color: "#fff",
+            gap: 10,
+            fontSize: 14,
+          }}
+        >
+          <i className="ti ti-loader-2 ti-spin" />
+          正在生成二维码…
+        </div>
       )}
     </PageContainer>
   );

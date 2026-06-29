@@ -17,6 +17,7 @@
 import { auth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { consumeRights, consumeErrorToResponse } from '@/lib/auth/consume-rights'
 import { getChartSnapshot } from '@/core/chart/chart-record-service'
 import { executeStage4Full } from '@/core/stages/stage4-full-compatibility'
 
@@ -87,6 +88,19 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: '未登录' }, { status: 401 })
+    }
+
+    // 统一权益消耗(会员免费,非会员走免费额度)
+    const ip = req.headers.get('x-forwarded-for') || 'unknown'
+    const consume = await consumeRights({
+      userId: session.user.id,
+      ip,
+      resourceType: 'COMPATIBILITY',
+      baseCost: 0,
+    })
+    if (!consume.ok) {
+      const err = consumeErrorToResponse(consume.error)
+      return NextResponse.json(err.body, { status: err.status })
     }
 
     let body: unknown

@@ -85,11 +85,14 @@ function StatusDisplay({ status, progress }: { status: string; progress: number 
           <i className="ti ti-x" /> 生成失败
         </span>
       );
-    case "GENERATING":
+    case "GENERATING": {
+      // S-05：3 阶段精细化文案（<40% 排盘解析 / 40-80% AI 校对 / >80% 即将完成）
+      const phaseText =
+        progress < 40 ? "正在排盘解析" : progress < 80 ? "AI 校对中" : "即将完成";
       return (
         <div>
           <span style={statusChipStyle("var(--soft)", "var(--brand)")}>
-            <i className="ti ti-loader-2 ti-spin" /> 生成中 {progress}%
+            <i className="ti ti-loader-2 ti-spin" /> {phaseText} · {progress}%
           </span>
           <div className="dim-track" style={{ height: 4, marginTop: 6 }}>
             <div
@@ -99,6 +102,7 @@ function StatusDisplay({ status, progress }: { status: string; progress: number 
           </div>
         </div>
       );
+    }
     case "PENDING":
     default:
       return (
@@ -320,6 +324,37 @@ export default function ReportDetailPage() {
           <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", margin: 0 }}>
             {report.template.name}
           </h1>
+          {/* O-13：报告操作按钮（已完成才显示） */}
+          {isCompleted && (
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm no-print"
+                onClick={() => {
+                  const summary = parsed?.chapters
+                    ?.map((c: { title?: string; content?: string }) =>
+                      c.title ? `## ${c.title}\n${c.content ?? ""}` : c.content ?? "",
+                    )
+                    .join("\n\n") ?? "";
+                  navigator.clipboard.writeText(
+                    `${report.template.name}\n命主：${report.identity.name}\n\n${summary}`,
+                  );
+                  toast.success("报告摘要已复制到剪贴板");
+                }}
+                title="复制摘要"
+              >
+                <i className="ti ti-copy" /> 复制
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm no-print"
+                onClick={() => window.print()}
+                title="打印 / 另存为 PDF"
+              >
+                <i className="ti ti-printer" /> 打印
+              </button>
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
           <span>命主：{report.identity.name}</span>
@@ -342,11 +377,68 @@ export default function ReportDetailPage() {
           }}
         >
           <i className="ti ti-x" style={{ color: "var(--danger)", fontSize: 20, marginTop: 2 }} />
-          <div>
+          <div style={{ flex: 1 }}>
             <p style={{ fontSize: 14, fontWeight: 600, color: "var(--danger)", margin: 0 }}>报告生成失败</p>
-            <p style={{ fontSize: 12, color: "var(--ink-light)", marginTop: 4, marginBottom: 0 }}>
+            <p style={{ fontSize: 12, color: "var(--ink-light)", marginTop: 4, marginBottom: 8 }}>
               {report.errorMessage || "请稍后重试或联系客服"}
             </p>
+            {/* O-19：失败态重试 CTA */}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  // 优先尝试用本地缓存的生成参数直接重试
+                  const raw = typeof window !== "undefined" ? localStorage.getItem(`zw-report-params-${report.id}`) : null;
+                  if (raw) {
+                    try {
+                      const params = JSON.parse(raw) as {
+                        templateId: string;
+                        identityId: string;
+                        chartRecordId: string;
+                        extraInfo?: string;
+                      };
+                      const res = await fetch("/api/reports", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(params),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        toast.success("报告已重新生成");
+                        if (data.report?.id) {
+                          router.push(`/reports/${data.report.id}`);
+                        } else {
+                          router.refresh();
+                        }
+                        return;
+                      }
+                      const err = await res.json().catch(() => ({}));
+                      toast.error(err.error || "重试失败");
+                    } catch {
+                      toast.error("网络错误，请重试");
+                    }
+                    return;
+                  }
+                  // 无缓存参数：跳回模板列表，预选原命主
+                  const params = new URLSearchParams({
+                    tab: "generate",
+                    identityId: report.identity.id,
+                    templateId: report.template.id,
+                  });
+                  router.push(`/reports?${params.toString()}`);
+                }}
+              >
+                <i className="ti ti-refresh" /> 重新生成
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => router.push("/reports")}
+              >
+                返回模板
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -549,49 +641,78 @@ export default function ReportDetailPage() {
             </div>
           )}
 
-          {/* 目录 */}
-          {parsed.chapters.length > 3 && (
-            <div className="card" style={{ marginTop: 14, background: "var(--soft)" }}>
-              <h3 style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.1em", marginBottom: 8 }}>
-                目录
-              </h3>
-              <div className="log-list" style={{ gap: 2 }}>
-                {parsed.chapters.map((ch, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      const el = document.getElementById(`chapter-${idx}`);
-                      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      background: "transparent",
-                      border: "none",
-                      padding: "4px 0",
-                      fontSize: 13,
-                      color: "var(--ink-light)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {idx + 1}. {ch.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* S-16：桌面端左侧 sticky 章节目录 + 移动端折叠 select */}
+          <div
+            className="report-with-toc"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr)",
+              gap: 18,
+              marginTop: 14,
+            }}
+          >
+            {parsed.chapters.length > 3 && (
+              <aside
+                className="report-toc"
+                style={{
+                  order: 0,
+                  background: "var(--soft)",
+                  border: "1px solid var(--line-light)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: 14,
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    letterSpacing: "0.1em",
+                    marginBottom: 8,
+                  }}
+                >
+                  章节目录
+                </h3>
+                <div className="log-list" style={{ gap: 2 }}>
+                  {parsed.chapters.map((ch, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        const el = document.getElementById(`chapter-${idx}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        padding: "4px 0",
+                        fontSize: 13,
+                        color: "var(--ink-light)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {idx + 1}. {ch.title}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            )}
 
-          {/* 章节内容 */}
-          {parsed.chapters.map((chapter, idx) => (
-            <div key={idx} id={`chapter-${idx}`} className="report-sec" style={{ marginTop: 14, scrollMarginTop: 80 }}>
-              <h4>
-                <span style={{ color: "var(--brand)", marginRight: 6 }}>{idx + 1}.</span>
-                {chapter.title}
-              </h4>
-              <p style={{ whiteSpace: "pre-wrap" }}>{chapter.content || "内容生成中..."}</p>
+            {/* 章节内容 */}
+            <div className="report-chapters">
+              {parsed.chapters.map((chapter, idx) => (
+                <div key={idx} id={`chapter-${idx}`} className="report-sec" style={{ marginTop: 14, scrollMarginTop: 80 }}>
+                  <h4>
+                    <span style={{ color: "var(--brand)", marginRight: 6 }}>{idx + 1}.</span>
+                    {chapter.title}
+                  </h4>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{chapter.content || "内容生成中..."}</p>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
 
           {/* 推荐问题 */}
           {parsed.content && Array.isArray(parsed.content) && parsed.content.some((p) => p.qa && p.qa.length > 0) && (

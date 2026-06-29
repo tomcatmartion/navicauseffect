@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import { useSession } from "next-auth/react";
+import { useRequirePhoneBinding } from "@/lib/auth/use-require-phone-binding";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ import {
 import { PageContainer } from "@/components/shared/page-container";
 import { SectionTitle } from "@/components/shared/section-title";
 import { EmptyState } from "@/components/shared/empty-state";
+import { usePaywall } from "@/components/shared/paywall-dialog";
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -429,7 +431,9 @@ function IdentityGroup({ group }: IdentityGroupProps) {
 
 export default function ReportsPage() {
   const { status: sessionStatus } = useSession();
+  const requirePhoneBinding = useRequirePhoneBinding();
   const router = useRouter();
+  const { showPaywall } = usePaywall();
 
   const [basicTemplates, setBasicTemplates] = useState<ReportTemplate[]>([]);
   const [advancedTemplates, setAdvancedTemplates] = useState<ReportTemplate[]>([]);
@@ -519,6 +523,12 @@ export default function ReportsPage() {
   const handleIdentityChange = (id: string) => {
     setSelectedIdentityId(id);
     fetchChartRecords(id);
+    // O-06：记忆选择
+    try {
+      localStorage.setItem("lastReportIdentityId", id);
+    } catch {
+      // 隐私模式下可能失败，忽略
+    }
   };
 
   const fetchIdentities = useCallback(async () => {
@@ -528,10 +538,23 @@ export default function ReportsPage() {
         const data = await res.json();
         const list: Identity[] = data.identities ?? [];
         setIdentities(list);
-        const active = list.find((i) => i.isActive);
-        if (active && !urlPreserveRef.current) {
-          setSelectedIdentityId(active.id);
-          fetchChartRecords(active.id);
+        // O-06：优先用 localStorage 记忆的上次命主，其次 active，再其次第一个
+        let picked: Identity | undefined;
+        if (!urlPreserveRef.current) {
+          const lastIdentityId =
+            typeof window !== "undefined"
+              ? localStorage.getItem("lastReportIdentityId")
+              : null;
+          if (lastIdentityId) {
+            picked = list.find((i) => i.id === lastIdentityId);
+          }
+        }
+        if (!picked) {
+          picked = list.find((i) => i.isActive) ?? list[0];
+        }
+        if (picked) {
+          setSelectedIdentityId(picked.id);
+          fetchChartRecords(picked.id);
         }
       }
     } catch {
@@ -600,6 +623,8 @@ export default function ReportsPage() {
       toast.error("请先保存命盘后再生成报告");
       return;
     }
+    // B-17：微信登录用户付费前强制绑定手机
+    if (requirePhoneBinding()) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/reports", {
@@ -613,10 +638,36 @@ export default function ReportsPage() {
         }),
       });
       if (res.ok) {
+        const data = await res.json();
+        const reportId = data.report?.id;
+        if (reportId) {
+          // O-19：保存生成参数，方便报告详情页一键重试
+          try {
+            localStorage.setItem(
+              `zw-report-params-${reportId}`,
+              JSON.stringify({
+                templateId: selectedTemplate.id,
+                identityId: selectedIdentityId,
+                chartRecordId: selectedChartRecordId,
+                extraInfo: extraInfo.trim() || undefined,
+              }),
+            );
+          } catch {
+            // ignore
+          }
+        }
         toast.success("报告已开始生成");
         setDialogOpen(false);
         setActiveTab("my");
         fetchReports();
+      } else if (res.status === 402) {
+        // S-08：触发统一付费前置弹层
+        const data = await res.json();
+        showPaywall({
+          reason: data.code,
+          message: data.error,
+          resource: "REPORT",
+        });
       } else {
         const data = await res.json();
         toast.error(data.error || "生成失败");
@@ -713,9 +764,72 @@ export default function ReportsPage() {
           </div>
         ) : (
           <div>
+            {/* 前置提示：无命主或无盘时强引导（B-03 修复） */}
+            {identities.length === 0 ? (
+              <div
+                className="card"
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  borderColor: "var(--brand)",
+                  background: "linear-gradient(135deg, var(--soft), var(--panel))",
+                }}
+              >
+                <i
+                  className="ti ti-user-plus"
+                  style={{ fontSize: 36, color: "var(--brand)", marginBottom: 12 }}
+                />
+                <h3
+                  className="home-section-title"
+                  style={{ fontSize: 16, color: "var(--brand)", marginBottom: 6 }}
+                >
+                  生成报告前需先创建命主
+                </h3>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 16px" }}>
+                  命主是报告归属的档案（自己/家人/朋友），创建后即可排盘生成报告
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => router.push("/user")}
+                >
+                  <i className="ti ti-plus" /> 去创建命主
+                </button>
+              </div>
+            ) : chartRecords.length === 0 ? (
+              <div
+                className="card"
+                style={{
+                  padding: 24,
+                  textAlign: "center",
+                  borderColor: "var(--brand)",
+                  background: "linear-gradient(135deg, var(--soft), var(--panel))",
+                }}
+              >
+                <i
+                  className="ti ti-clipboard-list"
+                  style={{ fontSize: 36, color: "var(--brand)", marginBottom: 12 }}
+                />
+                <h3
+                  className="home-section-title"
+                  style={{ fontSize: 16, color: "var(--brand)", marginBottom: 6 }}
+                >
+                  当前命主还没有已保存的命盘
+                </h3>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 16px" }}>
+                  排盘后点击「保存」即可基于该盘生成报告
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => router.push("/chart")}
+                >
+                  <i className="ti ti-stars" /> 去排盘保存
+                </button>
+              </div>
+            ) : null}
+
             {/* 体验区 */}
             {basicTemplates.length > 0 && (
-              <div style={{ marginBottom: 32 }}>
+              <div style={{ marginBottom: 32, marginTop: identities.length === 0 || chartRecords.length === 0 ? 24 : 0 }}>
                 <SectionTitle
                   icon="ti-star"
                   title="体验区"

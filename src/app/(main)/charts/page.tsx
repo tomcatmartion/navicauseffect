@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -78,6 +79,9 @@ export default function ChartsListPage() {
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<ChartSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // S-04：搜索 / 筛选
+  const [searchText, setSearchText] = useState("");
+  const [filterIdentityId, setFilterIdentityId] = useState<string>("");
 
   const fetchCharts = useCallback(async () => {
     try {
@@ -173,6 +177,26 @@ export default function ChartsListPage() {
       });
   }, [charts, identities]);
 
+  // S-04：搜索 / 筛选后的分组
+  const filteredGrouped = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return grouped
+      .filter((g) => !filterIdentityId || g.identityId === filterIdentityId)
+      .map((g) => ({
+        ...g,
+        charts: g.charts.filter((c) => {
+          if (!q) return true;
+          return (
+            c.name.toLowerCase().includes(q) ||
+            (c.note ?? "").toLowerCase().includes(q) ||
+            (c.birthCity ?? "").toLowerCase().includes(q) ||
+            (g.identity?.name ?? "").toLowerCase().includes(q)
+          );
+        }),
+      }))
+      .filter((g) => g.charts.length > 0);
+  }, [grouped, searchText, filterIdentityId]);
+
   // 未登录
   if (sessionStatus === "unauthenticated") {
     return (
@@ -188,11 +212,7 @@ export default function ChartsListPage() {
 
   // 加载中
   if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
-        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 28, color: "var(--brand)" }} />
-      </div>
-    );
+    return <LoadingSkeleton size="lg" style={{ minHeight: 400 }} />;
   }
 
   return (
@@ -251,7 +271,102 @@ export default function ChartsListPage() {
           </button>
         </div>
       ) : (
-        grouped.map((group) => (
+        <>
+          {/* S-04：搜索 + 筛选栏 */}
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 16,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                flex: 1,
+                minWidth: 200,
+              }}
+            >
+              <i
+                className="ti ti-search"
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 14,
+                  color: "var(--text-muted)",
+                  pointerEvents: "none",
+                }}
+              />
+              <input
+                className="input"
+                placeholder="搜索命盘名 / 命主 / 城市"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                style={{
+                  width: "100%",
+                  paddingLeft: 32,
+                  height: 36,
+                }}
+              />
+            </div>
+            {identities.length > 1 && (
+              <select
+                className="input"
+                value={filterIdentityId}
+                onChange={(e) => setFilterIdentityId(e.target.value)}
+                style={{ height: 36, width: "auto", minWidth: 140 }}
+              >
+                <option value="">全部命主</option>
+                {identities.map((idn) => (
+                  <option key={idn.id} value={idn.id}>
+                    {idn.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {(searchText || filterIdentityId) && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setSearchText("");
+                  setFilterIdentityId("");
+                }}
+                style={{ fontSize: 12 }}
+              >
+                <i className="ti ti-x" /> 清除
+              </button>
+            )}
+          </div>
+
+          {/* S-04：搜索无结果 */}
+          {filteredGrouped.length === 0 ? (
+            <div className="card" style={{ padding: 32, textAlign: "center" }}>
+              <i
+                className="ti ti-search"
+                style={{ fontSize: 36, color: "var(--text-muted)", opacity: 0.4 }}
+              />
+              <p style={{ marginTop: 12, fontSize: 13, color: "var(--text-muted)" }}>
+                未找到匹配的命盘
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ marginTop: 12 }}
+                onClick={() => {
+                  setSearchText("");
+                  setFilterIdentityId("");
+                }}
+              >
+                清空搜索条件
+              </button>
+            </div>
+          ) : (
+            filteredGrouped.map((group) => (
           <div key={group.identityId} style={{ marginBottom: 24 }}>
             {/* 命主分组标题 */}
             <div
@@ -385,26 +500,32 @@ export default function ChartsListPage() {
                     <button
                       type="button"
                       className="btn btn-sm"
-                      title="AI 解盘"
+                      title="AI 对话"
                       onClick={() => router.push(`/chart?chartRecordId=${chart.id}`)}
                     >
-                      <i className="ti ti-message-2" /> 解盘
+                      <i className="ti ti-message-2" /> AI 对话
                     </button>
                     <button
                       type="button"
                       className="btn btn-sm"
                       title="生成报告"
-                      onClick={() => router.push(`/reports/new?chartId=${chart.id}`)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/reports?chartRecordId=${chart.id}&identityId=${chart.identityId}`);
+                      }}
                     >
-                      <i className="ti ti-file-text" /> 报告
+                      <i className="ti ti-file-text" /> 生成报告
                     </button>
                     <button
                       type="button"
                       className="btn btn-sm"
-                      title="合盘"
-                      onClick={() => router.push(`/compatibility?selfChartId=${chart.id}`)}
+                      title="双人合盘"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/compatibility?selfChartId=${chart.id}`);
+                      }}
                     >
-                      <i className="ti ti-hearts" /> 合盘
+                      <i className="ti ti-hearts" /> 双人合盘
                     </button>
                     {!chart.isPrimary && (
                       <button
@@ -431,6 +552,8 @@ export default function ChartsListPage() {
             </div>
           </div>
         ))
+          )}
+        </>
       )}
 
       {/* 删除确认 */}

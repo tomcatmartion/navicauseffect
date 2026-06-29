@@ -68,6 +68,11 @@ export default function MockPayPage() {
   }, []);
 
   useEffect(() => {
+    // B-07-2 + O-08：生产环境直接 redirect，不渲染任何 mock 入口
+    if (process.env.NODE_ENV === "production") {
+      router.replace("/pricing");
+      return;
+    }
     if (status === "unauthenticated") {
       setEnabled(null);
       setLoadingList(false);
@@ -76,7 +81,12 @@ export default function MockPayPage() {
     if (status === "authenticated") {
       loadOrders();
     }
-  }, [status, loadOrders]);
+  }, [status, loadOrders, router]);
+
+  // 生产环境早返（避免水合闪烁任何 mock UI）
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
 
   const createOrder = async (
     type: "MEMBERSHIP" | "PER_QUERY",

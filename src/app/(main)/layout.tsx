@@ -1,6 +1,5 @@
 import { Rail } from "@/components/layout/rail";
 import { Topbar } from "@/components/layout/topbar";
-import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import { MobileTabbar } from "@/components/layout/mobile-tabbar";
 import { Footer } from "@/components/layout/footer";
 
@@ -14,10 +13,10 @@ import { Footer } from "@/components/layout/footer";
  *       <Topbar />
  *       <div class="content">{children}<Footer/></div>
  *     </div>
- *     <ThemeSwitcher />        (右下角悬浮)
  *     <MobileTabbar />         (flex md:hidden，H5 底部 5 项)
  *   </div>
  *
+ * ThemeSwitcher 已移至 root layout 全局挂载（右上角，覆盖登录页/admin/主站）。
  * Footer 放在滚动区底部（不是 fixed），桌面端显示，移动端由 MobileTabbar 占据。
  */
 export default function MainLayout({
@@ -39,7 +38,6 @@ export default function MainLayout({
           <Footer />
         </div>
       </div>
-      <ThemeSwitcher />
       <MobileTabbar />
     </div>
   );

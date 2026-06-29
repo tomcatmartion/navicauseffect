@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
+import { addRecentChart } from "@/lib/utils/recent-charts";
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -163,6 +164,16 @@ function ChartDetailContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chart, initialAction]);
+
+  // S-06：记录到「最近访问」
+  useEffect(() => {
+    if (!chart) return;
+    addRecentChart({
+      id: chart.id,
+      name: chart.name,
+      identityName: chart.identity?.name,
+    });
+  }, [chart]);
 
   const handleSaveEdit = async () => {
     if (!chart) return;
@@ -344,28 +355,41 @@ function ChartDetailContent() {
         )}
       </div>
 
-      {/* Tab 切换 */}
-      <div className="seg" style={{ marginBottom: 16 }}>
+      {/* Tab 切换 + C-07：移除 AI 分析 Tab，改为右侧大 CTA */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div className="seg" style={{ marginBottom: 0, flex: 1, minWidth: 200 }}>
+          <button
+            type="button"
+            className={activeTab === "grid" ? "active" : ""}
+            onClick={() => setActiveTab("grid")}
+          >
+            命盘方阵
+          </button>
+          <button
+            type="button"
+            className={activeTab === "summary" ? "active" : ""}
+            onClick={() => setActiveTab("summary")}
+          >
+            基本信息
+          </button>
+        </div>
         <button
           type="button"
-          className={activeTab === "grid" ? "active" : ""}
-          onClick={() => setActiveTab("grid")}
+          className="btn btn-primary"
+          onClick={() => router.push(`/chart?chartRecordId=${chart.id}`)}
+          style={{ height: 36, padding: "0 16px" }}
+          title="向 AI 提问关于这张命盘的任何问题"
         >
-          命盘方阵
-        </button>
-        <button
-          type="button"
-          className={activeTab === "summary" ? "active" : ""}
-          onClick={() => setActiveTab("summary")}
-        >
-          基本信息
-        </button>
-        <button
-          type="button"
-          className={activeTab === "analysis" ? "active" : ""}
-          onClick={() => setActiveTab("analysis")}
-        >
-          AI 分析
+          <i className="ti ti-message-2" style={{ marginRight: 6 }} />
+          AI 对话
         </button>
       </div>
 
@@ -408,32 +432,7 @@ function ChartDetailContent() {
         </div>
       )}
 
-      {/* Tab 内容：AI 分析入口 */}
-      {activeTab === "analysis" && (
-        <div className="card" style={{ padding: 24, textAlign: "center" }}>
-          <i
-            className="ti ti-robot"
-            style={{ fontSize: 36, color: "var(--brand)" }}
-          />
-          <p style={{ fontWeight: 600, color: "var(--brand)", marginTop: 12 }}>
-            AI 深度解读
-          </p>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-            跳转到 AI 对话页，针对此命盘深度提问
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ marginTop: 16 }}
-            onClick={() =>
-              router.push(`/chart?chartRecordId=${chart.id}`)
-            }
-          >
-            <i className="ti ti-message-2" style={{ marginRight: 6 }} />
-            开始 AI 对话
-          </button>
-        </div>
-      )}
+      {/* C-07：原 AI 分析 Tab 内容已移除，由 Tab bar 右侧 CTA 按钮替代 */}
 
       <div className="space-y-4" style={{ marginTop: 16 }}>
 
@@ -491,7 +490,7 @@ function ChartDetailContent() {
             onClick={() => router.push(`/chart?chartRecordId=${chart.id}`)}
           >
             <i className="ti ti-message-2" style={{ fontSize: 18 }} />
-            <span style={{ fontSize: 12 }}>AI 解盘</span>
+            <span style={{ fontSize: 12 }}>AI 对话</span>
           </button>
           <button
             className="btn btn-ghost"

@@ -1,14 +1,27 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import type { HybridDebugInfo } from "@/types/hybrid-debug";
 import { HybridDebugPanel } from "./hybrid-debug-panel";
+import { usePaywall } from "@/components/shared/paywall-dialog";
+import { ErrorRetryCard } from "@/components/shared/error-retry-card";
+import { generatePresetQuestions } from "@/lib/ziwei/preset-questions";
+import { useRequirePhoneBinding } from "@/lib/auth/use-require-phone-binding";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   debugInfo?: HybridDebugInfo;
+  /** O-09：失败时携带结构化错误信息，渲染为重试 Card */
+  error?: {
+    title: string;
+    detail?: string;
+    code?: string | number;
+    /** 失败前用户发送的文本（用于一键重试） */
+    retryText?: string;
+  };
 }
 
 interface DualChatPanelProps {
@@ -21,10 +34,31 @@ interface DualChatPanelProps {
   chartData: Record<string, unknown> | null;
   /** 父母出生年份（可选，影响父母四化评分） */
   parentBirthYears?: { father?: number; mother?: number };
+  /** 已保存命盘 ID，用于本地持久化对话历史（O-10） */
+  chartRecordId?: string | null;
 }
 
-export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProps) {
+function hashChartData(chartData: Record<string, unknown> | null): string {
+  if (!chartData) return "guest";
+  try {
+    const keys = ["gender", "year", "month", "day", "hour", "birthCity"];
+    const parts = keys.map((k) => String((chartData as Record<string, unknown>)[k] ?? ""));
+    return parts.join("-").replace(/\s+/g, "");
+  } catch {
+    return "guest";
+  }
+}
+
+function getChatStorageKey(chartRecordId?: string | null, sessionId?: string | null, chartData?: Record<string, unknown> | null): string {
+  const suffix = chartRecordId || sessionId || hashChartData(chartData ?? null);
+  return `zw-chat-${suffix}`;
+}
+
+export function DualChatPanel({ chartData, parentBirthYears, chartRecordId }: DualChatPanelProps) {
   const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const { showPaywall } = usePaywall();
+  const requirePhoneBinding = useRequirePhoneBinding();
 
   // ── Hybrid（程序模型混合）状态 ─────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -34,6 +68,37 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
   const [input, setInput] = useState("");
   const [activeDebug, setActiveDebug] = useState<HybridDebugInfo | null>(null);
   const [userScrolled, setUserScrolled] = useState(false);
+
+  // O-10：对话历史本地持久化（刷新后恢复）
+  const storageKey = useMemo(
+    () => getChatStorageKey(chartRecordId, sessionId, chartData),
+    [chartRecordId, sessionId, chartData],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.sessionStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { messages: ChatMessage[]; sessionId?: string | null };
+        if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+          if (parsed.sessionId) setSessionId(parsed.sessionId);
+        }
+      }
+    } catch {
+      // 解析失败忽略
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify({ messages, sessionId }));
+    } catch {
+      // 存储失败忽略（例如超出容量）
+    }
+  }, [messages, sessionId, storageKey]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +131,9 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
   const sendMessage = useCallback(async (text: string) => {
     if (!text || streaming) return;
 
+    // B-17：微信登录用户使用 AI 对话前强制绑定手机
+    if (requirePhoneBinding()) return;
+
     const userMsg: ChatMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -92,7 +160,28 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setMessages((prev) => [...prev, { role: "assistant", content: `[错误] ${(err as Record<string, string>).error || "请求失败"}` }]);
+        // S-08：402 触发统一付费前置弹层
+        if (res.status === 402) {
+          showPaywall({
+            reason: (err as Record<string, string>).code,
+            message: (err as Record<string, string>).error,
+            resource: "READING",
+          });
+          setMessages((prev) => prev.slice(0, -1)); // 撤回用户消息（保留输入）
+          setInput(text);
+          setStreaming(false);
+          return;
+        }
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: "",
+          error: {
+            title: "AI 回复失败",
+            detail: (err as Record<string, string>).error || "请求失败，请稍后重试",
+            code: res.status,
+            retryText: text,
+          },
+        }]);
         setStreaming(false);
         return;
       }
@@ -177,13 +266,22 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
       }
     } catch (err) {
       console.error("Reading error:", err);
-      setMessages((prev) => [...prev, { role: "assistant", content: "网络错误，请检查连接后重试。" }]);
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: "",
+        error: {
+          title: "网络错误",
+          detail: "无法连接到 AI 服务，请检查网络后重试",
+          code: "NETWORK_ERROR",
+          retryText: text,
+        },
+      }]);
       setStreamContent("");
     } finally {
       setStreaming(false);
       setUserScrolled(false);
     }
-  }, [streaming, chartData, sessionId, parentBirthYears]);
+  }, [streaming, chartData, sessionId, parentBirthYears, requirePhoneBinding]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -194,17 +292,55 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
 
   const handleSend = () => sendMessage(input.trim());
 
-  const presetQuestions = [
-    "我的事业运如何？",
-    "我明年的财运怎么样？",
-    "我后年能结婚吗？",
-    "我最适合的职业方向有哪些？",
-    "我的家庭关系怎么样？",
-  ];
+  // S-03：新建对话（清空消息 + sessionId，开启新会话）
+  const handleNewChat = useCallback(() => {
+    if (streaming) return;
+    if (messages.length > 0 && !window.confirm("确定要新建对话吗？当前对话将不会保留。")) {
+      return;
+    }
+    setMessages([]);
+    setSessionId(null);
+    setInput("");
+    setStreamContent("");
+    setUserScrolled(false);
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem(storageKey);
+      } catch {
+        // ignore
+      }
+    }
+  }, [streaming, messages.length, storageKey]);
+
+  // S-17：根据命盘数据动态生成预设问题；无 chartData 时 fallback 5 个静态
+  const presetQuestions = useMemo(() => generatePresetQuestions(chartData), [chartData]);
 
   return (
     <>
       <div className="chat-shell">
+        {/* S-03：顶部工具栏（仅在有对话时显示「新建对话」） */}
+        {messages.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              padding: "6px 8px",
+              borderBottom: "1px solid var(--line-light)",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={handleNewChat}
+              disabled={streaming}
+              title="清空当前对话，开始新的咨询"
+              style={{ padding: "4px 10px", fontSize: 12 }}
+            >
+              <i className="ti ti-plus" /> 新建对话
+            </button>
+          </div>
+        )}
+
         {/* 流式输出状态提示（用 testUI .tool-call 风格） */}
         {streaming && (
           <div
@@ -278,10 +414,26 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
                 >
                   {msg.role === "user" ? "你" : "AI 解读"}
                 </div>
-                <div className="whitespace-pre-wrap leading-relaxed">
-                  {renderContent(msg.content)}
-                </div>
-                {msg.role === "assistant" && msg.debugInfo && (
+                {msg.error ? (
+                  <ErrorRetryCard
+                    title={msg.error.title}
+                    detail={msg.error.detail}
+                    code={msg.error.code}
+                    retrying={streaming}
+                    onRetry={() => {
+                      const retryText = msg.error?.retryText;
+                      if (!retryText) return;
+                      // 移除失败消息后重发
+                      setMessages((prev) => prev.filter((_, k) => k !== i));
+                      sendMessage(retryText);
+                    }}
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap leading-relaxed">
+                    {renderContent(msg.content)}
+                  </div>
+                )}
+                {msg.role === "assistant" && msg.debugInfo && isAdmin && (
                   <div
                     style={{
                       marginTop: 8,
@@ -348,6 +500,48 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
 
         {/* 输入区 */}
         <div className="chat-composer">
+          {/* 未登录：登录引导 banner */}
+          {!session?.user && (
+            <Link
+              href="/auth/login?callbackUrl=%2Fchart"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 14px",
+                marginBottom: 8,
+                background: "var(--soft)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                textDecoration: "none",
+                color: "inherit",
+                fontSize: 12,
+                transition: "background .15s",
+              }}
+            >
+              <i
+                className="ti ti-login"
+                style={{ color: "var(--brand)", fontSize: 16 }}
+              />
+              <div style={{ flex: 1, color: "var(--text-muted)" }}>
+                登录后即可开启 <strong style={{ color: "var(--brand)" }}>AI 智能解盘</strong>
+                ，新用户注册即得 10 星币
+              </div>
+              <span
+                style={{
+                  background: "var(--brand)",
+                  color: "#fff",
+                  padding: "4px 12px",
+                  borderRadius: 4,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                去登录
+              </span>
+            </Link>
+          )}
           <div className="composer-box">
             <textarea
               ref={textareaRef}
@@ -379,7 +573,39 @@ export function DualChatPanel({ chartData, parentBirthYears }: DualChatPanelProp
             </button>
           </div>
           <div className="composer-hint">
-            每次 AI 解盘消耗 <strong style={{ color: "var(--brand)" }}>2 星币</strong> · 年卡会员 7 折
+            {session?.user ? (
+              <>
+                {(session.user as { membershipPlan?: string }).membershipPlan &&
+                (session.user as { membershipPlan?: string }).membershipPlan !== "FREE" ? (
+                  <>
+                    <i className="ti ti-crown" style={{ color: "var(--brand)" }} /> 您是
+                    <strong style={{ color: "var(--brand)" }}>
+                      {(session.user as { membershipPlan?: string }).membershipPlan === "YEARLY"
+                        ? "年度"
+                        : (session.user as { membershipPlan?: string }).membershipPlan === "QUARTERLY"
+                          ? "季度"
+                          : "月度"}
+                      会员
+                    </strong>
+                    ，AI 对话<strong style={{ color: "var(--brand)" }}>免费</strong>
+                  </>
+                ) : (
+                  <>
+                    每次 AI 解盘消耗 <strong style={{ color: "var(--brand)" }}>2 星币</strong> ·{" "}
+                    <Link
+                      href="/pricing"
+                      style={{ color: "var(--brand)", textDecoration: "underline" }}
+                    >
+                      开通会员免费
+                    </Link>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                每次 AI 解盘消耗 <strong style={{ color: "var(--brand)" }}>2 星币</strong> · 年卡会员 7 折
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -83,7 +83,14 @@ export function SaveChartButton({
         setIdentities(list);
         // 默认选 active 命主或第一个
         const active = list.find((i: Identity) => i.isActive);
-        setSelectedIdentityId(active?.id ?? list[0]?.id ?? "");
+        const picked = active ?? list[0];
+        setSelectedIdentityId(picked?.id ?? "");
+        // O-05：把命主名补进默认盘别名（仅当用户尚未手动修改时）
+        if (picked) {
+          const dateStr = `${birthInfo.year}/${String(birthInfo.month).padStart(2, "0")}/${String(birthInfo.day).padStart(2, "0")}`;
+          const cityPart = birthInfo.birthCity ? `-${birthInfo.birthCity}` : "";
+          setChartName(`${picked.name}-${dateStr}${cityPart}-${birthInfo.hour}时`);
+        }
       }
     } finally {
       setFetchingIdentities(false);
@@ -96,9 +103,17 @@ export function SaveChartButton({
       router.push("/auth/login");
       return;
     }
-    // 默认盘别名
-    const dateStr = `${birthInfo.year}-${String(birthInfo.month).padStart(2, "0")}-${String(birthInfo.day).padStart(2, "0")}`;
-    setChartName(`${dateStr}-${birthInfo.hour}时`);
+    // B-17：微信登录未绑定手机的用户，保存命盘前强制引导绑定
+    if ((session?.user as { phoneBindingRequired?: boolean }).phoneBindingRequired) {
+      toast.info("微信登录用户需先绑定手机号，才能保存命盘");
+      router.push(`/auth/bind-phone?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      return;
+    }
+    // O-05：默认盘别名 = 命主名-城市-YYYY/MM/DD（用户可改）
+    // 命主名在 fetchIdentities 完成后才能填入，所以这里先放占位，handleIdentityLoaded 时再补
+    const dateStr = `${birthInfo.year}/${String(birthInfo.month).padStart(2, "0")}/${String(birthInfo.day).padStart(2, "0")}`;
+    const cityPart = birthInfo.birthCity ? `-${birthInfo.birthCity}` : "";
+    setChartName(`${dateStr}${cityPart}-${birthInfo.hour}时`);
     setOpen(true);
     fetchIdentities();
   };

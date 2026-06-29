@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminCard } from "@/components/admin/AdminCard";
 
 interface SmsConfig {
   provider: string;
@@ -72,119 +73,109 @@ export default function SmsConfigPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <i className="ti ti-message-sms text-xl" style={{ color: "var(--brand)" }} />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold">短信网关配置</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">配置短信服务商与验证码模板</p>
-        </div>
-      </div>
+    <>
+      <AdminPageHeader
+        icon="ti-message-sms"
+        title="短信网关配置"
+        desc="配置短信服务商与验证码模板"
+      />
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <div className="admin-alert error">
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
+        </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg"
-              style={{ background: "var(--soft)" }}
-            >
-              <i className="ti ti-settings" style={{ fontSize: 18, color: "var(--brand)" }} />
-            </div>
-            <div>
-              <CardTitle className="text-base">短信服务商配置</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">阿里云 / 腾讯云短信参数</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>服务商</Label>
-            <Select
-              value={config.provider}
-              onValueChange={(v) => setConfig({ ...config, provider: v })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="aliyun">阿里云短信</SelectItem>
-                <SelectItem value="tencent">腾讯云短信</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {saved && (
+        <div className="admin-alert success">
+          <i className="ti ti-circle-check" />
+          <span>配置已保存</span>
+        </div>
+      )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>AccessKey ID</Label>
-              <Input
-                value={config.accessKeyId}
-                onChange={(e) => setConfig({ ...config, accessKeyId: e.target.value })}
-                placeholder="LTAI5t..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>AccessKey Secret</Label>
-              <Input
-                type="password"
-                value={config.accessKeySecret}
-                onChange={(e) => setConfig({ ...config, accessKeySecret: e.target.value })}
-                placeholder="密钥"
-              />
-            </div>
-          </div>
+      <AdminCard
+        icon="ti-settings"
+        title="短信服务商配置"
+        desc="阿里云 / 腾讯云短信参数"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="field">
+          <Label className="field-label">服务商</Label>
+          <Select
+            value={config.provider}
+            onValueChange={(v) => setConfig({ ...config, provider: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="aliyun">阿里云短信</SelectItem>
+              <SelectItem value="tencent">腾讯云短信</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>短信签名</Label>
-              <Input
-                value={config.signName}
-                onChange={(e) => setConfig({ ...config, signName: e.target.value })}
-                placeholder="微著"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>验证码模板 ID</Label>
-              <Input
-                value={config.templateCode}
-                onChange={(e) => setConfig({ ...config, templateCode: e.target.value })}
-                placeholder="SMS_123456789"
-              />
-            </div>
+        <div className="field-row">
+          <div className="field">
+            <Label className="field-label">AccessKey ID</Label>
+            <Input
+              value={config.accessKeyId}
+              onChange={(e) => setConfig({ ...config, accessKeyId: e.target.value })}
+              placeholder="LTAI5t..."
+            />
           </div>
+          <div className="field">
+            <Label className="field-label">AccessKey Secret</Label>
+            <Input
+              type="password"
+              value={config.accessKeySecret}
+              onChange={(e) => setConfig({ ...config, accessKeySecret: e.target.value })}
+              placeholder="密钥"
+            />
+          </div>
+        </div>
 
-          <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "保存中..." : "保存配置"}
-            </Button>
-            {saved && <span className="text-sm text-emerald-600">已保存</span>}
+        <div className="field-row">
+          <div className="field">
+            <Label className="field-label">短信签名</Label>
+            <Input
+              value={config.signName}
+              onChange={(e) => setConfig({ ...config, signName: e.target.value })}
+              placeholder="微著"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="field">
+            <Label className="field-label">验证码模板 ID</Label>
+            <Input
+              value={config.templateCode}
+              onChange={(e) => setConfig({ ...config, templateCode: e.target.value })}
+              placeholder="SMS_123456789"
+            />
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg"
-              style={{ background: "var(--soft)" }}
-            >
-              <i className="ti ti-info-circle" style={{ fontSize: 18, color: "var(--brand)" }} />
-            </div>
-            <CardTitle className="text-base">配置说明</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. 阿里云短信：需在阿里云控制台创建 AccessKey，并申请短信签名和模板。</p>
-          <p>2. 腾讯云短信：需在腾讯云控制台创建 SecretId/SecretKey，并申请签名和模板。</p>
-          <p>3. 验证码模板内容示例：您的验证码为 $&#123;code&#125;，5分钟内有效。</p>
-        </CardContent>
-      </Card>
-    </div>
+        <div className="admin-save-row">
+          <Button onClick={handleSave} disabled={saving}>
+            <i className="ti ti-device-floppy" />
+            {saving ? "保存中..." : "保存配置"}
+          </Button>
+          {saved && (
+            <span className="admin-save-hint">
+              <i className="ti ti-check" />
+              已保存
+            </span>
+          )}
+        </div>
+      </AdminCard>
+
+      <AdminCard icon="ti-info-circle" title="配置说明">
+        <div className="help-note">
+          <p>1. <b>阿里云短信</b>：需在阿里云控制台创建 AccessKey，并申请短信签名和模板。</p>
+          <p style={{ marginTop: 6 }}>2. <b>腾讯云短信</b>：需在腾讯云控制台创建 SecretId/SecretKey，并申请签名和模板。</p>
+          <p style={{ marginTop: 6 }}>3. 验证码模板内容示例：您的验证码为 $&#123;code&#125;，5 分钟内有效。</p>
+        </div>
+      </AdminCard>
+    </>
   );
 }

@@ -628,6 +628,8 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
   });
   const [aiPersonalityStreaming, setAiPersonalityStreaming] = useState(false);
   const [aiPersonalityContent, setAiPersonalityContent] = useState("");
+  // C-03：专家模式开关（默认收起 DEBUG 分析 Tab）
+  const [expertMode, setExpertMode] = useState(false);
 
   const usePipeline = Boolean(chartData?.palaces);
 
@@ -2165,24 +2167,40 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             </button>
           ))}
         </div>
-        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground px-1 pt-1">高级调试</p>
-        <div className="flex flex-wrap gap-1">
-          {DEBUG_ANALYSIS_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => void handleAnalyze(opt.id)}
-              className={`flex min-w-[4.5rem] cursor-pointer items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-sm transition-colors sm:min-w-0 ${
-                activeType === opt.id
-                  ? "bg-card font-medium text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span className="text-base">{opt.icon}</span>
-              <span className="max-w-[4.5rem] truncate sm:max-w-none">{opt.label}</span>
-            </button>
-          ))}
+        {/* C-03：高级调试默认折叠（专家模式开关） */}
+        <div className="flex items-center justify-between px-1 pt-1">
+          <button
+            type="button"
+            onClick={() => setExpertMode((v) => !v)}
+            className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+            aria-expanded={expertMode}
+          >
+            <i className={`ti ${expertMode ? "ti-chevron-down" : "ti-chevron-right"} text-[10px]`} />
+            高级调试（专家模式）
+          </button>
+          {expertMode && (
+            <span className="text-[10px] text-muted-foreground/70">仅管理员可见</span>
+          )}
         </div>
+        {expertMode && (
+          <div className="flex flex-wrap gap-1">
+            {DEBUG_ANALYSIS_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => void handleAnalyze(opt.id)}
+                className={`flex min-w-[4.5rem] cursor-pointer items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-sm transition-colors sm:min-w-0 ${
+                  activeType === opt.id
+                    ? "bg-card font-medium text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className="text-base">{opt.icon}</span>
+                <span className="max-w-[4.5rem] truncate sm:max-w-none">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {usePipeline && (
@@ -2275,19 +2293,31 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             )}
             {usePipeline && pipelineSnapshot && !loading && !affairParamsStale && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
-                <MatterAffairPanel
-                  result={buildAffairResult(
-                    pipelineSnapshot.affair,
-                    pipelineSnapshot.limitPatterns?.synthesis?.trend,
-                    pipelineSnapshot.extended?.threeLayerTable as ThreeLayerPalaceTable | undefined,
-                  )}
-                  onStage4={goToInteractionStage4}
-                />
+                {pipelineSnapshot.affair?.matterType ? (
+                  <MatterAffairPanel
+                    result={buildAffairResult(
+                      pipelineSnapshot.affair,
+                      pipelineSnapshot.limitPatterns?.synthesis?.trend,
+                      pipelineSnapshot.extended?.threeLayerTable as ThreeLayerPalaceTable | undefined,
+                    )}
+                    onStage4={goToInteractionStage4}
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    reading pipeline 未返回 0530 事项字段，仅 debug pipeline 支持该视图。
+                  </p>
+                )}
               </div>
             )}
             {!usePipeline && !!legacyResult && !loading && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
-                <MatterAffairPanel result={buildAffairResult(legacyAffair())} />
+                {legacyAffair().matterType ? (
+                  <MatterAffairPanel result={buildAffairResult(legacyAffair())} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    当前数据源未包含事项分析字段（0530）。
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
@@ -2353,7 +2383,13 @@ export function ZiweiAnalysisPanel({ birthData, currentAge, chartData, parentBir
             </Button>
             {usePipeline && pipelineSnapshot && !loading && !interactionParamsStale && (
               <div className="rounded-md border border-dashed border-primary/20 bg-muted/30 p-2">
-                <MatterInteractionPanel result={pipelineSnapshot.interaction} />
+                {pipelineSnapshot.interaction?.threeDimension ? (
+                  <MatterInteractionPanel result={pipelineSnapshot.interaction} />
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    reading pipeline 未返回 0530 互动字段，仅 debug pipeline 支持该视图。
+                  </p>
+                )}
               </div>
             )}
           </CardContent>

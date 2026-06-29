@@ -10,10 +10,14 @@ declare module "next-auth" {
       role: string;
       membershipPlan: string;
       membershipStatus: string;
+      /** 微信扫码新用户首次登录后,需要绑定手机号 */
+      phoneBindingRequired?: boolean;
     };
   }
 
   interface JWT {
     userId?: string;
+    /** 微信扫码新用户首次登录后,需要绑定手机号 */
+    phoneBindingRequired?: boolean;
   }
 }

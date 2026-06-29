@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
     if (!type) {
       return NextResponse.json({ error: "缺少 type 参数" }, { status: 400 });
     }
+    if (channel !== undefined && !["WECHAT", "ALIPAY"].includes(channel)) {
+      return NextResponse.json({ error: "channel 必须为 WECHAT 或 ALIPAY" }, { status: 400 });
+    }
 
     let amount = 0;
     let orderType: "MEMBERSHIP" | "PER_QUERY" | "COIN_PACK" | "CREDIT_PACK";

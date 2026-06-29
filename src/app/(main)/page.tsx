@@ -2,8 +2,13 @@
 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getRecentCharts, type RecentChart } from "@/lib/utils/recent-charts";
+import {
+  OnboardingDialog,
+  isOnboardingCompleted,
+} from "@/components/shared/onboarding-dialog";
 
 /**
  * 捕获 URL ?ref=XXXX 邀请码，存入 localStorage + cookie（30 天）。
@@ -29,34 +34,44 @@ function useRefCapture() {
   }, [searchParams]);
 }
 
-// 首页 4 大核心功能（对照 Downloads/index.html mockup）
+// 首页 6 大核心功能（描述文字对照旧版首页，视觉用新版 testUI 规范）
 const FEATURES = [
   {
-    title: "精准排盘",
-    desc: "生辰信息秒速生成个人命盘",
+    title: "命理排盘",
+    desc: "基于紫微斗数精准排盘，生成命盘、大限盘、流年盘，支持阴历/阳历与真太阳时自动校正",
     icon: "ti-spiral",
   },
   {
-    title: "关系分析",
-    desc: "太岁入卦，洞察人际相处之道",
-    icon: "ti-users",
+    title: "AI 对话",
+    desc: "四大顶尖 AI 大模型深度解读命盘，融合紫微智慧与心理学视角，给出全方位分析",
+    icon: "ti-brain",
   },
   {
-    title: "行运解读",
-    desc: "大限流年，把握当下时机",
+    title: "性格分析",
+    desc: "从命宫主星解读你的性格密码，结合大五人格理论，帮助你更好地认识自己",
+    icon: "ti-user-search",
+  },
+  {
+    title: "感情婚姻",
+    desc: "夫妻宫与桃花星深度分析，结合依恋理论，为你的感情生活提供温暖指引",
+    icon: "ti-hearts",
+  },
+  {
+    title: "事业财运",
+    desc: "官禄宫与财帛宫联合解读，结合职业心理学，助你找到事业发展最优路径",
     icon: "ti-trending-up",
   },
   {
-    title: "知识体系",
-    desc: "星曜宫位，由浅入深系统学习",
-    icon: "ti-books",
+    title: "情绪疏导",
+    desc: "福德宫分析内在情绪模式，融合认知行为疗法，提供专业的心理疏导建议",
+    icon: "ti-mood-zen",
   },
 ] as const;
 
 // 首页 tag（对照 mockup）
 const TAGS = ["紫云派斗数", "太岁入卦法", "AI 深度解读", "性格为底 · 行运为表"] as const;
 
-// 已登录快捷入口（保留原逻辑）
+// 已登录快捷入口（B-14：移动端强化，加入会员入口）
 const QUICK_ENTRIES = [
   {
     href: "/chart",
@@ -87,6 +102,13 @@ const QUICK_ENTRIES = [
     color: "var(--warning)",
   },
   {
+    href: "/pricing",
+    title: "会员充值",
+    desc: "开通会员或购买星币",
+    icon: "ti-crown",
+    color: "var(--brand)",
+  },
+  {
     href: "/promoter",
     title: "推广得币",
     desc: "邀请好友注册获得星币",
@@ -99,6 +121,22 @@ export default function HomePage() {
   const { data: session, status } = useSession();
   const isLoggedIn = status === "authenticated" && !!session?.user;
   useRefCapture();
+  // S-06：最近访问命盘
+  const [recents, setRecents] = useState<RecentChart[]>([]);
+  // S-01：新用户 Onboarding 引导
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    setRecents(getRecentCharts());
+    // 已登录但未完成引导 → 触发
+    if (!isOnboardingCompleted()) {
+      // 延迟 1s 避免与首页 hero 渲染抢焦点
+      const t = setTimeout(() => setShowOnboarding(true), 1000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [isLoggedIn]);
 
   // 加载中：显示原 hero（避免水合不匹配）
   if (status === "loading") {
@@ -109,147 +147,313 @@ export default function HomePage() {
     );
   }
 
-  // 已登录：快捷入口 + 问候
+  // 已登录：与未登录视觉一致(光晕 + 大字 slogan + 装饰线 + tag),中间区改为快捷入口 chip
   if (isLoggedIn) {
     const hour = new Date().getHours();
     const greeting = hour < 6 ? "夜安" : hour < 11 ? "早安" : hour < 14 ? "午安" : hour < 18 ? "下午好" : hour < 22 ? "晚上好" : "夜深了";
     const nickname = session?.user?.name || "朋友";
 
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 24px 60px" }}>
-        {/* 问候 */}
-        <div
-          className="card"
+      <div style={{ width: "100%" }}>
+        <section
           style={{
-            padding: 24,
-            marginBottom: 24,
-            background: "linear-gradient(135deg, var(--soft), var(--panel))",
+            position: "relative",
+            textAlign: "center",
+            padding: "56px 24px 0",
+            overflow: "hidden",
           }}
         >
-          <div style={{ fontSize: 12, color: "var(--text-muted)", letterSpacing: 2 }}>
-            <i className="ti ti-home" style={{ marginRight: 6 }} />
-            WELCOME BACK
-          </div>
-          <h2
+          {/* 背景径向光晕(同未登录) */}
+          <div
+            aria-hidden
             style={{
-              fontSize: 28,
-              color: "var(--brand)",
-              fontFamily: "var(--font-head)",
-              fontWeight: 700,
-              marginTop: 6,
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              background:
+                "radial-gradient(circle at 50% 42%, rgba(139, 111, 71, 0.09), transparent 62%)",
             }}
-          >
-            {greeting}，{nickname}
-          </h2>
-          <p style={{ fontSize: 13, color: "var(--ink-light)", marginTop: 6 }}>
-            继续探索你的命盘，或开启一段新的咨询
-          </p>
-        </div>
+          />
 
-        {/* 快捷入口 */}
-        <h3
-          className="home-section-title"
-          style={{ fontSize: 15, color: "var(--brand)", marginBottom: 12 }}
-        >
-          <i className="ti ti-bolt" style={{ marginRight: 6 }} />
-          快捷入口
-        </h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            gap: 14,
-            marginBottom: 24,
-          }}
-        >
-          {QUICK_ENTRIES.map((entry) => (
-            <Link
-              key={entry.href}
-              href={entry.href}
-              className="card"
+          <div style={{ position: "relative", zIndex: 1 }}>
+            {/* 个性化问候(小字 letter-spacing,位于 slogan 上方) */}
+            <p
               style={{
-                padding: 18,
-                textDecoration: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                cursor: "pointer",
+                fontSize: 12,
+                color: "var(--text-muted)",
+                letterSpacing: 3,
+                margin: "0 0 14px",
               }}
             >
-              <i
-                className={`ti ${entry.icon}`}
-                style={{ fontSize: 26, color: entry.color }}
-              />
-              <div
-                style={{
-                  fontSize: 14,
-                  color: "var(--brand)",
-                  fontWeight: 600,
-                  fontFamily: "var(--font-head)",
-                }}
-              >
-                {entry.title}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                {entry.desc}
-              </div>
-            </Link>
-          ))}
-        </div>
+              <i className="ti ti-home" style={{ marginRight: 6 }} />
+              {greeting} · {nickname}
+            </p>
 
-        {/* 4 大核心功能（对照 mockup） */}
-        <h3
-          className="home-section-title"
-          style={{ fontSize: 15, color: "var(--brand)", marginBottom: 12, marginTop: 28 }}
-        >
-          <i className="ti ti-sparkles" style={{ marginRight: 6 }} />
-          核心功能
-        </h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {FEATURES.map((f) => (
-            <div key={f.title} className="card" style={{ padding: 18, textAlign: "center" }}>
-              <i
-                className={`ti ${f.icon}`}
-                style={{ fontSize: 26, color: "var(--brand)", display: "block", marginBottom: 10 }}
-              />
-              <h4
+            {/* 大字 slogan(同未登录) */}
+            <h1
+              style={{
+                fontSize: 52,
+                fontWeight: 700,
+                color: "var(--brand)",
+                fontFamily: "var(--font-head)",
+                lineHeight: 1.5,
+                letterSpacing: 7,
+                margin: 0,
+              }}
+            >
+              <span style={{ display: "block" }}>观己 观人 观世界</span>
+              <span style={{ display: "block" }}>知微 知著 知真如</span>
+            </h1>
+
+            {/* 装饰线 + 菱形印章(同未登录) */}
+            <div
+              aria-hidden
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                margin: "26px 0 4px",
+              }}
+            >
+              <span
                 style={{
-                  fontSize: 14,
-                  color: "var(--brand)",
-                  fontWeight: 600,
-                  marginBottom: 6,
+                  width: 72,
+                  height: 1,
+                  background: "linear-gradient(90deg, transparent, var(--line))",
+                }}
+              />
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  border: "1px solid var(--line)",
+                  transform: "rotate(45deg)",
+                  display: "inline-block",
+                }}
+              />
+              <span
+                style={{
+                  width: 72,
+                  height: 1,
+                  background: "linear-gradient(90deg, var(--line), transparent)",
+                }}
+              />
+            </div>
+
+            {/* 续句(替换紫云理念描述,个性化) */}
+            <p
+              style={{
+                fontSize: 15,
+                color: "var(--text-muted)",
+                lineHeight: 2,
+                maxWidth: 600,
+                margin: "22px auto 0",
+              }}
+            >
+              继续探索你的命盘，或开启一段新的咨询
+              <br />
+              性格为底，行运为表，结合你的实际处境，解答当下疑惑。
+            </p>
+
+            {/* 4 个 tag(同未登录) */}
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "center",
+                flexWrap: "wrap",
+                margin: "26px 0 34px",
+              }}
+            >
+              {TAGS.map((t) => (
+                <span
+                  key={t}
+                  style={{
+                    fontSize: 12,
+                    padding: "6px 14px",
+                    background: "var(--panel)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 20,
+                    color: "var(--brand)",
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            {/* 6 快捷入口 chip（B-14：移动端强化，含合盘/会员/推广；响应式 grid） */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: 10,
+                maxWidth: 720,
+                margin: "0 auto 52px",
+              }}
+            >
+              {QUICK_ENTRIES.map((entry) => (
+                <Link
+                  key={entry.href}
+                  href={entry.href}
+                  style={{ textDecoration: "none" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "10px 14px",
+                      background: "var(--panel)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 24,
+                      cursor: "pointer",
+                      transition: "border-color .2s, transform .15s",
+                    }}
+                  >
+                    <i
+                      className={`ti ${entry.icon}`}
+                      style={{ fontSize: 16, color: entry.color }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "var(--brand)",
+                        fontWeight: 500,
+                        fontFamily: "var(--font-head)",
+                      }}
+                    >
+                      {entry.title}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* S-06：最近访问命盘（仅在有记录时显示） */}
+            {recents.length > 0 && (
+              <div style={{ maxWidth: 720, margin: "0 auto 40px", padding: "0 24px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 10,
+                    color: "var(--text-muted)",
+                    fontSize: 12,
+                    fontFamily: "var(--font-head)",
+                  }}
+                >
+                  <i className="ti ti-history" style={{ fontSize: 14 }} />
+                  最近访问
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  {recents.slice(0, 5).map((r) => (
+                    <Link
+                      key={r.id}
+                      href={`/charts/${r.id}`}
+                      style={{ textDecoration: "none" }}
+                    >
+                      <div
+                        className="chip"
+                        style={{
+                          cursor: "pointer",
+                          background: "var(--soft)",
+                          color: "var(--ink)",
+                          border: "1px solid var(--line-light)",
+                          padding: "5px 12px",
+                          fontSize: 12,
+                          maxWidth: 200,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={r.name}
+                      >
+                        <i
+                          className="ti ti-clipboard-list"
+                          style={{ marginRight: 4, fontSize: 11, color: "var(--brand)" }}
+                        />
+                        {r.name}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 6 大核心功能(同未登录,3 列 grid,maxWidth 960) */}
+        <section
+          id="features"
+          style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px 60px", scrollMarginTop: 80 }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 16,
+            }}
+          >
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="card"
+                style={{
+                  padding: "22px 14px",
+                  textAlign: "center",
+                  transition: "transform .2s, border-color .2s",
                 }}
               >
-                {f.title}
-              </h4>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
-                {f.desc}
-              </p>
-            </div>
-          ))}
-        </div>
+                <i
+                  className={`ti ${f.icon}`}
+                  style={{
+                    fontSize: 26,
+                    color: "var(--brand)",
+                    display: "block",
+                    marginBottom: 10,
+                  }}
+                />
+                <h4
+                  style={{
+                    fontSize: 14,
+                    color: "var(--brand)",
+                    fontWeight: 600,
+                    marginBottom: 6,
+                  }}
+                >
+                  {f.title}
+                </h4>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }
 
   // ────────────────────────────────────────────────────────────
-  // 未登录：对照 Downloads/index.html 首页内容
-  //   顶部品牌条 · 大字 slogan · 装饰线 · 紫云理念描述 · 4 tag · 2 CTA · 4 features
+  // 未登录：对照 ~/Downloads/index.html 首页内容
+  //   大字 slogan · 装饰线 · 紫云理念描述 · 4 tag · 2 CTA · 4 features
   // ────────────────────────────────────────────────────────────
   return (
     <div style={{ width: "100%" }}>
-      {/* Hero（首页主视觉） */}
       <section
         style={{
           position: "relative",
           textAlign: "center",
-          padding: "48px 24px 12px",
+          padding: "56px 24px 0",
           overflow: "hidden",
         }}
       >
@@ -265,56 +469,16 @@ export default function HomePage() {
           }}
         />
 
-        {/* 顶部品牌条：微著 | 传统斗数 */}
-        <div style={{ position: "relative", zIndex: 1, marginBottom: 36 }}>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 14,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: "var(--brand)",
-                letterSpacing: 4,
-                fontFamily: "var(--font-head)",
-              }}
-            >
-              微著
-            </span>
-            <span
-              style={{
-                display: "inline-block",
-                width: 1,
-                height: 20,
-                background: "var(--line)",
-              }}
-            />
-            <span
-              style={{
-                fontSize: 13,
-                color: "var(--text-muted)",
-                letterSpacing: 3,
-              }}
-            >
-              传统斗数
-            </span>
-          </span>
-        </div>
-
-        {/* 大字 slogan */}
         <div style={{ position: "relative", zIndex: 1 }}>
+          {/* 大字 slogan */}
           <h1
             style={{
-              fontSize: 48,
+              fontSize: 52,
               fontWeight: 700,
               color: "var(--brand)",
               fontFamily: "var(--font-head)",
               lineHeight: 1.5,
-              letterSpacing: 6,
+              letterSpacing: 7,
               margin: 0,
             }}
           >
@@ -330,7 +494,7 @@ export default function HomePage() {
               alignItems: "center",
               justifyContent: "center",
               gap: 14,
-              margin: "22px 0 4px",
+              margin: "26px 0 4px",
             }}
           >
             <span
@@ -361,11 +525,11 @@ export default function HomePage() {
           {/* 紫云理念描述 */}
           <p
             style={{
-              fontSize: 14,
+              fontSize: 15,
               color: "var(--text-muted)",
               lineHeight: 2,
               maxWidth: 600,
-              margin: "18px auto 0",
+              margin: "22px auto 0",
             }}
           >
             秉承紫云老师传统斗数理念
@@ -382,13 +546,12 @@ export default function HomePage() {
               gap: 10,
               justifyContent: "center",
               flexWrap: "wrap",
-              margin: "24px 0 30px",
+              margin: "26px 0 34px",
             }}
           >
             {TAGS.map((t) => (
               <span
                 key={t}
-                className="chip"
                 style={{
                   fontSize: 12,
                   padding: "6px 14px",
@@ -410,7 +573,7 @@ export default function HomePage() {
               gap: 14,
               justifyContent: "center",
               flexWrap: "wrap",
-              marginBottom: 44,
+              marginBottom: 52,
             }}
           >
             <Link href="/chart">
@@ -419,7 +582,6 @@ export default function HomePage() {
                 className="btn btn-primary"
                 style={{ fontSize: 15, padding: "13px 32px" }}
               >
-                <i className="ti ti-spiral" style={{ marginRight: 6 }} />
                 开始排盘
               </button>
             </Link>
@@ -429,7 +591,6 @@ export default function HomePage() {
                 className="btn btn-ghost"
                 style={{ fontSize: 15, padding: "13px 32px" }}
               >
-                <i className="ti ti-books" style={{ marginRight: 6 }} />
                 了解斗数
               </button>
             </a>
@@ -437,7 +598,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4 大核心功能 */}
+      {/* 6 大核心功能（描述对照旧版首页） */}
       <section
         id="features"
         style={{ maxWidth: 960, margin: "0 auto", padding: "0 24px 60px", scrollMarginTop: 80 }}
@@ -445,7 +606,7 @@ export default function HomePage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(3, 1fr)",
             gap: 16,
           }}
         >
@@ -462,7 +623,7 @@ export default function HomePage() {
               <i
                 className={`ti ${f.icon}`}
                 style={{
-                  fontSize: 28,
+                  fontSize: 26,
                   color: "var(--brand)",
                   display: "block",
                   marginBottom: 10,
@@ -484,23 +645,13 @@ export default function HomePage() {
             </div>
           ))}
         </div>
-
-        {/* 底部 CTA */}
-        <div style={{ textAlign: "center", marginTop: 36 }}>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
-            无需付费，即刻体验紫微排盘与 AI 智能解析
-          </p>
-          <Link href="/chart">
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ fontSize: 15, padding: "12px 36px" }}
-            >
-              免费体验
-            </button>
-          </Link>
-        </div>
       </section>
+
+      {/* S-01：新用户 Onboarding 弹层 */}
+      <OnboardingDialog
+        open={showOnboarding}
+        onComplete={() => setShowOnboarding(false)}
+      />
     </div>
   );
 }

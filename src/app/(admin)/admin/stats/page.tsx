@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminCard } from "@/components/admin/AdminCard";
+import { AdminStat } from "@/components/admin/AdminStat";
+import { AdminStatGrid } from "@/components/admin/AdminStatGrid";
 
 interface UserStats {
   todayNew: number;
@@ -75,19 +78,18 @@ export default function StatsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <i className="ti ti-chart-line text-xl" style={{ color: "var(--brand)" }} />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold">数据统计</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">用户、收入、功能使用与行为漏斗分析</p>
-        </div>
-      </div>
+    <>
+      <AdminPageHeader
+        icon="ti-chart-line"
+        title="数据统计"
+        desc="用户、收入、功能使用与行为漏斗分析"
+      />
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <div className="admin-alert error">
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
+        </div>
       )}
 
       <Tabs defaultValue="users" onValueChange={handleTabChange}>
@@ -98,145 +100,149 @@ export default function StatsPage() {
           <TabsTrigger value="behavior">用户行为</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="日新增用户" value={userStats?.todayNew ?? "..."} />
-            <StatCard label="周活跃用户" value={userStats?.weekActive ?? "..."} />
-            <StatCard label="月活跃用户" value={userStats?.monthActive ?? "..."} />
-            <StatCard label="总用户数" value={userStats?.totalUsers ?? "..."} />
-          </div>
-          {userStats?.trend && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">近 7 日新增用户</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex h-40 items-end gap-2">
-                  {userStats.trend.map((d) => {
-                    const max = Math.max(...userStats.trend.map((t) => t.count), 1);
-                    return (
-                      <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
-                        <div
-                          className="w-full rounded-t bg-primary/70 transition-all"
-                          style={{ height: `${(d.count / max) * 100}%`, minHeight: 4 }}
-                        />
-                        <span className="text-[10px] text-muted-foreground">
-                          {d.date.slice(5)}
-                        </span>
-                        <span className="text-xs font-semibold">{d.count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+        <TabsContent value="users" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+          <AdminStatGrid>
+            <AdminStat icon="ti-user-plus" label="日新增用户" value={userStats?.todayNew ?? "..."} />
+            <AdminStat icon="ti-calendar-week" label="周活跃用户" value={userStats?.weekActive ?? "..."} />
+            <AdminStat icon="ti-calendar-month" label="月活跃用户" value={userStats?.monthActive ?? "..."} />
+            <AdminStat icon="ti-users" label="总用户数" value={userStats?.totalUsers ?? "..."} />
+          </AdminStatGrid>
+          {userStats?.trend && userStats.trend.length > 0 && (
+            <AdminCard icon="ti-chart-bar" title="近 7 日新增用户">
+              <TrendBars
+                data={userStats.trend.map((d) => ({ label: d.date.slice(5), value: d.count }))}
+                color="var(--brand)"
+              />
+            </AdminCard>
           )}
         </TabsContent>
 
-        <TabsContent value="revenue" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="今日收入" value={revenueStats ? `¥${revenueStats.todayRevenue}` : "..."} />
-            <StatCard label="月度收入" value={revenueStats ? `¥${revenueStats.monthRevenue}` : "..."} />
-            <StatCard label="微信支付" value={revenueStats ? `¥${revenueStats.wechatRevenue}` : "..."} />
-            <StatCard label="支付宝" value={revenueStats ? `¥${revenueStats.alipayRevenue}` : "..."} />
-          </div>
-          {revenueStats?.trend && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">近 7 日收入趋势</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex h-40 items-end gap-2">
-                  {revenueStats.trend.map((d) => {
-                    const max = Math.max(...revenueStats.trend.map((t) => t.amount), 1);
-                    return (
-                      <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
-                        <div
-                          className="w-full rounded-t bg-emerald-500/70 transition-all"
-                          style={{ height: `${(d.amount / max) * 100}%`, minHeight: 4 }}
-                        />
-                        <span className="text-[10px] text-muted-foreground">
-                          {d.date.slice(5)}
-                        </span>
-                        <span className="text-xs font-semibold">¥{d.amount}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+        <TabsContent value="revenue" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+          <AdminStatGrid>
+            <AdminStat icon="ti-cash" label="今日收入" value={revenueStats ? `¥${revenueStats.todayRevenue}` : "..."} />
+            <AdminStat icon="ti-calendar-stats" label="月度收入" value={revenueStats ? `¥${revenueStats.monthRevenue}` : "..."} />
+            <AdminStat icon="ti-brand-wechat" label="微信支付" value={revenueStats ? `¥${revenueStats.wechatRevenue}` : "..."} />
+            <AdminStat icon="ti-credit-card" label="支付宝" value={revenueStats ? `¥${revenueStats.alipayRevenue}` : "..."} />
+          </AdminStatGrid>
+          {revenueStats?.trend && revenueStats.trend.length > 0 && (
+            <AdminCard icon="ti-chart-bar" title="近 7 日收入趋势">
+              <TrendBars
+                data={revenueStats.trend.map((d) => ({ label: d.date.slice(5), value: d.amount, prefix: "¥" }))}
+                color="var(--success)"
+              />
+            </AdminCard>
           )}
         </TabsContent>
 
-        <TabsContent value="usage" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <TabsContent value="usage" style={{ marginTop: 16 }}>
+          <AdminStatGrid>
             {usageStats?.categories.map((cat) => (
-              <StatCard
+              <AdminStat
                 key={cat.category}
+                icon="ti-chart-dots"
                 label={CATEGORY_LABELS[cat.category] || cat.category}
                 value={cat.count}
               />
             ))}
-            <StatCard label="排盘总数" value={usageStats?.totalCharts ?? "..."} />
-          </div>
+            <AdminStat icon="ti-yin-yang" label="排盘总数" value={usageStats?.totalCharts ?? "..."} />
+          </AdminStatGrid>
         </TabsContent>
 
-        <TabsContent value="behavior" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">用户行为漏斗</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {behaviorStats?.funnel.map((step, i) => {
-                const maxCount = behaviorStats.funnel[0]?.count || 1;
-                const rate =
-                  i === 0 ? "100%" : `${((step.count / maxCount) * 100).toFixed(1)}%`;
-                return (
-                  <div key={i} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{step.step}</span>
-                      <div className="flex items-center gap-4">
-                        <span className="font-semibold">{step.count}</span>
-                        <span className="text-xs text-muted-foreground w-12 text-right">
-                          {rate}
-                        </span>
+        <TabsContent value="behavior" style={{ marginTop: 16 }}>
+          <AdminCard icon="ti-filter" title="用户行为漏斗">
+            {behaviorStats?.funnel && behaviorStats.funnel.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {behaviorStats.funnel.map((step, i) => {
+                  const maxCount = behaviorStats.funnel[0]?.count || 1;
+                  const rate =
+                    i === 0 ? "100%" : `${((step.count / maxCount) * 100).toFixed(1)}%`;
+                  return (
+                    <div key={i}>
+                      <div className="flex items-center justify-between" style={{ fontSize: 13, marginBottom: 6 }}>
+                        <span style={{ color: "var(--ink)" }}>{step.step}</span>
+                        <div className="flex items-center" style={{ gap: 16 }}>
+                          <span style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>{step.count}</span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: "var(--text-muted)",
+                              width: 48,
+                              textAlign: "right",
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                            {rate}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ height: 8, background: "var(--soft)", borderRadius: 4, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            borderRadius: 4,
+                            background: "linear-gradient(90deg, var(--brand), var(--brand-light))",
+                            width: `${(step.count / maxCount) * 100}%`,
+                            minWidth: step.count > 0 ? 8 : 0,
+                            transition: "width .4s ease",
+                          }}
+                        />
                       </div>
                     </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary/70 transition-all"
-                        style={{
-                          width: `${(step.count / maxCount) * 100}%`,
-                          minWidth: step.count > 0 ? 8 : 0,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-              {!behaviorStats && (
-                <div className="py-8 text-center text-muted-foreground">加载中...</div>
-              )}
-            </CardContent>
-          </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
+                加载中...
+              </div>
+            )}
+          </AdminCard>
         </TabsContent>
       </Tabs>
-    </div>
+    </>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+/** 趋势柱状图（极简，无外部图表库） */
+function TrendBars({
+  data,
+  color,
+}: {
+  data: Array<{ label: string; value: number; prefix?: string }>;
+  color: string;
+}) {
+  const max = Math.max(...data.map((d) => d.value), 1);
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "var(--soft)" }}>
-          <i className="ti ti-chart-bar" style={{ fontSize: 18, color: "var(--brand)" }} />
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 160 }}>
+      {data.map((d) => (
+        <div
+          key={d.label}
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              borderTopLeftRadius: 4,
+              borderTopRightRadius: 4,
+              background: `linear-gradient(180deg, ${color}, color-mix(in srgb, ${color} 60%, transparent))`,
+              height: `${(d.value / max) * 100}%`,
+              minHeight: 4,
+              transition: "height .4s ease",
+            }}
+          />
+          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{d.label}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--ink)" }}>
+            {d.prefix || ""}
+            {d.value}
+          </span>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold tracking-tight">{value}</div>
-      </CardContent>
-    </Card>
+      ))}
+    </div>
   );
 }

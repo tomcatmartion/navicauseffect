@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminCard } from "@/components/admin/AdminCard";
 
 interface WechatPayConfig {
   mchId: string;
@@ -65,7 +66,12 @@ export default function PaymentConfigPage() {
     fetchConfig();
   }, [fetchConfig]);
 
-  const saveConfig = async (key: string, value: unknown, setLoading: (v: boolean) => void, setSaved: (v: boolean) => void) => {
+  const saveConfig = async (
+    key: string,
+    value: unknown,
+    setLoading: (v: boolean) => void,
+    setSaved: (v: boolean) => void
+  ) => {
     setLoading(true);
     setSaved(false);
     try {
@@ -85,161 +91,145 @@ export default function PaymentConfigPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <i className="ti ti-credit-card text-xl" style={{ color: "var(--brand)" }} />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold">支付配置</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">微信支付与支付宝接口参数配置</p>
-        </div>
-      </div>
+    <>
+      <AdminPageHeader
+        icon="ti-credit-card"
+        title="支付配置"
+        desc="微信支付与支付宝接口参数配置"
+      />
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <div className="admin-alert error">
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
+        </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg"
-              style={{ background: "var(--soft)" }}
-            >
-              <i
-                className="ti ti-brand-wechat"
-                style={{ fontSize: 18, color: "#07c160" }}
-              />
-            </div>
-            <div>
-              <CardTitle className="text-base">微信支付 V3</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">商户号、AppID、API V3 密钥与回调</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>商户号 (mch_id)</Label>
-              <Input
-                value={wechat.mchId}
-                onChange={(e) => setWechat({ ...wechat, mchId: e.target.value })}
-                placeholder="1234567890"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>公众号 AppID</Label>
-              <Input
-                value={wechat.appId}
-                onChange={(e) => setWechat({ ...wechat, appId: e.target.value })}
-                placeholder="wx..."
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>API V3 密钥</Label>
-              <Input
-                type="password"
-                value={wechat.apiKey}
-                onChange={(e) => setWechat({ ...wechat, apiKey: e.target.value })}
-                placeholder="32位密钥"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>证书序列号</Label>
-              <Input
-                value={wechat.certSerialNo}
-                onChange={(e) => setWechat({ ...wechat, certSerialNo: e.target.value })}
-                placeholder="证书序列号"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>回调通知 URL</Label>
+      <AdminCard
+        icon="ti-brand-wechat"
+        iconColor="#07c160"
+        title="微信支付 V3"
+        desc="商户号、AppID、API V3 密钥与回调"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="field-row">
+          <div className="field">
+            <Label className="field-label">商户号 (mch_id)</Label>
             <Input
-              value={wechat.notifyUrl}
-              onChange={(e) => setWechat({ ...wechat, notifyUrl: e.target.value })}
-              placeholder="https://yourdomain.com/api/payment/callback"
+              value={wechat.mchId}
+              onChange={(e) => setWechat({ ...wechat, mchId: e.target.value })}
+              placeholder="1234567890"
             />
           </div>
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              onClick={() => saveConfig("wechat_pay", wechat, setSavingWechat, setSavedWechat)}
-              disabled={savingWechat}
-            >
-              {savingWechat ? "保存中..." : "保存微信配置"}
-            </Button>
-            {savedWechat && <span className="text-sm text-emerald-600">已保存</span>}
+          <div className="field">
+            <Label className="field-label">公众号 AppID</Label>
+            <Input
+              value={wechat.appId}
+              onChange={(e) => setWechat({ ...wechat, appId: e.target.value })}
+              placeholder="wx..."
+            />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <Label className="field-label">API V3 密钥</Label>
+            <Input
+              type="password"
+              value={wechat.apiKey}
+              onChange={(e) => setWechat({ ...wechat, apiKey: e.target.value })}
+              placeholder="32 位密钥"
+            />
+          </div>
+          <div className="field">
+            <Label className="field-label">证书序列号</Label>
+            <Input
+              value={wechat.certSerialNo}
+              onChange={(e) => setWechat({ ...wechat, certSerialNo: e.target.value })}
+              placeholder="证书序列号"
+            />
+          </div>
+        </div>
+        <div className="field">
+          <Label className="field-label">回调通知 URL</Label>
+          <Input
+            value={wechat.notifyUrl}
+            onChange={(e) => setWechat({ ...wechat, notifyUrl: e.target.value })}
+            placeholder="https://yourdomain.com/api/payment/callback"
+          />
+        </div>
+        <div className="admin-save-row">
+          <Button
+            onClick={() => saveConfig("wechat_pay", wechat, setSavingWechat, setSavedWechat)}
+            disabled={savingWechat}
+          >
+            <i className="ti ti-device-floppy" />
+            {savingWechat ? "保存中..." : "保存微信配置"}
+          </Button>
+          {savedWechat && (
+            <span className="admin-save-hint">
+              <i className="ti ti-check" />
+              已保存
+            </span>
+          )}
+        </div>
+      </AdminCard>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg"
-              style={{ background: "var(--soft)" }}
-            >
-              <i
-                className="ti ti-credit-card"
-                style={{ fontSize: 18, color: "#1677ff" }}
-              />
-            </div>
-            <div>
-              <CardTitle className="text-base">支付宝开放平台</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">应用 AppID、私钥、公钥与回调</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>应用 AppID</Label>
-            <Input
-              value={alipay.appId}
-              onChange={(e) => setAlipay({ ...alipay, appId: e.target.value })}
-              placeholder="2021..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>应用私钥</Label>
-            <Input
-              type="password"
-              value={alipay.privateKey}
-              onChange={(e) => setAlipay({ ...alipay, privateKey: e.target.value })}
-              placeholder="MIIEvQIBADANBg..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>支付宝公钥</Label>
-            <Input
-              type="password"
-              value={alipay.alipayPublicKey}
-              onChange={(e) => setAlipay({ ...alipay, alipayPublicKey: e.target.value })}
-              placeholder="MIIBIjANBg..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>回调通知 URL</Label>
-            <Input
-              value={alipay.notifyUrl}
-              onChange={(e) => setAlipay({ ...alipay, notifyUrl: e.target.value })}
-              placeholder="https://yourdomain.com/api/payment/callback"
-            />
-          </div>
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              onClick={() => saveConfig("alipay", alipay, setSavingAlipay, setSavedAlipay)}
-              disabled={savingAlipay}
-            >
-              {savingAlipay ? "保存中..." : "保存支付宝配置"}
-            </Button>
-            {savedAlipay && <span className="text-sm text-emerald-600">已保存</span>}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <AdminCard
+        icon="ti-credit-card"
+        iconColor="#1677ff"
+        title="支付宝开放平台"
+        desc="应用 AppID、私钥、公钥与回调"
+      >
+        <div className="field">
+          <Label className="field-label">应用 AppID</Label>
+          <Input
+            value={alipay.appId}
+            onChange={(e) => setAlipay({ ...alipay, appId: e.target.value })}
+            placeholder="2021..."
+          />
+        </div>
+        <div className="field">
+          <Label className="field-label">应用私钥</Label>
+          <Input
+            type="password"
+            value={alipay.privateKey}
+            onChange={(e) => setAlipay({ ...alipay, privateKey: e.target.value })}
+            placeholder="MIIEvQIBADANBg..."
+          />
+        </div>
+        <div className="field">
+          <Label className="field-label">支付宝公钥</Label>
+          <Input
+            type="password"
+            value={alipay.alipayPublicKey}
+            onChange={(e) => setAlipay({ ...alipay, alipayPublicKey: e.target.value })}
+            placeholder="MIIBIjANBg..."
+          />
+        </div>
+        <div className="field">
+          <Label className="field-label">回调通知 URL</Label>
+          <Input
+            value={alipay.notifyUrl}
+            onChange={(e) => setAlipay({ ...alipay, notifyUrl: e.target.value })}
+            placeholder="https://yourdomain.com/api/payment/callback"
+          />
+        </div>
+        <div className="admin-save-row">
+          <Button
+            onClick={() => saveConfig("alipay", alipay, setSavingAlipay, setSavedAlipay)}
+            disabled={savingAlipay}
+          >
+            <i className="ti ti-device-floppy" />
+            {savingAlipay ? "保存中..." : "保存支付宝配置"}
+          </Button>
+          {savedAlipay && (
+            <span className="admin-save-hint">
+              <i className="ti ti-check" />
+              已保存
+            </span>
+          )}
+        </div>
+      </AdminCard>
+    </>
   );
 }

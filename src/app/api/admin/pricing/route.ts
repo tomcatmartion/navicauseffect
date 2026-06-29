@@ -37,11 +37,19 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "无权限" }, { status: 403 });
   }
 
-  const body = await request.json();
-  const { action } = body;
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "无效的请求体" }, { status: 400 });
+  }
+  const { action } = body as { action?: string };
 
   if (action === "updatePerQueryPrice") {
-    const { price } = body;
+    const { price } = body as { price?: number };
+    if (typeof price !== "number" || price < 0 || !Number.isFinite(price)) {
+      return NextResponse.json({ error: "price 必须为非负数字" }, { status: 400 });
+    }
     await prisma.adminConfig.upsert({
       where: { configKey: "per_query_price" },
       update: { configValue: price },
@@ -51,7 +59,19 @@ export async function PUT(request: NextRequest) {
   }
 
   if (action === "updatePlan") {
-    const { id, originalPrice, activityPrice, isActive } = body;
+    const { id, originalPrice, activityPrice, isActive, plan } = body as {
+      id?: string;
+      originalPrice?: number;
+      activityPrice?: number | null;
+      isActive?: boolean;
+      plan?: string;
+    };
+    if (typeof originalPrice !== "number" || originalPrice < 0) {
+      return NextResponse.json({ error: "originalPrice 必须为非负数字" }, { status: 400 });
+    }
+    if (activityPrice !== null && activityPrice !== undefined && (typeof activityPrice !== "number" || activityPrice < 0)) {
+      return NextResponse.json({ error: "activityPrice 必须为非负数字或 null" }, { status: 400 });
+    }
 
     if (id) {
       const updated = await prisma.membershipPricing.update({
@@ -64,9 +84,12 @@ export async function PUT(request: NextRequest) {
       });
       return NextResponse.json(updated);
     } else {
+      if (!plan || !["MONTHLY", "QUARTERLY", "YEARLY"].includes(plan)) {
+        return NextResponse.json({ error: "plan 必须为 MONTHLY/QUARTERLY/YEARLY" }, { status: 400 });
+      }
       const created = await prisma.membershipPricing.create({
         data: {
-          plan: body.plan,
+          plan: plan as "MONTHLY" | "QUARTERLY" | "YEARLY",
           originalPrice,
           activityPrice: activityPrice ?? null,
           isActive: isActive ?? true,

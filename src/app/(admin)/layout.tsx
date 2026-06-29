@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 const adminNavItems = [
   { label: "概览", href: "/admin", icon: "ti-dashboard" },
@@ -23,41 +22,46 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const currentItem = adminNavItems.find((item) =>
+    item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href)
+  );
+
   return (
-    <div className="flex min-h-screen">
-      {/* 桌面端侧边栏 */}
-      <aside className="fixed left-0 top-0 z-40 hidden h-full w-56 border-r border-border bg-card md:block">
-        <div className="flex h-16 items-center border-b px-4">
-          <Link href="/admin" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground font-bold">
-              管
-            </div>
-            <span className="font-semibold">管理后台</span>
-          </Link>
-        </div>
-        <nav className="space-y-1 p-3">
-          {adminNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                pathname === item.href
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <i className={`ti ${item.icon}`} />
-              {item.label}
-            </Link>
-          ))}
+    <div className="admin-shell">
+      {/* 桌面端侧边栏（移动端复用为抽屉）*/}
+      <aside className={`admin-rail${drawerOpen ? " open" : ""}`}>
+        <Link
+          href="/admin"
+          className="admin-rail-logo-box"
+          onClick={() => setDrawerOpen(false)}
+        >
+          <div className="admin-rail-logo">管</div>
+          <span className="admin-rail-brand">微著后台</span>
+        </Link>
+        <nav className="admin-rail-nav">
+          {adminNavItems.map((item) => {
+            const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setDrawerOpen(false)}
+                className={`admin-rail-btn${active ? " active" : ""}`}
+              >
+                <i className={`ti ${item.icon}`} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
-        <div className="absolute bottom-4 left-0 w-full px-3">
+        <div className="admin-rail-foot">
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+            onClick={() => setDrawerOpen(false)}
+            className="admin-rail-btn"
           >
-            <i className="ti ti-arrow-left" /> 返回前台
+            <i className="ti ti-arrow-left" />
+            <span>返回前台</span>
           </Link>
         </div>
       </aside>
@@ -65,82 +69,44 @@ export default function AdminLayout({
       {/* 移动端抽屉遮罩 */}
       {drawerOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 md:hidden"
+          className="admin-rail-mask open"
           onClick={() => setDrawerOpen(false)}
         />
       )}
 
-      {/* 移动端侧边抽屉 */}
-      <aside
-        className={cn(
-          "fixed left-0 top-0 z-50 h-full w-64 border-r border-border bg-card transition-transform duration-200 md:hidden",
-          drawerOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex h-16 items-center justify-between border-b px-4">
-          <Link href="/admin" className="flex items-center gap-2" onClick={() => setDrawerOpen(false)}>
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground font-bold">
-              管
-            </div>
-            <span className="font-semibold">管理后台</span>
-          </Link>
-          <button
-            onClick={() => setDrawerOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
-          >
-            <i className="ti ti-x" />
-          </button>
-        </div>
-        <nav className="space-y-1 overflow-y-auto p-3" style={{ maxHeight: "calc(100vh - 120px)" }}>
-          {adminNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setDrawerOpen(false)}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                pathname === item.href
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <i className={`ti ${item.icon}`} />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="absolute bottom-4 left-0 w-full border-t px-3 pt-3">
-          <Link
-            href="/"
-            onClick={() => setDrawerOpen(false)}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-          >
-            <i className="ti ti-arrow-left" /> 返回前台
-          </Link>
-        </div>
-      </aside>
-
       {/* 主内容区 */}
-      <main className="flex-1 md:ml-56">
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b bg-card/80 px-4 backdrop-blur-sm md:px-6">
-          {/* 移动端菜单按钮 */}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="mr-3 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted md:hidden"
-          >
-            <i className="ti ti-menu-2" />
-          </button>
-          <h1 className="text-base font-semibold md:text-lg">微著 · 管理后台</h1>
-          {/* 移动端返回前台快捷入口 */}
-          <Link
-            href="/"
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground md:hidden"
-          >
-            返回前台 →
-          </Link>
+      <div className="admin-main">
+        <header className="admin-topbar">
+          <div className="admin-topbar-left">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="admin-topbar-burger"
+              aria-label="打开菜单"
+            >
+              <i className="ti ti-menu-2" />
+            </button>
+            <div>
+              <h1 className="admin-topbar-title">
+                <i className="ti ti-shield-check" />
+                <span>微著 · 管理后台</span>
+              </h1>
+              <div className="admin-topbar-breadcrumb">
+                <Link href="/admin">后台</Link>
+                <i className="ti ti-chevron-right" />
+                <span>{currentItem?.label ?? "页面"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="admin-topbar-actions">
+            <Link href="/" className="admin-topbar-back">
+              <i className="ti ti-arrow-left" />
+              <span>返回前台</span>
+            </Link>
+          </div>
         </header>
-        <div className="admin-page p-4 md:p-6">{children}</div>
-      </main>
+        <div className="admin-content admin-page">{children}</div>
+      </div>
     </div>
   );
 }

@@ -1,30 +1,20 @@
 "use client";
 
-import { useTheme, type ZiweiTheme } from "@/components/providers/theme-provider";
-
-interface ThemeOption {
-  key: ZiweiTheme;
-  label: string;
-  /** 切换按钮显示的颜色（来自 testUI/js/theme.js） */
-  color: string;
-}
-
-const OPTIONS: ThemeOption[] = [
-  { key: "newspaper", label: "报纸主题", color: "#F2ECD9" },
-  { key: "clay", label: "粘土主题", color: "#F5F2EF" },
-  { key: "neumorphism", label: "新拟态主题", color: "#E0E5EC" },
-];
+import { useTheme } from "@/components/providers/theme-provider";
+import { CONCRETE_THEMES, THEME_OPTIONS } from "@/lib/theme/theme-options";
 
 /**
- * 右下角悬浮三主题切换器。
- * DOM 结构与 testUI 的 .theme-switcher 完全一致（CSS 来自 ziwei.css）。
+ * 右下角悬浮主题切换器。
+ * DOM 结构与 testUI 的 .theme-switcher 基本一致（CSS 来自 ziwei.css）。
+ *
+ * 仅展示 3 个具体主题：粘土风(土)、新拟态(拟)、报纸(报)。
  */
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
 
   return (
     <div className="theme-switcher" role="group" aria-label="主题切换">
-      {OPTIONS.map((opt) => {
+      {THEME_OPTIONS.map((opt) => {
         const isActive = theme === opt.key;
         return (
           <button
@@ -36,9 +26,24 @@ export function ThemeSwitcher() {
             aria-label={opt.label}
             aria-pressed={isActive}
             onClick={() => setTheme(opt.key)}
-          />
+          >
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "var(--ink)",
+                lineHeight: 1,
+                fontFamily: "var(--font-head)",
+              }}
+            >
+              {opt.shortLabel}
+            </span>
+          </button>
         );
       })}
     </div>
   );
 }
+
+// 兼容旧引用
+export { CONCRETE_THEMES };

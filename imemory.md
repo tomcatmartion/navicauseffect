@@ -6,6 +6,70 @@
 
 ---
 
+## 2026-06-26 文档编辑误覆写教训
+
+### E-68: 对已有 `.md` 追加内容时**绝对不能用 `Write` 工具**，必须用 `SearchReplace` 定位后追加
+
+- **现象**：更新 `planfiles/文件与功能对照表.md` 时，意图在末尾追加「共享 UI 组件」新章节，使用 `Write` 工具后整个文件被替换为仅 12 行新内容，原有 138 行对照表全部丢失
+- **根因**：`Write` 工具语义是「覆盖写入」（overwrite），无论目标文件是否已存在都会整体替换；而 `SearchReplace` 才是「在已有内容中定位并替换/插入」的正确工具
+- **影响**：险些造成项目重要文档永久丢失；幸亏前一步 `Read` 过原文件，得以完整重建
+- **正确做法（强约束）**：①**已有文件追加内容 → 一律 `SearchReplace`**，用 `old_str` 精确定位插入锚点（如标题、文件末尾空行），`new_str` 包含锚点 + 新增内容；②只有创建全新文件时才用 `Write`；③修改 `.md`、`.txt`、日志类文件前，先 `Read` 确认当前内容；④若不慎覆写，立刻停止后续操作，优先用最近一次 `Read`/git/备份恢复
+- **教训层级**：工具选择错误比逻辑错误更危险——逻辑错误通常可被诊断发现，而覆写文件是静默破坏。必须形成肌肉记忆：`Write` = 新建，`SearchReplace` = 编辑已有文件
+
+---
+
+## 2026-06-24 /chart 页面 hydration mismatch 教训
+
+### E-64: useState 惰性初始化若访问 `window/sessionStorage` 会导致 SSR/CSR 首帧不一致
+
+- **现象**：`/chart` 页面报错 "Hydration failed because the server rendered HTML didn't match the client"，差异为服务端渲染了表单容器，客户端渲染了加载占位
+- **根因**：`src/app/(main)/chart/page.tsx` 中 `isHydrating` 用 `useState(() => { if (typeof window === "undefined") return false; ... })` 初始化；SSR 时返回 `false`，客户端首帧若检测到 `sessionStorage`/`?chartRecordId` 返回 `true`，首帧 DOM 不一致触发 hydration mismatch
+- **正确做法**：任何依赖客户端 storage/URL/浏览器 API 的状态，初始值必须与 SSR 输出一致。常见方案：①初始值固定为「loading/占位」状态，mount 后再根据实际数据切换；②使用 `useSyncExternalStore` 并在 SSR snapshot 返回固定值；③用 `useEffect` 做客户端判断，绝不在 `useState` 初始化函数里分支 `typeof window`
+- **修复**：将 `isHydrating` 初始值固定为 `true`，SSR 与客户端首帧统一渲染加载占位，`useEffect` 中再决定是否进入表单/对话态
+
+---
+
+## 2026-06-24 管理后台按钮文字居中排查教训
+
+### E-65: 用 `transform: translateY(-1px)` 修复按钮文字对齐是错误的——它位移整个按钮而非文字（**推翻 E-63 的修复方案**）
+
+- **现象**：管理后台按钮文字看上去整体偏上 1-2px，跨 newspaper/clay/neumorphism 三主题，跨 default/sm/xs/lg 四尺寸均存在；多次 padding/line-height 调整无效
+- **错误根因**：E-63 给出的修复方案 `ziwei.css 用 transform: translateY(-1px) 抵消中文字符视觉重心偏下` **本身就是 bug**——`transform` 位移的是**整个按钮元素**（包括文字、图标、边框、背景），不是只位移文字。结果：按钮在父容器内整体上移 1px，但文字相对按钮的偏移完全没变。视觉上看不出问题被修复，反而引入了按钮和同级元素（如开关、徽章）的错位
+- **真正根因**：①中文字符在 line-box 内**视觉中心比几何中心高 ~1.5-2px**（中文方块字"天头"大于"地脚"的字体度量特性）；②shadcn `<Button>` 默认 `leading-none`（line-height:1）+ `inline-flex` + `items-center` 让 line-box 几何中心居中于 content-box，但中文字符视觉中心仍偏上于 line-box 几何中心
+- **数学推导的正确方案**：用 `padding-top` 把 content-box 中心**下移** N/2 px，使中文字符视觉中心对齐按钮几何中心。公式：`padding-top = 字符视觉偏上量 × 2 ≈ 3px`（按 size 分级：h-9=3px / h-7=2px / h-6=1px / h-10=4px）。圆角大的主题（clay ~16px）顶部圆角"吃掉"视觉空间，需 +1px 微调
+- **正确做法**：①文字对齐问题**永远不用 transform 修复**——transform 位移容器不位移内容；②用 `padding-top`（针对 inline-flex 容器）或 `line-height`（针对 inline 文本）调整文字在容器内的位置；③多层 CSS 覆盖产生冲突时，**收敛为单一权威层**而不是再加新层补偿
+- **修复**：删除 ziwei.css `.admin-content button { transform: translateY(-1px); line-height: 1; display: inline-flex; ... }` 整段，改为 `.admin-content [data-slot="button"] { padding-top: 3px }` 单一权威层 + clay 主题 +1px 微调。Playwright 像素级测量确认三主题下顶距=底距（垂直偏移 0px）
+- **教训层级**：**本项目至少 6 次尝试修复此问题**（见 workresultdoc 2026-06-24 系列记录），每次都加新层补偿而不删除旧层，导致 5 层样式叠加。**5 层中没有任何一层是"权威源"**——这就是问题的真正根因
+
+### E-63: 按钮文字「不居中」可能是图标未渲染，而非文字本身居中问题
+
+- **现象**：管理后台多个页面（支付配置、AI 模型、价格管理）的保存/添加按钮文字明显偏右、偏下，反复调整 padding、line-height、align-items 均无效
+- **根因**：`src/app/layout.tsx` 引入的 Tabler Icons CDN 路径错误（`@tabler/icons@2.44.0/tabler-icons.css` 不存在），导致所有 `<i class="ti ti-*">` 图标未渲染；不可见的图标元素仍占据 flex 布局空间，把文字推向右侧
+- **排查方法**：用 Playwright 获取按钮内 `<i>` 的 `getComputedStyle` 发现 `font-family` 为默认 sans-serif、`width: 0`、`content: none`；curl 该 CDN URL 返回 404
+- **正确做法**：①先验证图标 CDN 是否可访问、路径是否正确（Tabler v2 webfont 正确路径为 `.../iconfont/tabler-icons.min.css`）。②按钮文字居中问题出现时，先检查图标是否实际可见，再调整文字/内边距。③不要只依赖 padding-bottom 在 `align-items: center` 的 flex 容器中「推」文字——padding 不改变 flex 子项的中心位置
+- **修复**：`layout.tsx` 修正 CDN 路径；`button.tsx` 统一 `py-0`；`ziwei.css` 用 `transform: translateY(-1px)` 抵消中文字符视觉重心偏下
+
+### E-66: Tabler Icons CDN 路径再次变更（推翻 E-63 给出的"正确路径"）
+
+- **现象**：用户反馈"看不到按钮内的图标"，并质疑修复未部署。E-63、E-65 都自认修复了但问题仍然存在
+- **真正根因**：E-63 给出的"正确路径"`@tabler/icons@2.44.0/iconfont/tabler-icons.min.css` **本身也是 404**。Tabler 在 2.x 之后将 webfont 包从 `@tabler/icons` 拆分为独立的 `@tabler/icons-webfont`，原包路径全部失效
+- **静默失败陷阱**：CDN 404 **不会抛错、不会在 console 报错**（CSS link 加载失败只产生网络层 404，浏览器不会显示），导致反复"假修复"——开发者改了又改，但用户看到的一直是"图标不可见"
+- **修复**：CDN 改为 `https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css`（HTTP 200 实证可用）。`<i>` 标签 `font-family` 从 `ui-sans-serif` 变为 `tabler-icons`、`width` 从 `0px` 变为 `14px`
+- **正确做法（强约束）**：①所有外部 CDN 引入**必须 `curl -sI` 验证 HTTP 状态码**，不能只看代码里"看起来对"。②"按钮文字不居中"问题排查顺序固定为：**先确认图标实际可见**（Playwright `getComputedStyle` 看 `font-family` 和 `width`），再调整文字内边距。③旧版本记录的"修复 URL"可能本身就是错的，**必须重新验证**不能照抄
+- **教训层级**：这是项目里**至少 7 次尝试修复按钮问题**的最后一次。前 6 次都在调整 padding/line-height/transform 这些次级症状，从未触及"图标根本没渲染"这个主诉。**用户截图描述的"看不到按钮内的图标"是字面意义上的真实状态，不是错觉**
+
+### E-67: Tailwind 4 项目里 unlayered CSS 规则会 silently 覆盖所有 Tailwind utilities（CSS Cascade Level 5 陷阱）
+
+- **现象**：用户反馈「按钮宽度跟文字一样、没内边距」。Playwright `getComputedStyle` 测量所有 shadcn Button 的 `padding-left/right = 0px`，本应 `.px-4`（16px）等 Tailwind utility 生效
+- **错误根因**：`ziwei.css:119` 的 `* { margin:0; padding:0; box-sizing:border-box }` 是 unlayered 规则。按 **CSS Cascade Level 5 规范**：unlayered rules **永远胜过** layered rules（与特异性无关）。Tailwind 4 的所有 utilities（`.px-4`/`.py-2`/`.mx-3`/`.gap-2` 等）都在 `@layer utilities` 中，全部被这条 unlayered `*` 规则**完全覆盖**
+- **反直觉点**：开发者以为 `.px-4`（特异性 0,1,0）会胜过 `*`（特异性 0,0,0），但**层级(layer)优先级高于特异性**——`unlayered > layered`，无论特异性。这一规则在 CSS Cascade Level 5 才确定，许多老教程未涵盖
+- **影响范围**：项目里**所有** Tailwind padding/margin 类失效。不仅按钮，理论上 form input、card、grid gap 等用 Tailwind 工具类的地方都被这条 `*` 规则覆盖。但因为 ziwei.css 本身提供了大量 `.card`/`.btn`/`.input` 等组件类直接定义 padding，所以大部分场景「碰巧看起来对」
+- **修复**：用 `@layer base { * { margin:0; padding:0; box-sizing:border-box } }` 包裹这条 reset 规则，让它在 base layer（顺序在 utilities 之前），Tailwind utilities 即可正常 cascade 覆盖
+- **正确做法（强约束）**：①**Tailwind 4 项目里所有 reset/base 性质的 CSS（包括 `*`、`html`、`body` 选择器）必须放进 `@layer base`**，否则会 silently 让 utilities 失效。②排查「Tailwind 类不生效」类问题，先查 `@layer` 声明，再查特异性。③诊断方法：用 Playwright `getComputedStyle` 检查具体属性值，再用 `CSS.getMatchedStylesForNode` 或遍历 `document.styleSheets` 找匹配规则——这是定位 layer vs specificity 问题的唯一可靠手段
+- **教训层级**：CSS Cascade Level 5 引入 layer 后，特异性不再是唯一规则。**layer 优先级 > 特异性 > 出现顺序**。老项目迁移到 Tailwind 4 时必须重新审视所有 unlayered 全局 reset
+
+---
+
 ## 2026-05-14/15 腾讯云部署完整教训
 
 ### E-56: 部署只传代码和配置，禁止上传 .next 构建产物

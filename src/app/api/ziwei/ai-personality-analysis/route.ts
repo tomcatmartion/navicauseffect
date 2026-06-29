@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { checkDailyLimit, incrementDailyUsage } from '@/lib/rate-limit'
+import { consumeRights, consumeErrorToResponse } from '@/lib/auth/consume-rights'
 import { runCoreChartStages } from '@/core/pipeline/run-chart-stages'
 import {
   buildPrompt,
@@ -28,11 +28,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '未登录' }, { status: 401 })
   }
 
+  // 统一权益消耗(会员免费,非会员走免费额度)
   const ip = request.headers.get('x-forwarded-for') || 'unknown'
-  const membershipPlan = session.user.membershipPlan || 'FREE'
-  const limitResult = await checkDailyLimit(session.user.id, ip, membershipPlan)
-  if (!limitResult.allowed) {
-    return NextResponse.json({ error: '今日使用次数已达上限' }, { status: 429 })
+  const consume = await consumeRights({
+    userId: session.user.id,
+    ip,
+    resourceType: 'ANALYSIS',
+    baseCost: 0, // 走免费额度模式
+  })
+  if (!consume.ok) {
+    const err = consumeErrorToResponse(consume.error)
+    return NextResponse.json(err.body, { status: err.status })
   }
 
   let body: unknown
@@ -158,7 +164,7 @@ export async function POST(request: NextRequest) {
           }
 
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-          await incrementDailyUsage(session.user.id, ip)
+          // consumeRights 已在请求开始时消耗,无需再 incrementDailyUsage
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err)
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`))

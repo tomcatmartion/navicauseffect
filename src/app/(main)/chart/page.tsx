@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import type { IFunctionalAstrolabe } from "iztro/lib/astro/FunctionalAstrolabe";
 import type { IFunctionalHoroscope } from "iztro/lib/astro/FunctionalHoroscope";
 import { BirthInputForm } from "@/components/chart/birth-input-form";
 import { SaveChartButton } from "@/components/chart/save-chart-button";
+import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { serializeAstrolabeForReading } from "@/lib/ziwei/serialize-chart-for-reading";
 import {
   Sheet,
@@ -69,27 +72,42 @@ interface BirthData {
 }
 
 export default function ChartPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [astrolabe, setAstrolabe] = useState<IFunctionalAstrolabe | null>(null);
   const [horoscope, setHoroscope] = useState<IFunctionalHoroscope | null>(null);
   const [trueSolarTimeInfo, setTrueSolarTimeInfo] = useState("");
   const [birthTimeIndex, setBirthTimeIndex] = useState(0);
   const [horoscopeTimeIndex, setHoroscopeTimeIndex] = useState(0);
   const [birthData, setBirthData] = useState<BirthData | null>(null);
+  const [chartRecordId, setChartRecordId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // 是否正在从 sessionStorage / URL chartRecordId 恢复命盘
-  // 关键：惰性初始化「同步」判断是否有待恢复数据，避免首帧渲染表单后又被异步替换
-  // （曾经出现的 bug：刷新 /chart 时先闪一下 BirthInputForm，再切到对话页）
-  const [isHydrating, setIsHydrating] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    const hasSession = !!sessionStorage.getItem(CHART_STATE_KEY);
-    const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
-    return hasSession || hasUrlParam;
-  });
+  // 初始值必须固定为 true，保证 SSR 与客户端首帧一致，避免 hydration mismatch。
+  // 实际是否有数据在 useEffect 中判断；无数据时会关闭 loading 并展示表单。
+  const [isHydrating, setIsHydrating] = useState<boolean>(true);
   const [parentBirthYears, setParentBirthYears] = useState<{ father?: number; mother?: number } | undefined>();
   const [restoredChartData, setRestoredChartData] = useState<Record<string, unknown> | null>(null);
   const [chartPanelOpen, setChartPanelOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // O-03：移动端首屏不展开命盘抽屉，避免 70vh sheet 盖住对话区
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setChartPanelOpen(false);
+    }
+  }, []);
+
+  // O-04：在浏览器 paint 前同步判断是否真有待恢复数据；无数据立即关闭 hydrating，避免 loading 闪现
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const hasStorage = !!window.sessionStorage.getItem(CHART_STATE_KEY);
+    const hasUrl = !!new URLSearchParams(window.location.search).get("chartRecordId");
+    if (!hasStorage && !hasUrl) {
+      setIsHydrating(false);
+    }
+  }, []);
 
   const chartDataForPipeline = useMemo(() => {
     if (restoredChartData) return restoredChartData;
@@ -138,13 +156,17 @@ export default function ChartPage() {
     preloadHeavyDeps();
   }, []);
 
-  // 恢复 sessionStorage
+  // 恢复 sessionStorage（O-17：URL > sessionStorage 优先级明确化）
   useEffect(() => {
+    const urlHasChartRecordId = !!new URLSearchParams(window.location.search).get("chartRecordId");
     const raw = sessionStorage.getItem(CHART_STATE_KEY);
+    // O-17：双源冲突时 URL 优先，给用户明确提示
+    if (urlHasChartRecordId && raw) {
+      toast.info("已优先使用链接中的命盘", { duration: 2500 });
+    }
     if (!raw) {
       // 无 sessionStorage 数据：若 URL 同时有 chartRecordId，让 chartRecordId useEffect 负责关闭 hydrating
-      const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
-      if (!hasUrlParam) setIsHydrating(false);
+      if (!urlHasChartRecordId) setIsHydrating(false);
       return;
     }
     (async () => {
@@ -172,8 +194,7 @@ export default function ChartPage() {
         // 忽略，落入新建态
       } finally {
         // 若 URL 也有 chartRecordId，留给 chartRecordId useEffect 关闭（避免闪现）
-        const hasUrlParam = !!new URLSearchParams(window.location.search).get("chartRecordId");
-        if (!hasUrlParam) setIsHydrating(false);
+        if (!urlHasChartRecordId) setIsHydrating(false);
       }
     })();
   }, []);
@@ -182,6 +203,7 @@ export default function ChartPage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const chartRecordId = searchParams.get("chartRecordId");
+    setChartRecordId(chartRecordId);
     // astrolabe 已存在 → sessionStorage 路径已恢复成功，无需再 fetch，关 hydrating
     if (!chartRecordId || astrolabe) {
       if (astrolabe) setIsHydrating(false);
@@ -190,7 +212,17 @@ export default function ChartPage() {
     (async () => {
       try {
         const res = await fetch(`/api/charts/${chartRecordId}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+          // 401/403：session 过期；404：命盘不存在；其他：网络/服务异常
+          if (res.status === 401 || res.status === 403) {
+            toast.error("登录已过期，请重新登录后查看命盘", { duration: 4000 });
+          } else if (res.status === 404) {
+            toast.error("命盘不存在或已被删除", { duration: 4000 });
+          } else {
+            toast.error("命盘加载失败，请稍后重试", { duration: 4000 });
+          }
+          return;
+        }
         const data = await res.json();
         const snap = data.chart?.chartSnapshot;
         if (!snap?.birthInfo) return;
@@ -231,7 +263,7 @@ export default function ChartPage() {
           }),
         );
       } catch {
-        // 静默失败
+        toast.error("命盘加载失败，请检查网络后重试", { duration: 4000 });
       } finally {
         setIsHydrating(false);
       }
@@ -336,28 +368,56 @@ export default function ChartPage() {
   //   - 有待恢复数据 → true，显示加载态，等待异步恢复完成
   //   - 无待恢复数据 → false，立即落入下方表单分支
   if (isHydrating && !astrolabe) {
-    return (
-      <div
-        style={{
-          minHeight: 360,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--text-muted)",
-          gap: 12,
-        }}
-      >
-        <i className="ti ti-loader-2 ti-spin" style={{ fontSize: 24, color: "var(--brand)" }} />
-        <p style={{ fontSize: 13, margin: 0 }}>正在恢复命盘…</p>
-      </div>
-    );
+    return <LoadingSkeleton size="lg" text="正在恢复命盘…" style={{ minHeight: 360 }} />;
   }
 
   // ── 新建态：出生信息表单 ─────────────────────────────────
   if (!astrolabe) {
     return (
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "24px 24px 60px" }}>
+        {/* 未登录 banner（在表单态也显示） */}
+        {!session?.user && (
+          <Link
+            href="/auth/login?callbackUrl=%2Fchart"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              marginBottom: 16,
+              background: "linear-gradient(135deg, var(--soft), var(--panel))",
+              border: "1px solid var(--brand)",
+              borderRadius: "var(--radius-sm)",
+              textDecoration: "none",
+              color: "inherit",
+              fontSize: 13,
+            }}
+          >
+            <i className="ti ti-login" style={{ color: "var(--brand)", fontSize: 18 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: "var(--brand)" }}>
+                登录后即可开启 AI 智能解盘
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                新用户注册即得 10 星币，排盘免费
+              </div>
+            </div>
+            <span
+              style={{
+                background: "var(--brand)",
+                color: "#fff",
+                padding: "5px 14px",
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              去登录
+            </span>
+          </Link>
+        )}
+
         {/* 步骤条 */}
         <div className="step-bar">
           <div className="step active">
@@ -400,15 +460,38 @@ export default function ChartPage() {
         {/* 左栏：历史会话 + 模型选择 */}
         <aside className="reading-sidebar">
           <h4>历史会话</h4>
-          <div className="model-bar">
+          <div
+            className="model-bar"
+            title="多模型切换功能开发中，当前由系统智能调度"
+            style={{ opacity: 0.7, cursor: "not-allowed" }}
+          >
             <i className="ti ti-cpu" />
-            <select aria-label="AI 模型选择" defaultValue="minimax">
-              <option value="minimax">MiniMax v1</option>
+            <select
+              aria-label="AI 模型选择"
+              defaultValue="minimax"
+              disabled
+              style={{ cursor: "not-allowed" }}
+            >
+              <option value="minimax">MiniMax v1（智能调度）</option>
               <option value="deepseek">DeepSeek V3</option>
               <option value="glm">智谱 GLM-4</option>
               <option value="qwen">通义千问 Max</option>
               <option value="claude">Claude Sonnet</option>
             </select>
+            <span
+              style={{
+                marginLeft: 6,
+                fontSize: 10,
+                padding: "1px 5px",
+                background: "var(--soft)",
+                color: "var(--text-muted)",
+                borderRadius: 3,
+                fontWeight: 400,
+                whiteSpace: "nowrap",
+              }}
+            >
+              即将推出
+            </span>
           </div>
           <div className="consult-list">
             <div className="consult-item" style={{ background: "var(--soft)" }}>
@@ -460,15 +543,42 @@ export default function ChartPage() {
                     历史会话
                   </SheetTitle>
                 </SheetHeader>
-                <div className="model-bar" style={{ margin: "0 12px 10px" }}>
+                <div
+                  className="model-bar"
+                  style={{
+                    margin: "0 12px 10px",
+                    opacity: 0.7,
+                    cursor: "not-allowed",
+                  }}
+                  title="多模型切换功能开发中，当前由系统智能调度"
+                >
                   <i className="ti ti-cpu" />
-                  <select aria-label="AI 模型选择" defaultValue="minimax">
-                    <option value="minimax">MiniMax v1</option>
+                  <select
+                    aria-label="AI 模型选择"
+                    defaultValue="minimax"
+                    disabled
+                    style={{ cursor: "not-allowed" }}
+                  >
+                    <option value="minimax">MiniMax v1（智能调度）</option>
                     <option value="deepseek">DeepSeek V3</option>
                     <option value="glm">智谱 GLM-4</option>
                     <option value="qwen">通义千问 Max</option>
                     <option value="claude">Claude Sonnet</option>
                   </select>
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      padding: "1px 5px",
+                      background: "var(--soft)",
+                      color: "var(--text-muted)",
+                      borderRadius: 3,
+                      fontWeight: 400,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    即将推出
+                  </span>
                 </div>
                 <div className="consult-list">
                   <div
@@ -519,6 +629,7 @@ export default function ChartPage() {
           <DualChatPanel
             chartData={chartDataForPipeline}
             parentBirthYears={parentBirthYears}
+            chartRecordId={chartRecordId}
           />
         </section>
       </div>
@@ -654,8 +765,8 @@ export default function ChartPage() {
             </div>
           )}
 
-          {/* 规则解析（折叠区） */}
-          {birthData && (
+          {/* 规则解析（折叠区）：仅 ADMIN/调试可见，避免普通用户触发 403 */}
+          {birthData && isAdmin && (
             <details style={{ marginTop: 18 }}>
               <summary
                 style={{
@@ -668,7 +779,7 @@ export default function ChartPage() {
                 }}
               >
                 <i className="ti ti-list-details" style={{ marginRight: 6 }} />
-                规则解析（能级 / 格局 / 性格）
+                规则解析（能级 / 格局 / 性格）· 管理员调试
               </summary>
               <div style={{ marginTop: 8 }}>
                 <ZiweiAnalysisPanel
@@ -678,6 +789,29 @@ export default function ChartPage() {
                 />
               </div>
             </details>
+          )}
+
+          {/* 普通用户：引导至 AI 对话 */}
+          {birthData && !isAdmin && (
+            <div
+              className="help-note"
+              style={{
+                marginTop: 18,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 12px",
+              }}
+            >
+              <i
+                className="ti ti-bulb"
+                style={{ color: "var(--brand)", fontSize: 16 }}
+              />
+              <div style={{ flex: 1, fontSize: 12, color: "var(--text-muted)" }}>
+                想看 <strong style={{ color: "var(--brand)" }}>命盘深度解析</strong>？
+                直接在左侧对话框提问即可，AI 会结合命盘全方位解答。
+              </div>
+            </div>
           )}
         </div>
       </aside>

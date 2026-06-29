@@ -104,14 +104,10 @@
 }
 
 /* 三主题各自的 --radius 覆盖（与 ziwei.css 的 [data-theme] 块对齐）*/
-[data-theme="newspaper"] {
-  --radius: 0.25rem; /* 4px */
-}
-[data-theme="clay"] {
-  --radius: 1.25rem; /* 20px */
-}
+[data-theme="newspaper"],
+[data-theme="clay"],
 [data-theme="neumorphism"] {
-  --radius: 1rem; /* 16px */
+  --radius: 0.5rem; /* 8px，三主题统一小圆角 */
 }
 
 .dark {

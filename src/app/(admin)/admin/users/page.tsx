@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -13,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminToolbar } from "@/components/admin/AdminToolbar";
 
 interface UserItem {
   id: string;
@@ -81,124 +80,112 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <i className="ti ti-users text-xl" style={{ color: "var(--brand)" }} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">用户管理</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">查看和管理所有注册用户</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            placeholder="搜索昵称/手机/邮箱..."
-            className="w-72"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          />
-          <Button variant="outline" onClick={handleSearch}>
-            <i className="ti ti-search" style={{ marginRight: 4 }} />
-            搜索
-          </Button>
-        </div>
-      </div>
+    <>
+      <AdminPageHeader
+        icon="ti-users"
+        title="用户管理"
+        desc="查看和管理所有注册用户"
+      />
+
+      <AdminToolbar
+        search={{
+          value: searchInput,
+          onChange: setSearchInput,
+          placeholder: "搜索昵称/手机/邮箱...",
+          onEnter: handleSearch,
+        }}
+      >
+        <Button variant="outline" size="sm" onClick={handleSearch}>
+          <i className="ti ti-search" />
+          搜索
+        </Button>
+      </AdminToolbar>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
+        <div className="admin-alert error">
+          <i className="ti ti-alert-circle" />
+          <span>{error}</span>
+        </div>
       )}
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
+      <div className="admin-table-wrap">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>昵称</TableHead>
+              <TableHead>手机号</TableHead>
+              <TableHead>邮箱</TableHead>
+              <TableHead>角色</TableHead>
+              <TableHead>会员等级</TableHead>
+              <TableHead className="text-right">排盘次数</TableHead>
+              <TableHead className="text-right">支付订单</TableHead>
+              <TableHead className="text-right">积分</TableHead>
+              <TableHead>注册时间</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.length === 0 ? (
               <TableRow>
-                <TableHead className="font-semibold">昵称</TableHead>
-                <TableHead className="font-semibold">手机号</TableHead>
-                <TableHead className="font-semibold">邮箱</TableHead>
-                <TableHead className="font-semibold">角色</TableHead>
-                <TableHead className="font-semibold">会员等级</TableHead>
-                <TableHead className="text-right font-semibold">排盘次数</TableHead>
-                <TableHead className="text-right font-semibold">支付订单</TableHead>
-                <TableHead className="text-right font-semibold">积分</TableHead>
-                <TableHead className="font-semibold">注册时间</TableHead>
+                <TableCell colSpan={9} className="admin-table-empty">
+                  暂无用户数据
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
-                    暂无用户数据
+            ) : (
+              users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">
+                    {user.nickname || "未设置"}
+                  </TableCell>
+                  <TableCell className="text-muted">{user.phone || "—"}</TableCell>
+                  <TableCell className="text-muted">{user.email || "—"}</TableCell>
+                  <TableCell>
+                    {user.role === "ADMIN" ? (
+                      <span className="admin-badge info">管理员</span>
+                    ) : (
+                      <span className="admin-badge neutral">用户</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={
+                        user.membership?.plan && user.membership.plan !== "FREE"
+                          ? "admin-badge success"
+                          : "admin-badge neutral"
+                      }
+                    >
+                      {planLabel(user.membership?.plan || "FREE")}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{user._count.consultationRecords}</TableCell>
+                  <TableCell className="text-right tabular-nums">{user._count.paymentOrders}</TableCell>
+                  <TableCell className="text-right tabular-nums">{user.totalPoints}</TableCell>
+                  <TableCell className="text-xs text-muted">
+                    {new Date(user.createdAt).toLocaleDateString("zh-CN")}
                   </TableCell>
                 </TableRow>
-              ) : (
-                users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.nickname || "未设置"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{user.phone || "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.role === "ADMIN" ? "default" : "outline"}>
-                        {user.role === "ADMIN" ? "管理员" : "用户"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          user.membership?.plan && user.membership.plan !== "FREE"
-                            ? "default"
-                            : "outline"
-                        }
-                      >
-                        {planLabel(user.membership?.plan || "FREE")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{user._count.consultationRecords}</TableCell>
-                    <TableCell className="text-right tabular-nums">{user._count.paymentOrders}</TableCell>
-                    <TableCell className="text-right tabular-nums">{user.totalPoints}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleDateString("zh-CN")}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
+        <div className="admin-pagination">
+          <span className="admin-pagination-info">
             共 {total} 条，第 {page}/{totalPages} 页
           </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
-            >
-              <i className="ti ti-chevron-left" style={{ marginRight: 4 }} />
+          <div className="admin-pagination-actions">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <i className="ti ti-chevron-left" />
               上一页
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage(page + 1)}
-            >
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
               下一页
-              <i className="ti ti-chevron-right" style={{ marginLeft: 4 }} />
+              <i className="ti ti-chevron-right" />
             </Button>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

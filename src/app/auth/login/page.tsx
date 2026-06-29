@@ -4,68 +4,131 @@ import { Suspense, useState, useEffect, useCallback } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+
+/**
+ * 手机号格式校验(11 位,1 开头,第二位 3-9)
+ */
+const PHONE_REGEX = /^1[3-9]\d{9}$/;
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/chart";
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
   const wechatCode = searchParams.get("wechat_code");
+
+  // Tab 切换
+  const [activeTab, setActiveTab] = useState<"password" | "sms" | "register">("password");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [username, setUsername] = useState("");
+  // 账号密码 form
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
 
-  const [phone, setPhone] = useState("");
+  // 手机验证码 form
+  const [smsPhone, setSmsPhone] = useState("");
   const [smsCode, setSmsCode] = useState("");
-  const [smsSent, setSmsSent] = useState(false);
 
-  const [regUsername, setRegUsername] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regNickname, setRegNickname] = useState("");
+  // 注册 form
+  const [regPhone, setRegPhone] = useState("");
+  const [regCode, setRegCode] = useState("");
   const [regInviteCode, setRegInviteCode] = useState("");
 
+  // 验证码倒计时(秒)
+  const [smsCountdown, setSmsCountdown] = useState(0);
+  const [regCountdown, setRegCountdown] = useState(0);
+
+  // 微信登录是否配置(开发演示模式下 configured:true + mock:true)
   const [wechatConfigured, setWechatConfigured] = useState<boolean | null>(null);
+  const [wechatMock, setWechatMock] = useState(false);
 
+  // 从 localStorage / cookie 读 pendingInviteCode(首页 ?ref= 捕获的)
+  // O-07：同时控制顶部邀请 banner 的显示
+  const [hasInviteCode, setHasInviteCode] = useState(false);
   useEffect(() => {
-    fetch("/api/auth/wechat")
-      .then((r) => r.json())
-      .then((data) => setWechatConfigured(data.configured ?? false))
-      .catch(() => setWechatConfigured(false));
-  }, []);
-
-  // 从 cookie / localStorage 读取 pendingInviteCode（首页 ?ref= 捕获的）
-  useEffect(() => {
+    let stored = "";
     try {
-      const fromStorage = localStorage.getItem("pendingInviteCode");
-      if (fromStorage) {
-        setRegInviteCode(fromStorage);
-        return;
-      }
+      stored = localStorage.getItem("pendingInviteCode") ?? "";
     } catch {
       /* ignore */
     }
-    const m = document.cookie.match(/(?:^|;\s*)pendingInviteCode=([^;]+)/);
-    if (m?.[1]) setRegInviteCode(decodeURIComponent(m[1]));
+    if (!stored) {
+      const m = document.cookie.match(/(?:^|;\s*)pendingInviteCode=([^;]+)/);
+      if (m?.[1]) stored = decodeURIComponent(m[1]);
+    }
+    if (stored) {
+      setRegInviteCode(stored);
+      setHasInviteCode(true);
+    }
   }, []);
 
+  // 倒计时
+  useEffect(() => {
+    if (smsCountdown <= 0) return;
+    const t = setTimeout(() => setSmsCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [smsCountdown]);
+
+  useEffect(() => {
+    if (regCountdown <= 0) return;
+    const t = setTimeout(() => setRegCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [regCountdown]);
+
+  // 检查微信扫码登录是否配置(开发演示模式也返回 configured:true)
+  useEffect(() => {
+    fetch("/api/auth/wechat")
+      .then((r) => r.json())
+      .then((data) => {
+        setWechatConfigured(data.configured ?? false);
+        setWechatMock(data.mock === true);
+      })
+      .catch(() => setWechatConfigured(false));
+  }, []);
+
+  // 微信扫码回调(带 wechat_code 参数)
   const handleWechatLogin = useCallback(
     async (code: string) => {
       setLoading(true);
       setError("");
-      const result = await signIn("wechat", { code, redirect: false });
+      // 透传首页 ?ref= 捕获的邀请码,让 authorize 在新用户注册时触发邀请奖励
+      let inviteCode = "";
+      try {
+        inviteCode = localStorage.getItem("pendingInviteCode") ?? "";
+      } catch {
+        /* ignore */
+      }
+      if (!inviteCode) {
+        const m = document.cookie.match(/(?:^|;\s*)pendingInviteCode=([^;]+)/);
+        if (m?.[1]) inviteCode = decodeURIComponent(m[1]);
+      }
+      const result = await signIn("wechat", {
+        code,
+        inviteCode: inviteCode || undefined,
+        redirect: false,
+      });
       setLoading(false);
       if (result?.error) {
-        setError("微信登录失败，请重试");
-      } else {
+        setError("微信登录失败,请重试");
+        return;
+      }
+      if (result?.ok) {
+        // 登录成功后,fetch session 检查是否需要绑定手机号
+        try {
+          const sessRes = await fetch("/api/auth/session");
+          const sessData = await sessRes.json();
+          if (sessData?.user?.phoneBindingRequired) {
+            // 新用户微信扫码,跳绑定手机号页
+            window.location.href = "/auth/bind-phone";
+            return;
+          }
+        } catch {
+          // session 检查失败,不阻断登录,正常跳 callbackUrl
+        }
         window.location.href = callbackUrl;
       }
     },
-    [callbackUrl]
+    [callbackUrl],
   );
 
   useEffect(() => {
@@ -74,120 +137,165 @@ function LoginForm() {
     }
   }, [wechatCode, handleWechatLogin]);
 
-  const handleUsernameLogin = async (e: React.FormEvent) => {
+  // 发送验证码(注册 + 手机登录共用)
+  const handleSendCode = async (
+    phone: string,
+    type: "sms" | "register",
+  ): Promise<void> => {
+    if (!phone) {
+      toast.error("请先输入手机号");
+      return;
+    }
+    if (!PHONE_REGEX.test(phone)) {
+      toast.error("手机号格式不合法");
+      return;
+    }
+    const countdown = type === "sms" ? smsCountdown : regCountdown;
+    if (countdown > 0) return;
+    try {
+      const res = await fetch("/api/auth/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "发送失败");
+        return;
+      }
+      if (type === "sms") setSmsCountdown(60);
+      else setRegCountdown(60);
+
+      if (data.mock) {
+        toast.success("开发环境验证码为 123456", { duration: 5000 });
+      } else if (data.hint) {
+        toast.success(data.hint, { duration: 4000 });
+      } else {
+        toast.success("验证码已发送");
+      }
+    } catch {
+      toast.error("网络错误");
+    }
+  };
+
+  // 账号密码登录(兼容旧 admin 账号)
+  const handlePasswordLogin = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     const result = await signIn("credentials", {
-      username: username.trim(),
+      username: account.trim(),
       password: password.trim(),
       callbackUrl,
       redirect: false,
     });
-
     setLoading(false);
-    // Auth.js：须用 ok 判断成功；仅看 error 可能在部分失败形态下误判
     if (result?.ok) {
       window.location.href = callbackUrl;
       return;
     }
-    setError(
-      result?.error === "CredentialsSignin"
-        ? "用户名或密码错误"
-        : (result?.error ? String(result.error) : "登录失败，请稍后重试"),
-    );
+    setError("账号或密码错误");
   };
 
-  const handlePhoneLogin = async (e: React.FormEvent) => {
+  // 手机验证码登录
+  const handleSmsLogin = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     const result = await signIn("phone", {
-      phone,
-      code: smsCode,
+      phone: smsPhone.trim(),
+      code: smsCode.trim(),
       redirect: false,
     });
-
     setLoading(false);
-    if (result?.error) {
-      setError("验证码错误或已过期");
-    } else {
+    if (result?.ok) {
       window.location.href = callbackUrl;
-    }
-  };
-
-  const handleSendSms = async () => {
-    if (!phone || phone.length !== 11) {
-      setError("请输入正确的手机号");
       return;
     }
-    const smsEnabled = process.env.NEXT_PUBLIC_SMS_ENABLED === 'true';
-    if (smsEnabled) {
-      // TODO: 接入 SMS API 发送验证码
-      console.warn('[login] SMS API not implemented yet');
-      setError("短信服务暂未开通");
-      setSmsSent(false);
-      return;
-    }
-    // 开发环境：模拟发送成功，提示用户输入任意 6 位数字
-    setSmsSent(true);
-    setError("开发模式：请输入任意 6 位数字作为验证码");
+    setError("验证码错误或手机号未注册");
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  // 注册并自动登录
+  const handleRegister = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
+      const trimmedPhone = regPhone.trim();
+      const trimmedCode = regCode.trim();
+      const trimmedInvite = regInviteCode.trim().toUpperCase();
+
+      // 1. 调注册 API
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: regUsername,
-          password: regPassword,
-          nickname: regNickname,
-          inviteCode: regInviteCode || undefined,
+          phone: trimmedPhone,
+          code: trimmedCode,
+          inviteCode: trimmedInvite || undefined,
         }),
       });
-
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error);
+        setError(data.error || "注册失败");
         setLoading(false);
         return;
       }
 
-      const result = await signIn("credentials", {
-        username: regUsername.trim(),
-        password: regPassword.trim(),
-        callbackUrl,
+      // 2. 自动用 phone provider 登录(checkCode 不删 code,phone provider 的 verifyCode 会消费)
+      // B-10：注册后 session 写入有短暂竞态，自动重试最多 3 次，避免让用户手动登录
+      let result = await signIn("phone", {
+        phone: trimmedPhone,
+        code: trimmedCode,
         redirect: false,
       });
-
+      let attempts = 1;
+      while (!result?.ok && attempts < 3) {
+        await new Promise((r) => setTimeout(r, 400 * attempts));
+        result = await signIn("phone", {
+          phone: trimmedPhone,
+          code: trimmedCode,
+          redirect: false,
+        });
+        attempts++;
+      }
       setLoading(false);
       if (result?.ok) {
+        if (data.bonusPoints > 0) {
+          toast.success(`注册成功!获得 ${data.bonusPoints} 星币`, { duration: 3000 });
+        }
         window.location.href = callbackUrl;
       } else {
-        setError(result?.error ? String(result.error) : "自动登录失败，请手动登录");
+        // 注册成功但自动登录失败,引导用户手动登录
+        toast.success("注册成功,请登录");
+        setSmsPhone(trimmedPhone);
+        setActiveTab("sms");
       }
     } catch {
-      setError("注册失败，请稍后重试");
+      setError("注册失败,请稍后重试");
       setLoading(false);
     }
   };
 
-  const handleWechatRedirect = async () => {
+  // 跳转微信扫码
+  const handleWechatRedirect = async (): Promise<void> => {
     setLoading(true);
     try {
       const res = await fetch("/api/auth/wechat");
       const data = await res.json();
+      if (data.mock) {
+        // 开发演示模式:不跳转,提示需要配置真实凭证
+        toast.info(
+          "微信扫码登录为演示入口,需在 .env 配置 WECHAT_APP_ID / WECHAT_APP_SECRET 后启用真实扫码",
+          { duration: 5000 },
+        );
+        setLoading(false);
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setError("微信登录未配置，请联系管理员");
+        setError("微信登录未配置,请联系管理员");
         setLoading(false);
       }
     } catch {
@@ -196,206 +304,342 @@ function LoginForm() {
     }
   };
 
+  // ─────────────────────────────────────────────────────────
+  // 渲染
+  // ─────────────────────────────────────────────────────────
+
   return (
-    <Card className="w-full max-w-md border-primary/15">
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-2xl text-primary-foreground">
-          ☯
-        </div>
-        <CardTitle className="font-serif-sc text-2xl text-primary">
-          微著
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">观己观人观世界</p>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
+    <div className="auth-page">
+      <div className="auth-card">
+        {/* O-07：邀请码全局 banner（顶部，所有 Tab 都可见） */}
+        {hasInviteCode && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              marginBottom: 16,
+              background: "linear-gradient(135deg, var(--soft), var(--panel))",
+              border: "1px solid var(--brand)",
+              borderRadius: "var(--radius-sm)",
+              fontSize: 12,
+            }}
+          >
+            <i className="ti ti-gift" style={{ color: "var(--brand)", fontSize: 18 }} />
+            <div style={{ flex: 1, lineHeight: 1.5 }}>
+              您被好友邀请
+              <span style={{ color: "var(--text-muted)" }}>（可在「注册」Tab 查看）</span>
+              <br />
+              <strong style={{ color: "var(--brand)" }}>注册即得 10 星币，邀请人也得 20 星币</strong>
+            </div>
           </div>
         )}
 
-        <Tabs defaultValue="account">
-          <TabsList className="mb-4 w-full">
-            <TabsTrigger value="account" className="flex-1">账号登录</TabsTrigger>
-            <TabsTrigger value="phone" className="flex-1">手机登录</TabsTrigger>
-            <TabsTrigger value="register" className="flex-1">注册</TabsTrigger>
-          </TabsList>
+        {/* 头部 logo */}
+        <div className="auth-head">
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              margin: "0 auto 14px",
+              background: "linear-gradient(135deg, var(--brand), var(--brand-dark))",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 26,
+              fontWeight: 700,
+              borderRadius: "50%",
+              boxShadow: "var(--shadow-lg)",
+            }}
+          >
+            微
+          </div>
+          <h2>紫微问道</h2>
+          <p>观己 · 观人 · 观世界</p>
+        </div>
 
-          <TabsContent value="account">
-            <form onSubmit={handleUsernameLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label>用户名</Label>
-                <Input
+        {/* Tab 切换 */}
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={activeTab === "password" ? "active" : ""}
+            onClick={() => {
+              setActiveTab("password");
+              setError("");
+            }}
+          >
+            账号密码
+          </button>
+          <button
+            type="button"
+            className={activeTab === "sms" ? "active" : ""}
+            onClick={() => {
+              setActiveTab("sms");
+              setError("");
+            }}
+          >
+            手机验证码
+          </button>
+          <button
+            type="button"
+            className={activeTab === "register" ? "active" : ""}
+            onClick={() => {
+              setActiveTab("register");
+              setError("");
+            }}
+          >
+            注册
+          </button>
+        </div>
+
+        {/* 错误提示 */}
+        {error && (
+          <div
+            className="help-note"
+            style={{
+              marginBottom: 16,
+              borderColor: "var(--danger)",
+              color: "var(--danger)",
+              alignItems: "center",
+            }}
+          >
+            <i className="ti ti-alert-circle" />
+            <span style={{ flex: 1 }}>{error}</span>
+            {activeTab === "register" && regPhone && (
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                style={{ marginLeft: 8, padding: "4px 10px", fontSize: 12 }}
+                onClick={() => {
+                  const form = document.getElementById("register-form") as HTMLFormElement | null;
+                  form?.requestSubmit();
+                }}
+              >
+                <i className="ti ti-refresh" /> 一键重试
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Tab:账号密码 */}
+        {activeTab === "password" && (
+          <form onSubmit={handlePasswordLogin}>
+            <div className="field">
+              <label className="field-label">账号</label>
+              <input
+                className="input"
+                type="text"
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
+                placeholder="用户名 / 手机号 / 邮箱"
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">密码</label>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="请输入密码"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%", marginTop: 8 }}
+              disabled={loading}
+            >
+              <i className="ti ti-login" style={{ marginRight: 6 }} />
+              {loading ? "登录中…" : "登录"}
+            </button>
+          </form>
+        )}
+
+        {/* Tab:手机验证码 */}
+        {activeTab === "sms" && (
+          <form onSubmit={handleSmsLogin}>
+            <div className="field">
+              <label className="field-label">手机号</label>
+              <input
+                className="input"
+                type="tel"
+                value={smsPhone}
+                onChange={(e) => setSmsPhone(e.target.value)}
+                placeholder="11 位手机号"
+                maxLength={11}
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">验证码</label>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  className="input"
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="请输入用户名"
+                  value={smsCode}
+                  onChange={(e) => setSmsCode(e.target.value)}
+                  placeholder="6 位短信验证码"
+                  maxLength={6}
                   required
-                  className="border-primary/20"
                 />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ whiteSpace: "nowrap" }}
+                  onClick={() => handleSendCode(smsPhone.trim(), "sms")}
+                  disabled={smsCountdown > 0}
+                >
+                  {smsCountdown > 0 ? `${smsCountdown}s` : "获取验证码"}
+                </button>
               </div>
-              <div className="space-y-2">
-                <Label>密码</Label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码"
-                  required
-                  className="border-primary/20"
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90"
-                disabled={loading}
-              >
-                {loading ? "登录中..." : "登录"}
-              </Button>
-            </form>
-          </TabsContent>
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%", marginTop: 8 }}
+              disabled={loading}
+            >
+              <i className="ti ti-login" style={{ marginRight: 6 }} />
+              {loading ? "登录中…" : "登录"}
+            </button>
+          </form>
+        )}
 
-          <TabsContent value="phone">
-            <form onSubmit={handlePhoneLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label>手机号</Label>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="请输入手机号"
-                  maxLength={11}
-                  required
-                  className="border-primary/20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>验证码</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    value={smsCode}
-                    onChange={(e) => setSmsCode(e.target.value)}
-                    placeholder="请输入验证码"
-                    maxLength={6}
-                    required
-                    className="border-primary/20"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleSendSms}
-                    disabled={smsSent}
-                    className="shrink-0 border-primary/20"
-                  >
-                    {smsSent ? "已发送" : "获取验证码"}
-                  </Button>
-                </div>
-              </div>
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90"
-                disabled={loading}
-              >
-                {loading ? "登录中..." : "登录"}
-              </Button>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="register">
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label>用户名 <span className="text-xs text-muted-foreground">（3-20位字母、数字或下划线）</span></Label>
-                <Input
+        {/* Tab:注册 */}
+        {activeTab === "register" && (
+          <form id="register-form" onSubmit={handleRegister}>
+            <div className="field">
+              <label className="field-label">手机号</label>
+              <input
+                className="input"
+                type="tel"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                placeholder="11 位手机号"
+                maxLength={11}
+                required
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">验证码</label>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input
+                  className="input"
                   type="text"
-                  value={regUsername}
-                  onChange={(e) => setRegUsername(e.target.value)}
-                  placeholder="请设置用户名"
+                  value={regCode}
+                  onChange={(e) => setRegCode(e.target.value)}
+                  placeholder="6 位短信验证码"
+                  maxLength={6}
                   required
-                  className="border-primary/20"
                 />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ whiteSpace: "nowrap" }}
+                  onClick={() => handleSendCode(regPhone.trim(), "register")}
+                  disabled={regCountdown > 0}
+                >
+                  {regCountdown > 0 ? `${regCountdown}s` : "获取验证码"}
+                </button>
               </div>
-              <div className="space-y-2">
-                <Label>昵称 <span className="text-xs text-muted-foreground">（选填，用于展示）</span></Label>
-                <Input
-                  value={regNickname}
-                  onChange={(e) => setRegNickname(e.target.value)}
-                  placeholder="给自己起个名字"
-                  className="border-primary/20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>邀请码（选填）</Label>
-                <Input
-                  value={regInviteCode}
-                  onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
-                  placeholder="有邀请码可获赠星币"
-                  maxLength={8}
-                  className="border-primary/20"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>密码</Label>
-                <Input
-                  type="password"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="至少6位密码"
-                  minLength={6}
-                  required
-                  className="border-primary/20"
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90"
-                disabled={loading}
-              >
-                {loading ? "注册中..." : "注册"}
-              </Button>
-            </form>
-          </TabsContent>
-        </Tabs>
+            </div>
+            <div className="field">
+              <label className="field-label">
+                邀请码 <span className="opt">(选填)</span>
+              </label>
+              <input
+                className="input"
+                type="text"
+                value={regInviteCode}
+                onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                placeholder="好友的邀请码,双方均获 20 星币"
+                maxLength={8}
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%", marginTop: 8 }}
+              disabled={loading}
+            >
+              <i className="ti ti-user-plus" style={{ marginRight: 6 }} />
+              {loading ? "注册中…" : "注册并登录"}
+            </button>
+          </form>
+        )}
 
+        {/* 微信扫码登录(开发演示模式也显示) */}
         {wechatConfigured && (
-          <div className="mt-5 border-t pt-5">
-            <p className="mb-3 text-center text-xs text-muted-foreground">其他登录方式</p>
-            <Button
-              variant="outline"
-              className="w-full gap-2 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+          <>
+            <div className="auth-divider">或</div>
+            <button
+              type="button"
+              className="btn wechat-btn"
+              style={{ width: "100%", background: "var(--panel)" }}
               onClick={handleWechatRedirect}
               disabled={loading}
             >
-              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
-                <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-7.062-6.122zm-2.18 2.769c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.825 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982z"/>
-              </svg>
+              <i className="ti ti-brand-wechat" style={{ marginRight: 6 }} />
               微信扫码登录
-            </Button>
-          </div>
+              {wechatMock && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    fontWeight: 400,
+                  }}
+                >
+                  (演示)
+                </span>
+              )}
+            </button>
+          </>
         )}
 
-        <div className="mt-4 text-center">
-          <Link href="/" className="text-xs text-muted-foreground hover:text-primary">
-            返回首页
+        {/* 底部 */}
+        <div className="auth-foot">
+          <Link href="/auth/forgot-password" style={{ color: "var(--brand)", textDecoration: "none", fontSize: "inherit" }}>
+            忘记密码?
           </Link>
+          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            登录即同意{" "}
+            <Link href="/legal/terms" style={{ color: "var(--brand)" }}>
+              用户协议
+            </Link>{" "}
+            ·{" "}
+            <Link href="/legal/privacy" style={{ color: "var(--brand)" }}>
+              隐私政策
+            </Link>
+          </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary/5 to-background px-4">
-      <Suspense
-        fallback={
-          <div className="flex h-96 w-full max-w-md items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    <Suspense
+      fallback={
+        <div className="auth-page">
+          <div className="auth-card">
+            <div style={{ textAlign: "center", padding: 40 }}>
+              <i
+                className="ti ti-loader-2 ti-spin"
+                style={{ fontSize: 28, color: "var(--brand)" }}
+              />
+            </div>
           </div>
-        }
-      >
-        <LoginForm />
-      </Suspense>
-    </div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
